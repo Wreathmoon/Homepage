@@ -32,7 +32,36 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  color: var(--semi-color-text-0);
+  background-color: var(--semi-color-bg-0);
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+  background-color: var(--semi-color-bg-1);
+}
+
+/* Semi Design dark mode support */
+.semi-navigation {
+  background-color: var(--semi-color-bg-1);
+}
+
+.semi-navigation-header h3 {
+  transition: color 0.3s;
 }

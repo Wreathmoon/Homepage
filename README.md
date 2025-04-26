@@ -1,4 +1,4 @@
-# Quotation-Helper
+# Homepage
 
 A React-based tool to help with quotation management.
 

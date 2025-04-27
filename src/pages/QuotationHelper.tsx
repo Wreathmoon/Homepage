@@ -33,20 +33,6 @@ const QuotationHelper: React.FC = () => {
                 >
                     Back to Tools
                 </button>
-                <button
-                    onClick={() => navigate('/')}
-                    style={{
-                        padding: '10px 20px',
-                        fontSize: '16px',
-                        cursor: 'pointer',
-                        backgroundColor: '#f44336',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '5px'
-                    }}
-                >
-                    Back to Home
-                </button>
             </div>
         </div>
     );

@@ -1,4 +1,4 @@
-import { IconBytedanceLogo, IconHistogram, IconHome, IconLive, IconSetting } from '@douyinfe/semi-icons';
+import { IconHistogram, IconHome, IconLive, IconSetting } from '@douyinfe/semi-icons';
 import { Breadcrumb, Layout, Nav, Skeleton } from '@douyinfe/semi-ui';
 import Header from '../components/Header';
 
@@ -7,13 +7,13 @@ const Home = () => {
 
     return (
         <Layout style={{
-            border: '1px solid var(--semi-color-border)',
             height: '100vh',
-            width: '100vw'
+            width: '100vw',
+            border: 'none'
         }}>
             <Header />
             <Layout>
-                <Sider style={{ backgroundColor: 'var(--semi-color-bg-1)' }}>
+                <Sider style={{ backgroundColor: 'var(--semi-color-bg-1)', border: 'none' }}>
                     <Nav
                         style={{ maxWidth: 220, height: '100%' }}
                         defaultSelectedKeys={['Home']}
@@ -55,7 +55,7 @@ const Home = () => {
                     </div>
                 </Content>
             </Layout>
-            <Footer
+            {/* <Footer
                 style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -77,7 +77,7 @@ const Home = () => {
                     <span style={{ marginRight: '24px' }}>平台客服</span>
                     <span>反馈建议</span>
                 </span>
-            </Footer>
+            </Footer> */}
         </Layout>
     );
 };

@@ -1,4 +1,4 @@
-import { IconBell, IconHelpCircle, IconMoon, IconSemiLogo, IconSun } from '@douyinfe/semi-icons';
+import { IconApps, IconBell, IconHelpCircle, IconMoon, IconSun } from '@douyinfe/semi-icons';
 import { Avatar, Button, Layout, Nav } from '@douyinfe/semi-ui';
 import { useState } from 'react';
 
@@ -20,12 +20,16 @@ const Header = () => {
         <Layout.Header style={{ backgroundColor: 'var(--semi-color-bg-1)' }}>
             <div>
                 <Nav mode="horizontal" defaultSelectedKeys={['Home']}>
+
                     <Nav.Header>
-                        <IconSemiLogo style={{ height: '36px', fontSize: 36 }} />
+                        <div style={{ color: '#E91E63' }} >
+                            <IconApps style={{ height: '36px', fontSize: 36 }} />
+                        </div>
                     </Nav.Header>
+
                     <span
                         style={{
-                            color: 'var(--semi-color-text-2)',
+                            color: 'var(--semi-color-text-1)',
                         }}
                     >
                         <span
@@ -35,11 +39,12 @@ const Header = () => {
                                 fontWeight: '600',
                             }}
                         >
-                            模版推荐
+                            Portal
                         </span>
-                        <span style={{ marginRight: '24px' }}>所有模版</span>
-                        <span>我的模版</span>
+                        <span style={{ marginRight: '24px' }}>Tools</span>
+                        <span>Contact</span>
                     </span>
+
                     <Nav.Footer>
                         <Button
                             theme="borderless"
@@ -66,8 +71,8 @@ const Header = () => {
                                 marginRight: '12px',
                             }}
                         />
-                        <Avatar color="orange" size="small">
-                            YJ
+                        <Avatar color="pink" size="small">
+                            WM
                         </Avatar>
                     </Nav.Footer>
                 </Nav>

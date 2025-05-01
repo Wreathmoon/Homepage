@@ -2,7 +2,7 @@ import { IconHistogram, IconHome, IconLive, IconSetting } from '@douyinfe/semi-i
 import { Breadcrumb, Layout, Nav } from '@douyinfe/semi-ui';
 import Header from '../components/Header';
 
-const Home = () => {
+const Contact = () => {
     const { Footer, Sider, Content } = Layout;
 
     return (
@@ -13,6 +13,21 @@ const Home = () => {
         }}>
             <Header />
             <Layout>
+                <Sider style={{ backgroundColor: 'var(--semi-color-bg-1)', border: 'none' }}>
+                    <Nav
+                        style={{ maxWidth: 220, height: '100%' }}
+                        defaultSelectedKeys={['Contact']}
+                        items={[
+                            { itemKey: 'Contact', text: '联系', icon: <IconHome size="large" /> },
+                            { itemKey: 'Histogram', text: '基础数据', icon: <IconHistogram size="large" /> },
+                            { itemKey: 'Live', text: '测试功能', icon: <IconLive size="large" /> },
+                            { itemKey: 'Setting', text: '设置', icon: <IconSetting size="large" /> },
+                        ]}
+                        footer={{
+                            collapseButton: true,
+                        }}
+                    />
+                </Sider>
                 <Content
                     style={{
                         padding: '24px',
@@ -23,7 +38,7 @@ const Home = () => {
                         style={{
                             marginBottom: '24px',
                         }}
-                        routes={['首页']}
+                        routes={['联系']}
                     />
                     <div
                         style={{
@@ -38,7 +53,7 @@ const Home = () => {
                             fontWeight: 'bold'
                         }}
                     >
-                        Home
+                        Contact
                     </div>
                 </Content>
             </Layout>
@@ -46,4 +61,4 @@ const Home = () => {
     );
 };
 
-export default Home;
+export default Contact; 

@@ -1,10 +1,14 @@
-import { IconApps, IconBell, IconHelpCircle, IconMoon, IconSun } from '@douyinfe/semi-icons';
+import { IconHome, IconBell, IconHelpCircle, IconMoon, IconSun } from '@douyinfe/semi-icons';
 import { Avatar, Button, Layout, Nav } from '@douyinfe/semi-ui';
 import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const Header = () => {
     const [isDark, setIsDark] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
 
+    // dark mode switch function
     const switchMode = () => {
         const body = document.body;
         if (body.hasAttribute('theme-mode')) {
@@ -16,34 +20,55 @@ const Header = () => {
         }
     };
 
+    const getActiveKey = () => {
+        const path = location.pathname;
+        if (path === '/home') return 'Home';
+        if (path === '/portal') return 'Portal';
+        if (path === '/tools') return 'Tools';
+        if (path === '/contact') return 'Contact';
+        return 'Home';
+    };
+
     return (
         <Layout.Header style={{ backgroundColor: 'var(--semi-color-bg-1)' }}>
             <div>
-                <Nav mode="horizontal" defaultSelectedKeys={['Home']}>
-
+                <Nav mode="horizontal" defaultSelectedKeys={[getActiveKey()]}>
                     <Nav.Header>
-                        <div style={{ color: '#E91E63' }} >
-                            <IconApps style={{ height: '36px', fontSize: 36 }} />
+                        <div 
+                            style={{ color: '#E91E63', cursor: 'pointer' }} 
+                            onClick={() => navigate('/home')}
+                        >
+                            <IconHome style={{ height: '36px', fontSize: 36 }} />
                         </div>
                     </Nav.Header>
 
-                    <span
+                    <Nav.Item
+                        itemKey="Portal"
+                        text="Portal"
+                        onClick={() => navigate('/portal')}
                         style={{
-                            color: 'var(--semi-color-text-1)',
+                            color: getActiveKey() === 'Portal' ? 'var(--semi-color-text-0)' : 'var(--semi-color-text-1)',
+                            fontWeight: getActiveKey() === 'Portal' ? '600' : 'normal',
                         }}
-                    >
-                        <span
-                            style={{
-                                marginRight: '24px',
-                                color: 'var(--semi-color-text-0)',
-                                fontWeight: '600',
-                            }}
-                        >
-                            Portal
-                        </span>
-                        <span style={{ marginRight: '24px' }}>Tools</span>
-                        <span>Contact</span>
-                    </span>
+                    />
+                    <Nav.Item
+                        itemKey="Tools"
+                        text="Tools"
+                        onClick={() => navigate('/tools')}
+                        style={{
+                            color: getActiveKey() === 'Tools' ? 'var(--semi-color-text-0)' : 'var(--semi-color-text-1)',
+                            fontWeight: getActiveKey() === 'Tools' ? '600' : 'normal',
+                        }}
+                    />
+                    <Nav.Item
+                        itemKey="Contact"
+                        text="Contact"
+                        onClick={() => navigate('/contact')}
+                        style={{
+                            color: getActiveKey() === 'Contact' ? 'var(--semi-color-text-0)' : 'var(--semi-color-text-1)',
+                            fontWeight: getActiveKey() === 'Contact' ? '600' : 'normal',
+                        }}
+                    />
 
                     <Nav.Footer>
                         <Button

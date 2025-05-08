@@ -19,12 +19,6 @@ const Home = () => {
                         backgroundColor: 'var(--semi-color-bg-0)',
                     }}
                 >
-                    <Breadcrumb
-                        style={{
-                            marginBottom: '24px',
-                        }}
-                        routes={['首页']}
-                    />
                     <div
                         style={{
                             borderRadius: '10px',

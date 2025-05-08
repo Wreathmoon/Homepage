@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Portal from './pages/Portal';
 import Tools from './pages/Tools';
 import Contact from './pages/Contact';
+import QuotationHelper from './pages/QuotationHelper';
 // import QuotationHelper from './pages/QuotationHelper';
 // import Tools from './pages/Tools';
 
@@ -20,9 +21,8 @@ function App() {
                         <Route path="/home" element={<Home />} />
                         <Route path="/portal" element={<Portal />} />
                         <Route path="/tools" element={<Tools />} />
+                        <Route path="/tools/quotationhelper" element={<QuotationHelper />} />
                         <Route path="/contact" element={<Contact />} />
-                        {/* <Route path="/tools" element={<Tools />} />
-                        <Route path="/tools/Quotation-Helper" element={<QuotationHelper />} /> */}
                     </Routes>
                 </Content>
             </Layout>

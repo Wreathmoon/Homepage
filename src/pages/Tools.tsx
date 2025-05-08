@@ -1,10 +1,17 @@
 import React from 'react';
 import { IconHistogram, IconHome, IconLive, IconSetting } from '@douyinfe/semi-icons';
-import { Breadcrumb, Layout, Nav } from '@douyinfe/semi-ui';
+import { Breadcrumb, Layout, Nav, Card, CardGroup, Typography } from '@douyinfe/semi-ui';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 
 const Tools = () => {
     const { Footer, Sider, Content } = Layout;
+    const { Text } = Typography;
+    const navigate = useNavigate();
+
+    const handleCardClick = () => {
+        navigate('/tools/quotationhelper');
+    };
 
     return (
         <Layout style={{
@@ -14,48 +21,67 @@ const Tools = () => {
         }}>
             <Header />
             <Layout>
-                <Sider style={{ backgroundColor: 'var(--semi-color-bg-1)', border: 'none' }}>
-                    <Nav
-                        style={{ maxWidth: 220, height: '100%' }}
-                        defaultSelectedKeys={['Tools']}
-                        items={[
-                            { itemKey: 'Tools', text: '工具', icon: <IconHome size="large" /> },
-                            { itemKey: 'Histogram', text: '基础数据', icon: <IconHistogram size="large" /> },
-                            { itemKey: 'Live', text: '测试功能', icon: <IconLive size="large" /> },
-                            { itemKey: 'Setting', text: '设置', icon: <IconSetting size="large" /> },
-                        ]}
-                        footer={{
-                            collapseButton: true,
-                        }}
-                    />
-                </Sider>
                 <Content
                     style={{
-                        padding: '24px',
+                        padding: '48px',
                         backgroundColor: 'var(--semi-color-bg-0)',
                     }}
                 >
-                    <Breadcrumb
-                        style={{
-                            marginBottom: '24px',
-                        }}
-                        routes={['工具']}
-                    />
-                    <div
-                        style={{
-                            borderRadius: '10px',
-                            border: '1px solid var(--semi-color-border)',
-                            height: '376px',
-                            padding: '32px',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            fontSize: '24px',
-                            fontWeight: 'bold'
-                        }}
-                    >
-                        Tools
-                    </div>
+                    <CardGroup spacing={96}>
+                        <div onClick={handleCardClick} style={{ cursor: 'pointer' }}>
+                            <Card
+                                shadows='hover'
+                                loading={false}
+                                title='报价助手'
+                                headerLine={false}
+                                style={{ width: 400, height: 200 }}
+                                headerExtraContent={<Text link>开始</Text>}
+                            >
+                                <p>快速生成产品询价邮件</p>
+                                <p>查询维护供应商联系方式</p>
+                            </Card>
+                        </div>
+                        <Card
+                            shadows='hover'
+                            loading={true}
+                            headerLine={false}
+                            style={{ width: 400, height: 200 }}
+                        >
+                            <Text>xxx</Text>
+                        </Card>
+                        <Card
+                            shadows='hover'
+                            loading={true}
+                            headerLine={false}
+                            style={{ width: 400, height: 200 }}
+                        >
+                            <Text>xxx</Text>
+                        </Card>
+                        <Card
+                            shadows='hover'
+                            loading={true}
+                            headerLine={false}
+                            style={{ width: 400, height: 200 }}
+                        >
+                            <Text>xxx</Text>
+                        </Card>
+                        <Card
+                            shadows='hover'
+                            loading={true}
+                            headerLine={false}
+                            style={{ width: 400, height: 200 }}
+                        >
+                            <Text>xxx</Text>
+                        </Card>
+                        <Card
+                            shadows='hover'
+                            loading={true}
+                            headerLine={false}
+                            style={{ width: 400, height: 200 }}
+                        >
+                            <Text>xxx</Text>
+                        </Card>
+                    </CardGroup>
                 </Content>
             </Layout>
         </Layout>

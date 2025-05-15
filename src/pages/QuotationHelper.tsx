@@ -1,10 +1,28 @@
-import React from 'react';
-import { IconHistogram, IconHome, IconLive, IconSetting } from '@douyinfe/semi-icons';
-import { Breadcrumb, Layout, Nav } from '@douyinfe/semi-ui';
+import React, { useState } from 'react';
+import { IconSearch, IconMailStroked1, IconCart } from '@douyinfe/semi-icons';
+import { Layout, Nav } from '@douyinfe/semi-ui';
 import Header from '../components/Header';
+import Quotation from '../components/Tools/Quotationhelper/Quotation';
+import Vendor from '../components/Tools/Quotationhelper/Vendor';
+import Cost from '../components/Tools/Quotationhelper/Cost';
+
+const { Footer, Sider, Content } = Layout;
 
 const QuotationHelper = () => {
-    const { Footer, Sider, Content } = Layout;
+    const [selectedPage, setSelectedPage] = useState<string>('Quotation');
+
+    const renderContent = () => {
+        switch (selectedPage) {
+            case 'Quotation':
+                return <Quotation />;
+            case 'Vendor':
+                return <Vendor />;
+            case 'Cost':
+                return <Cost />;
+            default:
+                return null;
+        }
+    };
 
     return (
         <Layout style={{
@@ -17,13 +35,14 @@ const QuotationHelper = () => {
                 <Sider style={{ backgroundColor: 'var(--semi-color-bg-1)', border: 'none' }}>
                     <Nav
                         style={{ maxWidth: 220, height: '100%' }}
-                        defaultSelectedKeys={['Tools']}
+                        defaultSelectedKeys={['Quotation']}
+                        selectedKeys={[selectedPage]}
                         items={[
-                            { itemKey: 'Tools', text: '工具', icon: <IconHome size="large" /> },
-                            { itemKey: 'Histogram', text: '基础数据', icon: <IconHistogram size="large" /> },
-                            { itemKey: 'Live', text: '测试功能', icon: <IconLive size="large" /> },
-                            { itemKey: 'Setting', text: '设置', icon: <IconSetting size="large" /> },
+                            { itemKey: 'Quotation', text: '询价邮件', icon: <IconMailStroked1 size="large" /> },
+                            { itemKey: 'Vendor', text: '供应商查询', icon: <IconSearch size="large" /> },
+                            { itemKey: 'Cost', text: '成本预估', icon: <IconCart size="large" /> },
                         ]}
+                        onSelect={data => setSelectedPage(data.itemKey as string)}
                         footer={{
                             collapseButton: true,
                         }}
@@ -31,24 +50,12 @@ const QuotationHelper = () => {
                 </Sider>
                 <Content
                     style={{
-                        padding: '48px',
+                        padding: '24px',
                         backgroundColor: 'var(--semi-color-bg-0)',
                     }}
                 >
-                    <div
-                        style={{
-                            borderRadius: '10px',
-                            border: '1px solid var(--semi-color-border)',
-                            height: '376px',
-                            padding: '32px',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            fontSize: '24px',
-                            fontWeight: 'bold'
-                        }}
-                    >
-                        QuotationHelper
+                    <div>
+                        {renderContent()}
                     </div>
                 </Content>
             </Layout>

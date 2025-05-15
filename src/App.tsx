@@ -6,8 +6,6 @@ import Portal from './pages/Portal';
 import Tools from './pages/Tools';
 import Contact from './pages/Contact';
 import QuotationHelper from './pages/QuotationHelper';
-// import QuotationHelper from './pages/QuotationHelper';
-// import Tools from './pages/Tools';
 
 const { Content } = Layout;
 

@@ -5,16 +5,27 @@ import { IconCopy } from '@douyinfe/semi-icons';
 
 const { Title, Text } = Typography;
 
+interface QuotationFormValues {
+  supplier: string;
+  product?: string;
+  details?: string;
+  endUserName?: string;
+  endUserAddress?: string;
+  endUserContact?: string;
+  endUserContactInfo?: string;
+  currency: string;
+  isFirst: boolean;
+}
+
 const currencyOptions = [
   'CNY', 'USD', 'EUR', 'GBP', 'JPY', 'HKD', 'AUD', 'CAD', 'SGD', 'CHF', 'RUB', 'INR', 'KRW', 'THB', 'MYR', 'TWD', 'VND', 'IDR', 'BRL', 'ZAR', 'MXN', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'HUF', 'CZK', 'TRY', 'SAR', 'AED', 'ILS'
 ].map(cur => ({ label: cur, value: cur }));
 
 const Quotation: React.FC = () => {
   const [mailContent, setMailContent] = useState('');
-  const mailRef = useRef<any>(null);
+  const mailRef = useRef<HTMLTextAreaElement>(null);
 
-  // 生成邮件内容
-  const handleGenerate = (values: any) => {
+  const handleGenerate = (values: QuotationFormValues) => {
     const {
       supplier, product, details, endUserName, endUserAddress,
       endUserContact, endUserContactInfo, currency, isFirst
@@ -41,7 +52,6 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
     setMailContent(mail);
   };
 
-  // 复制功能
   const handleCopy = () => {
     if (mailRef.current) {
       mailRef.current.select();
@@ -53,7 +63,7 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <Title heading={2}>询价邮件生成器</Title>
-      <Form
+      <Form<QuotationFormValues>
         labelPosition="top"
         style={{ background: 'var(--semi-color-bg-1)', padding: 24, borderRadius: 8 }}
         onSubmit={handleGenerate}
@@ -171,4 +181,4 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
   );
 };
 
-export default Quotation; 
+export default Quotation;

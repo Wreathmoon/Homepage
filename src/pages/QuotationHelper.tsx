@@ -3,7 +3,7 @@ import { IconSearch, IconMailStroked1, IconCart } from '@douyinfe/semi-icons';
 import { Layout, Nav } from '@douyinfe/semi-ui';
 import Header from '../components/Header';
 import Quotation from '../components/Tools/Quotationhelper/Quotation';
-import Vendor from '../components/Tools/Quotationhelper/Vendor';
+import { default as Vendor } from '../components/Tools/Quotationhelper/Vendor';
 import Cost from '../components/Tools/Quotationhelper/Cost';
 
 const { Footer, Sider, Content } = Layout;

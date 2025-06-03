@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { IconSearch, IconMailStroked1, IconCart } from '@douyinfe/semi-icons';
+import { IconMailStroked1, IconSearch, IconHistory, IconUpload } from '@douyinfe/semi-icons';
 import { Layout, Nav } from '@douyinfe/semi-ui';
 import Header from '../components/Header';
 import Quotation from '../components/Tools/Quotationhelper/Quotation';
 import Vendor from '../components/Tools/Quotationhelper/Vendor';
-import Cost from '../components/Tools/Quotationhelper/Cost';
+import QuotationHistory from '../components/Tools/Quotationhelper/QuotationHistory';
+import QuotationImport from '../components/Tools/Quotationhelper/QuotationImport';
 
 const { Footer, Sider, Content } = Layout;
 
@@ -17,8 +18,10 @@ const QuotationHelper = () => {
                 return <Quotation />;
             case 'Vendor':
                 return <Vendor />;
-            case 'Cost':
-                return <Cost />;
+            case 'History':
+                return <QuotationHistory />;
+            case 'Import':
+                return <QuotationImport />;
             default:
                 return null;
         }
@@ -40,7 +43,8 @@ const QuotationHelper = () => {
                         items={[
                             { itemKey: 'Quotation', text: '询价邮件', icon: <IconMailStroked1 size="large" /> },
                             { itemKey: 'Vendor', text: '供应商查询', icon: <IconSearch size="large" /> },
-                            { itemKey: 'Cost', text: '成本预估', icon: <IconCart size="large" /> },
+                            { itemKey: 'History', text: '历史报价', icon: <IconHistory size="large" /> },
+                            { itemKey: 'Import', text: '报价上传', icon: <IconUpload size="large" /> },
                         ]}
                         onSelect={data => setSelectedPage(data.itemKey as string)}
                         footer={{
@@ -54,9 +58,7 @@ const QuotationHelper = () => {
                         backgroundColor: 'var(--semi-color-bg-0)',
                     }}
                 >
-                    <div>
-                        {renderContent()}
-                    </div>
+                    {renderContent()}
                 </Content>
             </Layout>
         </Layout>

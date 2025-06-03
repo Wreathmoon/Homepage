@@ -14,9 +14,15 @@ import {
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { IconDownload } from '@douyinfe/semi-icons';
-import { getQuotationList, getQuotationDetail, downloadAttachment, mockQuotations } from '../../../services/quotationHistory';
+import { 
+    getQuotationList, 
+    getQuotationDetail, 
+    downloadAttachment, 
+    mockQuotations,
+    PRODUCT_CATEGORIES,
+    REGIONS
+} from '../../../services/quotationHistory';
 import type { QuotationRecord, QuotationQueryParams } from '../../../services/quotationHistory';
-import { PRODUCT_CATEGORIES } from '../../../services/vendor';
 
 const { Title } = Typography;
 
@@ -99,59 +105,57 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
 
 const QuotationHistory: React.FC = () => {
     const [loading, setLoading] = useState(false);
-    const [quotations, setQuotations] = useState<QuotationRecord[]>(mockQuotations);
-    const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 10, total: mockQuotations.length });
+    const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
+    const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 10, total: 0 });
     const [detailVisible, setDetailVisible] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<QuotationRecord | null>(null);
+    const [filters, setFilters] = useState<Partial<QuotationQueryParams>>({});
 
-    useEffect(() => {
-        const handleError = (e: ErrorEvent) => {
-            if (e.message.includes('ResizeObserver')) {
-                e.stopPropagation();
-                return false;
-            }
-        };
-        window.addEventListener('error', handleError);
-        return () => window.removeEventListener('error', handleError);
-    }, []);
-
-    const fetchQuotations = useCallback(async (params: QuotationQueryParams) => {
+    const fetchData = useCallback(async (page: number, pageSize: number, queryFilters: Partial<QuotationQueryParams>) => {
         setLoading(true);
         try {
-            const filteredData = mockQuotations.filter(item => {
-                if (params.vendor && !item.vendor.toLowerCase().includes(params.vendor.toLowerCase())) return false;
-                if (params.productType && !item.productName.toLowerCase().includes(params.productType.toLowerCase())) return false;
-                if (params.productKeyword && !item.productName.toLowerCase().includes(params.productKeyword.toLowerCase())) return false;
-                return true;
+            const { data, total } = await getQuotationList({
+                ...queryFilters,
+                page,
+                pageSize
             });
-
-            const start = (params.page - 1) * params.pageSize;
-            const end = start + params.pageSize;
-            const pageData = filteredData.slice(start, end);
-
-            setQuotations(pageData);
-            setPagination(prev => ({ ...prev, total: filteredData.length }));
+            setQuotations(data);
+            setPagination(prev => ({ ...prev, total }));
         } catch (error) {
             Toast.error('获取报价记录失败');
+            console.error('Error fetching quotations:', error);
         } finally {
             setLoading(false);
         }
     }, []);
 
+    useEffect(() => {
+        fetchData(pagination.currentPage, pagination.pageSize, filters);
+    }, [fetchData, pagination.currentPage, pagination.pageSize, filters]);
+
     const handleSubmit = (values: Record<string, any>) => {
-        const params: QuotationQueryParams = {
-            ...values,
-            page: pagination.currentPage,
-            pageSize: pagination.pageSize
+        const newFilters: Partial<QuotationQueryParams> = {
+            vendor: values.vendor,
+            category: values.category,
+            region: values.region,
+            productKeyword: values.productKeyword
         };
-        fetchQuotations(params);
+        setFilters(newFilters);
+        setPagination(prev => ({ ...prev, currentPage: 1 }));
+    };
+
+    const handleReset = () => {
+        setFilters({});
+        setPagination(prev => ({ ...prev, currentPage: 1 }));
+    };
+
+    const handlePageChange = (page: number) => {
+        setPagination(prev => ({ ...prev, currentPage: page }));
     };
 
     const handleShowDetail = useCallback((record: QuotationRecord) => {
         setCurrentRecord(record);
-        setTimeout(() => {
-            setDetailVisible(true);
-        }, 0);
+        setDetailVisible(true);
     }, []);
 
     const handleCloseDetail = useCallback(() => {
@@ -164,6 +168,16 @@ const QuotationHistory: React.FC = () => {
             title: '产品名称',
             dataIndex: 'productName',
             width: 200
+        },
+        {
+            title: '产品类别',
+            dataIndex: 'category',
+            width: 120
+        },
+        {
+            title: '地区',
+            dataIndex: 'region',
+            width: 100
         },
         {
             title: '产品详解',
@@ -233,17 +247,17 @@ const QuotationHistory: React.FC = () => {
         <div style={{ padding: '20px' }}>
             <Title heading={3}>历史报价查询</Title>
             
-            <Form onSubmit={handleSubmit}>
+            <Form onSubmit={handleSubmit} onReset={handleReset}>
                 <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
                     <Form.Select
-                        field="productType"
-                        label="产品类型"
+                        field="category"
+                        label="产品类别"
                         style={{ width: 200 }}
                         placeholder="请选择"
                         showClear
-                        optionList={PRODUCT_CATEGORIES.map(category => ({
-                            label: category,
-                            value: category
+                        optionList={PRODUCT_CATEGORIES.map(cat => ({
+                            label: cat,
+                            value: cat
                         }))}
                     />
                     <Form.Select
@@ -252,12 +266,10 @@ const QuotationHistory: React.FC = () => {
                         style={{ width: 200 }}
                         placeholder="请选择"
                         showClear
-                        optionList={[
-                            { label: '华北', value: '华北' },
-                            { label: '华东', value: '华东' },
-                            { label: '华南', value: '华南' },
-                            { label: '西部', value: '西部' }
-                        ]}
+                        optionList={REGIONS.map(region => ({
+                            label: region,
+                            value: region
+                        }))}
                     />
                     <Form.Input
                         field="productKeyword"
@@ -273,7 +285,7 @@ const QuotationHistory: React.FC = () => {
                         placeholder="请输入"
                         showClear
                     />
-                    <Space>
+                    <Space style={{ alignSelf: 'flex-end' }}>
                         <Button type="primary" htmlType="submit">
                             查询
                         </Button>
@@ -291,7 +303,7 @@ const QuotationHistory: React.FC = () => {
                     currentPage: pagination.currentPage,
                     pageSize: pagination.pageSize,
                     total: pagination.total,
-                    onPageChange: page => setPagination(prev => ({ ...prev, currentPage: page }))
+                    onPageChange: handlePageChange
                 }}
                 loading={loading}
                 scroll={{ x: 1500 }}

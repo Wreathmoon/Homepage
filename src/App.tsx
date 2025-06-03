@@ -1,15 +1,22 @@
 import { Layout } from '@douyinfe/semi-ui';
 import '@douyinfe/semi-ui/dist/css/semi.min.css';
 import { Route, BrowserRouter as Router, Routes, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import Home from './pages/Home';
 import Portal from './pages/Portal';
 import Tools from './pages/Tools';
 import Contact from './pages/Contact';
 import QuotationHelper from './pages/QuotationHelper';
+import { ResizeObserverFix } from './utils/resizeObserver';
 
 const { Content } = Layout;
 
 function App() {
+    // 应用 ResizeObserver 修复
+    useEffect(() => {
+        ResizeObserverFix.apply();
+    }, []);
+
     return (
         <Router>
             <Layout style={{ height: '100vh' }}>

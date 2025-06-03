@@ -24,6 +24,8 @@ export interface QuotationRecord {
     quotationDate: string; // 报价日期
     isValid: boolean;     // 报价是否有效
     remark: string;       // 备注
+    category: string;     // 产品类别
+    region: string;       // 地区
     attachments?: Array<{  // 附件列表
         id: string;
         name: string;
@@ -36,20 +38,81 @@ export interface QuotationQueryParams {
     vendor?: string;          // 供应商
     productType?: string;     // 产品类型
     region?: string;          // 地区
+    category?: string;        // 产品类别
     productKeyword?: string;  // 产品关键字
     page: number;
     pageSize: number;
 }
 
+// Mock产品类别
+export const PRODUCT_CATEGORIES = [
+    '服务器',
+    '存储设备',
+    '网络设备',
+    '安全设备',
+    '软件系统',
+    '云服务',
+    '其他'
+] as const;
+
+// Mock地区
+export const REGIONS = [
+    '华北',
+    '华东',
+    '华南',
+    '华中',
+    '西南',
+    '西北',
+    '东北',
+    '海外'
+] as const;
+
 // API 函数：获取历史报价列表
 export async function getQuotationList(params: QuotationQueryParams): Promise<{ data: QuotationRecord[]; total: number }> {
-    // TODO: 替换为实际API调用
-    const response = await request(API_ENDPOINTS.QUOTATION_LIST, {
-        method: 'GET',
-        params,
-        mock: true // 开发时使用模拟数据
-    });
-    return response;
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 过滤数据
+    let filteredData = [...mockQuotations];
+    
+    // 应用筛选条件
+    if (params.vendor) {
+        const vendorKeyword = params.vendor.toLowerCase();
+        filteredData = filteredData.filter(item => 
+            item.vendor.toLowerCase().includes(vendorKeyword)
+        );
+    }
+    
+    if (params.category) {
+        filteredData = filteredData.filter(item => 
+            item.category === params.category
+        );
+    }
+    
+    if (params.region) {
+        filteredData = filteredData.filter(item => 
+            item.region === params.region
+        );
+    }
+    
+    if (params.productKeyword) {
+        const keyword = params.productKeyword.toLowerCase();
+        filteredData = filteredData.filter(item => 
+            item.productName.toLowerCase().includes(keyword) ||
+            item.productSpec.toLowerCase().includes(keyword)
+        );
+    }
+
+    // 计算分页
+    const total = filteredData.length;
+    const start = (params.page - 1) * params.pageSize;
+    const end = start + params.pageSize;
+    const paginatedData = filteredData.slice(start, end);
+
+    return {
+        data: paginatedData,
+        total
+    };
 }
 
 // API 函数：获取历史报价详情
@@ -202,6 +265,8 @@ export const mockQuotations: QuotationRecord[] = [
         quotationDate: '2024-03-15',
         isValid: true,
         remark: '大批量优惠价格',
+        category: '服务器',
+        region: '华北',
         attachments: [
             {
                 id: '1-1',
@@ -279,6 +344,8 @@ export const mockQuotations: QuotationRecord[] = [
         quotationDate: '2024-03-14',
         isValid: true,
         remark: '含3年原厂服务',
+        category: '网络设备',
+        region: '华东',
         attachments: [
             {
                 id: '2-1',

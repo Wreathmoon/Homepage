@@ -7,7 +7,9 @@ import {
     Modal, 
     Toast,
     Popover,
-    Space
+    Space,
+    Tabs,
+    TabPane
 } from '@douyinfe/semi-ui';
 import { IconMore } from '@douyinfe/semi-icons';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
@@ -19,6 +21,10 @@ import {
     deleteQuotation,
     uploadQuotationFile
 } from '../../../services/quotation';
+import DatabaseManager from './DatabaseManager';
+import QuotationHistory from './QuotationHistory';
+import QuotationImport from './QuotationImport';
+import Vendor from './Vendor';
 
 const { Title, Text } = Typography;
 
@@ -27,6 +33,7 @@ const QuotationManagement: React.FC = () => {
     const [visible, setVisible] = useState(false);
     const [editing, setEditing] = useState<QuotationRecord | null>(null);
     const [loading, setLoading] = useState(false);
+    const [activeKey, setActiveKey] = useState('history');
 
     // 获取报价列表
     const fetchQuotations = async () => {
@@ -206,7 +213,27 @@ const QuotationManagement: React.FC = () => {
     ];
 
     return (
-        <div style={{ padding: '20px' }}>
+        <div style={{ padding: '20px', background: 'var(--semi-color-bg-0)' }}>
+            <Tabs 
+                type="line"
+                activeKey={activeKey}
+                onChange={key => setActiveKey(key)}
+                lazyRender={false}
+                keepDOM={true}
+            >
+                <TabPane tab="历史报价查询" itemKey="history">
+                    <QuotationHistory />
+                </TabPane>
+                <TabPane tab="报价导入" itemKey="import">
+                    <QuotationImport />
+                </TabPane>
+                <TabPane tab="供应商查询" itemKey="vendor">
+                    <Vendor />
+                </TabPane>
+                <TabPane tab="数据库管理" itemKey="database">
+                    <DatabaseManager />
+                </TabPane>
+            </Tabs>
             <Title heading={2}>报价管理</Title>
             <div style={{ marginBottom: 16 }}>
                 <Button type="primary" onClick={handleAdd} style={{ marginRight: 16 }}>新增</Button>
@@ -267,8 +294,8 @@ const QuotationManagement: React.FC = () => {
                     <Form.InputNumber 
                         field="discount_rate" 
                         label="折扣率"
-                        formatter={value => `${value}%`}
-                        parser={value => value!.replace('%', '')}
+                        formatter={(value) => `${value}%`}
+                        parser={(value) => value!.replace('%', '')}
                     />
                     <Form.InputNumber 
                         field="quote_total_price" 

@@ -34,6 +34,18 @@ interface DetailModalProps {
 }
 
 const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) => {
+    const [ready, setReady] = useState(false);
+
+    useEffect(() => {
+        if (visible && record) {
+            requestAnimationFrame(() => {
+                setReady(true);
+            });
+        } else {
+            setReady(false);
+        }
+    }, [visible, record]);
+
     if (!record) return null;
 
     const handleDownload = async (attachmentId: string, fileName: string) => {
@@ -65,17 +77,22 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
             }}
             bodyStyle={{
                 maxHeight: '85vh',
-                overflow: 'auto',
-                padding: '20px'
+                overflow: ready ? 'auto' : 'hidden',
+                padding: '20px',
+                opacity: ready ? 1 : 0,
+                transition: 'opacity 0.3s ease-in-out'
             }}
             maskStyle={{
                 backgroundColor: 'rgba(0, 0, 0, 0.65)',
                 backdropFilter: 'blur(2px)'
             }}
             getPopupContainer={() => document.body}
-            motion={false}
         >
-            <div style={{ padding: '0 4px' }}>
+            <div style={{ 
+                padding: '0 4px',
+                transform: ready ? 'none' : 'translateY(20px)',
+                transition: 'transform 0.3s ease-out',
+            }}>
                 {record.attachments && record.attachments.length > 0 && (
                     <div style={{
                         marginBottom: '20px',
@@ -174,7 +191,9 @@ const QuotationHistory: React.FC = () => {
 
     const handleCloseDetail = () => {
         setDetailVisible(false);
-        setCurrentRecord(null);
+        setTimeout(() => {
+            setCurrentRecord(null);
+        }, 300);
     };
 
     const columns: ColumnProps<QuotationRecord>[] = [

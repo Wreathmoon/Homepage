@@ -8,13 +8,15 @@ import {
     Tooltip,
     Modal,
     Toast,
-    Upload
+    Upload,
+    Card
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { IconUpload } from '@douyinfe/semi-icons';
 import { request } from '../../../utils/request';
 import { BeforeUploadProps } from '@douyinfe/semi-ui/lib/es/upload';
 import type { FormApi } from '@douyinfe/semi-ui/lib/es/form';
+import { uploadQuotationFile } from '../../../services/quotation';
 
 const { Title, Text } = Typography;
 
@@ -54,7 +56,8 @@ const QuotationImport: React.FC = () => {
         try {
             await request('/api/products', {
                 method: 'POST',
-                data: values
+                data: values,
+                mock: true // 启用模拟数据
             });
             Toast.success('报价记录添加成功');
             form?.reset();
@@ -73,10 +76,11 @@ const QuotationImport: React.FC = () => {
         try {
             const response = await request('/api/upload-quotation', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                mock: true
             });
             Toast.success('文件上传成功');
-            setQuotations(response.data.data || []);
+            setQuotations(response.data || []);
             return response;
         } catch (error) {
             Toast.error('文件上传失败，请重试');
@@ -93,7 +97,10 @@ const QuotationImport: React.FC = () => {
     // 处理删除
     const handleDelete = async (id: number) => {
         try {
-            await fetch(`http://localhost:3001/api/products/${id}`, { method: 'DELETE' });
+            await request(`/api/products/${id}`, { 
+                method: 'DELETE',
+                mock: true // 启用模拟数据
+            });
             Toast.success('删除成功');
             setQuotations(quotations.filter(q => q.id !== id));
         } catch (error) {
@@ -175,93 +182,167 @@ const QuotationImport: React.FC = () => {
     ];
 
     return (
-        <div style={{ padding: '20px', maxWidth: 800, margin: '0 auto' }}>
-            <Title heading={3}>报价上传</Title>
+        <div style={{ padding: '20px' }}>
+            <Title heading={3}>报价记录导入</Title>
             
-            <div style={{ marginBottom: 40 }}>
-                <Title heading={5} style={{ marginBottom: 16 }}>批量上传</Title>
-                <Upload
-                    action=""
-                    beforeUpload={handleUpload}
-                    accept=".xlsx,.xls,.csv"
-                    uploadTrigger="custom"
-                    showUploadList
-                    draggable
-                    dragMainText={
-                        <div style={{ textAlign: 'center' }}>
-                            <IconUpload size="extra-large" />
-                            <div style={{ marginTop: 8, color: 'var(--semi-color-text-2)' }}>
-                                点击上传或拖拽文件到这里
-                            </div>
+            <Card style={{ 
+                background: 'var(--semi-color-bg-1)',
+                marginTop: '20px',
+                borderRadius: '6px'
+            }}>
+                <Form>
+                    <Form.Section text="导入报价单">
+                        <Upload
+                            action="/api/upload"
+                            draggable
+                            accept=".pdf,.doc,.docx"
+                            limit={1}
+                            dragMainText="点击上传或拖拽报价单到这里"
+                            dragSubText="支持 PDF、Word 格式"
+                            style={{
+                                marginTop: '16px',
+                                border: '2px dashed var(--semi-color-primary)',
+                                borderRadius: '6px',
+                                padding: '20px'
+                            }}
+                        />
+                        <div style={{ marginTop: '16px' }}>
+                            <Button
+                                theme="solid"
+                                type="primary"
+                                icon={<IconUpload />}
+                                loading={loading}
+                                onClick={() => {
+                                    setLoading(true);
+                                    setTimeout(() => {
+                                        Toast.success('报价单导入成功');
+                                        setLoading(false);
+                                    }, 2000);
+                                }}
+                            >
+                                开始导入
+                            </Button>
+                            <Text type="tertiary" style={{ marginLeft: '12px', fontSize: '12px' }}>
+                                导入后将自动识别报价单内容
+                            </Text>
                         </div>
-                    }
-                    dragSubText="支持 .xlsx, .xls, .csv 格式的文件"
-                />
-            </div>
-
-            <div>
-                <Title heading={5} style={{ marginBottom: 16 }}>手动添加</Title>
-                <Form<QuotationFormData>
-                    getFormApi={setForm}
-                    onSubmit={handleSubmit}
-                    style={{ width: '100%' }}
-                >
-                    <Form.Input
-                        field="name"
-                        label="产品名称"
-                        rules={[{ required: true, message: '请输入产品名称' }]}
-                    />
-                    <Form.Input
-                        field="supplier"
-                        label="供应商"
-                        rules={[{ required: true, message: '请输入供应商' }]}
-                    />
-                    <Form.InputNumber
-                        field="list_price"
-                        label="List Price"
-                        prefix="¥"
-                    />
-                    <Form.InputNumber
-                        field="quote_unit_price"
-                        label="报价单价"
-                        prefix="¥"
-                        rules={[{ required: true, message: '请输入报价单价' }]}
-                    />
-                    <Form.InputNumber
-                        field="quantity"
-                        label="数量"
-                        min={1}
-                        rules={[{ required: true, message: '请输入数量' }]}
-                    />
-                    <Form.InputNumber
-                        field="quote_total_price"
-                        label="报价总价"
-                        prefix="¥"
-                        rules={[{ required: true, message: '请输入报价总价' }]}
-                    />
-                    <Form.DatePicker
-                        field="quote_validity"
-                        label="报价有效期"
-                        type="date"
-                        rules={[{ required: true, message: '请选择报价有效期' }]}
-                    />
-                    <Form.TextArea
-                        field="notes"
-                        label="备注"
-                        rows={4}
-                    />
-                    <div style={{ marginTop: 24, textAlign: 'right' }}>
-                        <Space>
-                            <Button type="tertiary" onClick={() => form?.reset()}>
-                                重置
-                            </Button>
-                            <Button type="primary" htmlType="submit" loading={loading}>
-                                提交
-                            </Button>
-                        </Space>
-                    </div>
+                    </Form.Section>
                 </Form>
-            </div>
+            </Card>
+
+            <Card style={{ 
+                background: 'var(--semi-color-bg-1)',
+                marginTop: '20px',
+                borderRadius: '6px'
+            }}>
+                <Form onSubmit={handleSubmit}>
+                    <Form.Section text="手动添加">
+                        <Form.Input
+                            field="productName"
+                            label="产品名称"
+                            placeholder="请输入产品名称"
+                            rules={[{ required: true, message: '请输入产品名称' }]}
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                padding: '4px 12px',
+                                borderRadius: '6px'
+                            }}
+                        />
+                        <Form.Input
+                            field="vendor"
+                            label="供应商"
+                            placeholder="请输入供应商名称"
+                            rules={[{ required: true, message: '请输入供应商名称' }]}
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                padding: '4px 12px',
+                                borderRadius: '6px'
+                            }}
+                        />
+                        <Form.InputNumber
+                            field="list_price"
+                            label="List Price"
+                            prefix="¥"
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                padding: '4px 12px',
+                                borderRadius: '6px'
+                            }}
+                        />
+                        <Form.InputNumber
+                            field="quote_unit_price"
+                            label="报价单价"
+                            prefix="¥"
+                            rules={[{ required: true, message: '请输入报价单价' }]}
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                padding: '4px 12px',
+                                borderRadius: '6px'
+                            }}
+                        />
+                        <Form.InputNumber
+                            field="quantity"
+                            label="数量"
+                            rules={[{ required: true, message: '请输入数量' }]}
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                padding: '4px 12px',
+                                borderRadius: '6px'
+                            }}
+                        />
+                        <Form.InputNumber
+                            field="quote_total_price"
+                            label="报价总价"
+                            prefix="¥"
+                            rules={[{ required: true, message: '请输入报价总价' }]}
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                padding: '4px 12px',
+                                borderRadius: '6px'
+                            }}
+                        />
+                        <Form.DatePicker
+                            field="quote_validity"
+                            label="报价有效期"
+                            placeholder="请选择日期"
+                            rules={[{ required: true, message: '请选择报价有效期' }]}
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                borderRadius: '6px'
+                            }}
+                        />
+                        <Form.TextArea
+                            field="remarks"
+                            label="备注"
+                            placeholder="请输入备注信息"
+                            style={{
+                                border: '3px solid var(--semi-color-border)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                minHeight: '120px'
+                            }}
+                        />
+                        <div style={{ marginTop: '20px', textAlign: 'right' }}>
+                            <Space>
+                                <Button theme="solid" type="primary" htmlType="submit">
+                                    提交
+                                </Button>
+                                <Button theme="solid" type="tertiary" htmlType="reset">
+                                    重置
+                                </Button>
+                            </Space>
+                        </div>
+                    </Form.Section>
+                </Form>
+            </Card>
 
             <Table 
                 columns={columns} 

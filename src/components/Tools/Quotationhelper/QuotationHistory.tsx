@@ -23,6 +23,7 @@ import {
     REGIONS
 } from '../../../services/quotationHistory';
 import type { QuotationRecord, QuotationQueryParams } from '../../../services/quotationHistory';
+import { ResizeObserverFix } from '../../../utils/resizeObserver';
 
 const { Title } = Typography;
 
@@ -58,18 +59,28 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
             onCancel={onClose}
             footer={null}
             width={800}
-            bodyStyle={{ 
-                maxHeight: '70vh',
-                overflow: 'auto',
-                padding: '24px'
+            zIndex={1050}
+            style={{ 
+                top: '5vh'
             }}
+            bodyStyle={{
+                maxHeight: '85vh',
+                overflow: 'auto',
+                padding: '20px'
+            }}
+            maskStyle={{
+                backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                backdropFilter: 'blur(2px)'
+            }}
+            getPopupContainer={() => document.body}
+            motion={false}
         >
-            <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '0 4px' }}>
                 {record.attachments && record.attachments.length > 0 && (
-                    <div style={{ 
-                        borderBottom: '1px solid var(--semi-color-border)',
-                        paddingBottom: 16,
-                        marginBottom: 16 
+                    <div style={{
+                        marginBottom: '20px',
+                        paddingBottom: '20px',
+                        borderBottom: '1px solid var(--semi-color-border)'
                     }}>
                         {record.attachments.map(attachment => (
                             <Button
@@ -85,18 +96,19 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
                     </div>
                 )}
 
-                <div style={{ flex: 1 }}>
-                    <pre style={{ 
-                        whiteSpace: 'pre-wrap', 
-                        background: 'var(--semi-color-fill-0)',
-                        padding: 16,
-                        borderRadius: 4,
+                <div>
+                    <div style={{
                         fontSize: '14px',
                         lineHeight: '1.6',
-                        margin: 0
+                        whiteSpace: 'pre-wrap',
+                        background: 'var(--semi-color-fill-0)',
+                        padding: '16px',
+                        borderRadius: '4px',
+                        maxHeight: '60vh',
+                        overflow: 'auto'
                     }}>
-                        {record.configDetail}
-                    </pre>
+                        {record.configDetail || record.productSpec}
+                    </div>
                 </div>
             </div>
         </Modal>
@@ -153,15 +165,17 @@ const QuotationHistory: React.FC = () => {
         setPagination(prev => ({ ...prev, currentPage: page }));
     };
 
-    const handleShowDetail = useCallback((record: QuotationRecord) => {
+    const handleShowDetail = (record: QuotationRecord) => {
         setCurrentRecord(record);
-        setDetailVisible(true);
-    }, []);
+        requestAnimationFrame(() => {
+            setDetailVisible(true);
+        });
+    };
 
-    const handleCloseDetail = useCallback(() => {
+    const handleCloseDetail = () => {
         setDetailVisible(false);
         setCurrentRecord(null);
-    }, []);
+    };
 
     const columns: ColumnProps<QuotationRecord>[] = [
         {
@@ -309,13 +323,11 @@ const QuotationHistory: React.FC = () => {
                 scroll={{ x: 1500 }}
             />
 
-            {currentRecord && (
-                <DetailModal
-                    visible={detailVisible}
-                    onClose={handleCloseDetail}
-                    record={currentRecord}
-                />
-            )}
+            <DetailModal
+                visible={detailVisible}
+                onClose={handleCloseDetail}
+                record={currentRecord}
+            />
         </div>
     );
 };

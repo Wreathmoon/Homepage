@@ -15,6 +15,9 @@ function App() {
     // 应用 ResizeObserver 修复
     useEffect(() => {
         ResizeObserverFix.apply();
+        return () => {
+            ResizeObserverFix.release();
+        };
     }, []);
 
     return (

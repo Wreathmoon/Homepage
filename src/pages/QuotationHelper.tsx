@@ -28,14 +28,17 @@ const QuotationHelper = () => {
     };
 
     return (
-        <Layout style={{
-            height: '100vh',
-            width: '100vw',
-            border: 'none'
-        }}>
+        <Layout style={{ height: '100%', border: 'none' }}>
             <Header />
-            <Layout>
-                <Sider style={{ backgroundColor: 'var(--semi-color-bg-1)', border: 'none' }}>
+            <Layout style={{ height: 'calc(100% - 60px)' }}>
+                <Sider style={{ 
+                    backgroundColor: 'var(--semi-color-bg-1)', 
+                    border: 'none',
+                    height: '100%',
+                    position: 'fixed',
+                    left: 0,
+                    zIndex: 100
+                }}>
                     <Nav
                         style={{ maxWidth: 220, height: '100%' }}
                         defaultSelectedKeys={['Quotation']}
@@ -52,14 +55,18 @@ const QuotationHelper = () => {
                         }}
                     />
                 </Sider>
-                <Content
-                    style={{
-                        padding: '24px',
-                        backgroundColor: 'var(--semi-color-bg-0)',
-                    }}
-                >
-                    {renderContent()}
-                </Content>
+                <Layout style={{ marginLeft: 220 }}>
+                    <Content
+                        style={{
+                            padding: '24px',
+                            backgroundColor: 'var(--semi-color-bg-0)',
+                            minHeight: '100%',
+                            overflowX: 'hidden'
+                        }}
+                    >
+                        {renderContent()}
+                    </Content>
+                </Layout>
             </Layout>
         </Layout>
     );

@@ -16,7 +16,9 @@ import {
     Tag
 } from '@douyinfe/semi-ui';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
+
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
+
 import { getVendorList, getVendorProducts, PRODUCT_CATEGORIES } from '../../../services/vendor';
 import type { VendorQueryParams, Vendor as VendorType } from '../../../services/vendor';
 
@@ -25,6 +27,7 @@ const { Title } = Typography;
 // 定义筛选条件接口
 interface FilterValues {
     country?: string;
+
     type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
     agentType?: 'GENERAL_AGENT' | 'AGENT' | 'DIRECT';
     productCategory?: string;
@@ -34,6 +37,7 @@ interface FilterValues {
 
 const Vendor: React.FC = () => {
     const [loading, setLoading] = useState(false);
+
     const [filters, setFilters] = useState<VendorQueryParams>({ page: 1, pageSize: 10 });   
     const [suppliers, setSuppliers] = useState<VendorType[]>([]);
     const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 10, total: 0 });
@@ -80,6 +84,7 @@ const Vendor: React.FC = () => {
             };
 
             const response = await getVendorList(params);
+
             
             // 如果有关键字，在前端进行额外过滤
             let filteredData = response.data;
@@ -96,6 +101,7 @@ const Vendor: React.FC = () => {
             setPagination(prev => ({ 
                 ...prev, 
                 total: filteredData.length,
+
                 currentPage: page,
                 pageSize 
             }));
@@ -107,6 +113,7 @@ const Vendor: React.FC = () => {
     }, []);
 
     // 获取供应商产品
+
     const fetchVendorProducts = useCallback(async (vendorId: number) => {
         setProductsLoading(true);
         try {
@@ -125,6 +132,7 @@ const Vendor: React.FC = () => {
         setFilters(initialFilters);
         fetchSuppliers({}, 1, pagination.pageSize);
     }, [pagination.pageSize, fetchSuppliers]);
+
 
     // 处理筛选条件提交
     const handleSubmit = (values: FilterValues) => {

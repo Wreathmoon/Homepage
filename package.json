@@ -4,13 +4,14 @@
   "private": true,
   "homepage": "/",
   "dependencies": {
-    "@douyinfe/semi-icons": "^2.78.0",
-    "@douyinfe/semi-ui": "^2.78.0",
+    "@douyinfe/semi-icons": "^2.80.0",
+    "@douyinfe/semi-ui": "^2.80.0",
     "@types/node": "^16.18.126",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/react-router-dom": "^5.3.3",
-    "react": "^18.2.0",
+    "axios": "^1.9.0",
+    "react": "^18.3.1",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.5.2",
     "react-scripts": "5.0.1",
@@ -18,10 +19,10 @@
     "web-vitals": "^3.5.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.11",
-    "@testing-library/react": "^14.1.2",
     "@testing-library/jest-dom": "^6.1.5",
-    "@testing-library/user-event": "^14.5.1"
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/jest": "^29.5.11"
   },
   "scripts": {
     "start": "react-scripts start",

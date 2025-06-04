@@ -1,5 +1,6 @@
 import { Layout } from '@douyinfe/semi-ui';
 import '@douyinfe/semi-ui/dist/css/semi.min.css';
+import './styles/global.css';
 import { Route, BrowserRouter as Router, Routes, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import Home from './pages/Home';
@@ -12,12 +13,19 @@ import { ResizeObserverFix } from './utils/resizeObserver';
 const { Content } = Layout;
 
 function App() {
-    // 应用 ResizeObserver 修复
+
+    // 全局处理 ResizeObserver 错误
     useEffect(() => {
-        ResizeObserverFix.apply();
-        return () => {
-            ResizeObserverFix.release();
+        const handleError = (event: Event) => {
+            if (event instanceof ErrorEvent && event.message.includes('ResizeObserver')) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
         };
+
+        window.addEventListener('error', handleError as EventListener);
+        return () => window.removeEventListener('error', handleError as EventListener);
+
     }, []);
 
     return (

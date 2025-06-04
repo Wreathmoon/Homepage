@@ -1,0 +1,20 @@
+/* Semi UI 下拉菜单选项靠左 */
+.semi-select-option {
+    display: flex !important;
+    justify-content: flex-start !important;
+    padding-left: 16px !important;
+}
+
+/* 下拉菜单选项文本靠左 */
+.semi-select-option-text {
+    text-align: left !important;
+    width: 100% !important;
+}
+
+/* 修复 ResizeObserver 错误 */
+iframe {
+    width: 0 !important;
+    height: 0 !important;
+    border: 0 !important;
+    position: absolute !important;
+} 

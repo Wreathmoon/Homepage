@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { IconSearch, IconMailStroked1, IconCart } from '@douyinfe/semi-icons';
+import { IconMailStroked1, IconSearch, IconHistory, IconUpload } from '@douyinfe/semi-icons';
 import { Layout, Nav } from '@douyinfe/semi-ui';
 import Header from '../components/Header';
 import Quotation from '../components/Tools/Quotationhelper/Quotation';
-import { default as Vendor } from '../components/Tools/Quotationhelper/Vendor';
-import Cost from '../components/Tools/Quotationhelper/Cost';
+import Vendor from '../components/Tools/Quotationhelper/Vendor';
+import QuotationHistory from '../components/Tools/Quotationhelper/QuotationHistory';
+import QuotationImport from '../components/Tools/Quotationhelper/QuotationImport';
+
 
 const { Footer, Sider, Content } = Layout;
 
@@ -17,22 +19,27 @@ const QuotationHelper = () => {
                 return <Quotation />;
             case 'Vendor':
                 return <Vendor />;
-            case 'Cost':
-                return <Cost />;
+            case 'History':
+                return <QuotationHistory />;
+            case 'Import':
+                return <QuotationImport />;
             default:
                 return null;
         }
     };
 
     return (
-        <Layout style={{
-            height: '100vh',
-            width: '100vw',
-            border: 'none'
-        }}>
+        <Layout style={{ height: '100%', border: 'none' }}>
             <Header />
-            <Layout>
-                <Sider style={{ backgroundColor: 'var(--semi-color-bg-1)', border: 'none' }}>
+            <Layout style={{ height: 'calc(100% - 60px)' }}>
+                <Sider style={{ 
+                    backgroundColor: 'var(--semi-color-bg-1)', 
+                    border: 'none',
+                    height: '100%',
+                    position: 'fixed',
+                    left: 0,
+                    zIndex: 100
+                }}>
                     <Nav
                         style={{ maxWidth: 220, height: '100%' }}
                         defaultSelectedKeys={['Quotation']}
@@ -40,7 +47,8 @@ const QuotationHelper = () => {
                         items={[
                             { itemKey: 'Quotation', text: '询价邮件', icon: <IconMailStroked1 size="large" /> },
                             { itemKey: 'Vendor', text: '供应商查询', icon: <IconSearch size="large" /> },
-                            { itemKey: 'Cost', text: '成本预估', icon: <IconCart size="large" /> },
+                            { itemKey: 'History', text: '历史报价', icon: <IconHistory size="large" /> },
+                            { itemKey: 'Import', text: '报价上传', icon: <IconUpload size="large" /> },
                         ]}
                         onSelect={data => setSelectedPage(data.itemKey as string)}
                         footer={{
@@ -48,16 +56,18 @@ const QuotationHelper = () => {
                         }}
                     />
                 </Sider>
-                <Content
-                    style={{
-                        padding: '24px',
-                        backgroundColor: 'var(--semi-color-bg-0)',
-                    }}
-                >
-                    <div>
+                <Layout style={{ marginLeft: 220 }}>
+                    <Content
+                        style={{
+                            padding: '24px',
+                            backgroundColor: 'var(--semi-color-bg-0)',
+                            minHeight: '100%',
+                            overflowX: 'hidden'
+                        }}
+                    >
                         {renderContent()}
-                    </div>
-                </Content>
+                    </Content>
+                </Layout>
             </Layout>
         </Layout>
     );

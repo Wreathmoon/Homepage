@@ -8,10 +8,12 @@ import Portal from './pages/Portal';
 import Tools from './pages/Tools';
 import Contact from './pages/Contact';
 import QuotationHelper from './pages/QuotationHelper';
+import { ResizeObserverFix } from './utils/resizeObserver';
 
 const { Content } = Layout;
 
 function App() {
+
     // 全局处理 ResizeObserver 错误
     useEffect(() => {
         const handleError = (event: Event) => {
@@ -23,6 +25,7 @@ function App() {
 
         window.addEventListener('error', handleError as EventListener);
         return () => window.removeEventListener('error', handleError as EventListener);
+
     }, []);
 
     return (

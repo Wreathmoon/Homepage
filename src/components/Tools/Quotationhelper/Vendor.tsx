@@ -16,6 +16,9 @@ import {
     Tag
 } from '@douyinfe/semi-ui';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
+
+import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
+
 import { getVendorList, getVendorProducts, PRODUCT_CATEGORIES } from '../../../services/vendor';
 import type { VendorQueryParams, Vendor as VendorType } from '../../../services/vendor';
 
@@ -24,7 +27,8 @@ const { Title } = Typography;
 // 定义筛选条件接口
 interface FilterValues {
     country?: string;
-    type?: string;
+
+    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
     agentType?: 'GENERAL_AGENT' | 'AGENT' | 'DIRECT';
     productCategory?: string;
     productKeyword?: string;
@@ -33,26 +37,14 @@ interface FilterValues {
 
 const Vendor: React.FC = () => {
     const [loading, setLoading] = useState(false);
-    const [filters, setFilters] = useState<VendorQueryParams>({ page: 1, pageSize: 10 });
+
+    const [filters, setFilters] = useState<VendorQueryParams>({ page: 1, pageSize: 10 });   
     const [suppliers, setSuppliers] = useState<VendorType[]>([]);
     const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 10, total: 0 });
     const [productsVisible, setProductsVisible] = useState(false);
     const [currentSupplier, setCurrentSupplier] = useState<VendorType | null>(null);
     const [products, setProducts] = useState<string[]>([]);
     const [productsLoading, setProductsLoading] = useState(false);
-
-    // 添加 ResizeObserver 错误处理
-    useEffect(() => {
-        const handleError = (event: Event) => {
-            if (event instanceof ErrorEvent && event.message.includes('ResizeObserver')) {
-                event.stopPropagation();
-                event.preventDefault();
-            }
-        };
-
-        window.addEventListener('error', handleError as EventListener);
-        return () => window.removeEventListener('error', handleError as EventListener);
-    }, []);
 
     // 获取供应商列表
     const fetchSuppliers = useCallback(async (values: FilterValues, page: number, pageSize: number) => {
@@ -92,10 +84,24 @@ const Vendor: React.FC = () => {
             };
 
             const response = await getVendorList(params);
-            setSuppliers(response.data);
+
+            
+            // 如果有关键字，在前端进行额外过滤
+            let filteredData = response.data;
+            if (values.keyword) {
+                const keyword = values.keyword.toLowerCase();
+                filteredData = filteredData.filter(item => 
+                    item.name.toLowerCase().includes(keyword) ||
+                    item.brands.some(brand => brand.toLowerCase().includes(keyword)) ||
+                    item.contact.toLowerCase().includes(keyword)
+                );
+            }
+            
+            setSuppliers(filteredData);
             setPagination(prev => ({ 
                 ...prev, 
-                total: response.total,
+                total: filteredData.length,
+
                 currentPage: page,
                 pageSize 
             }));
@@ -107,7 +113,8 @@ const Vendor: React.FC = () => {
     }, []);
 
     // 获取供应商产品
-    const fetchVendorProducts = useCallback(async (vendorId: string) => {
+
+    const fetchVendorProducts = useCallback(async (vendorId: number) => {
         setProductsLoading(true);
         try {
             const response = await getVendorProducts(vendorId);
@@ -126,8 +133,26 @@ const Vendor: React.FC = () => {
         fetchSuppliers({}, 1, pagination.pageSize);
     }, [pagination.pageSize, fetchSuppliers]);
 
+
+    // 处理筛选条件提交
+    const handleSubmit = (values: FilterValues) => {
+        const params: VendorQueryParams = {
+            country: values.country,
+            type: values.type,
+            productCategory: values.productCategory,
+            productKeyword: values.productKeyword,
+            keyword: values.keyword,
+            isGeneralAgent: values.agentType === 'GENERAL_AGENT',
+            isAgent: values.agentType === 'AGENT',
+            page: 1,
+            pageSize: pagination.pageSize
+        };
+        setFilters(params);
+        fetchSuppliers(values, 1, pagination.pageSize);
+    };
+
     // 表格列定义
-    const columns = [
+    const columns: ColumnProps<VendorType>[] = [
         { 
             title: '供应商名称', 
             dataIndex: 'name', 
@@ -213,7 +238,7 @@ const Vendor: React.FC = () => {
                 layout="horizontal"
                 labelPosition="left"
                 style={{ marginBottom: '20px' }}
-                onSubmit={(values) => fetchSuppliers(values, 1, pagination.pageSize)}
+                onSubmit={handleSubmit}
                 onReset={() => handleReset()}
             >
                 <Row style={{ marginBottom: 12 }}>

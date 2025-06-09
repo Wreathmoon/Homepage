@@ -1,4 +1,4 @@
-import { IconHome, IconBell, IconHelpCircle, IconMoon, IconSun } from '@douyinfe/semi-icons';
+import { IconBell, IconHelpCircle, IconMoon, IconSun } from '@douyinfe/semi-icons';
 import { Avatar, Button, Layout, Nav } from '@douyinfe/semi-ui';
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -38,7 +38,15 @@ const Header = () => {
                             style={{ color: '#E91E63', cursor: 'pointer' }} 
                             onClick={() => navigate('/home')}
                         >
-                            <IconHome style={{ height: '36px', fontSize: 36 }} />
+                            <img 
+                                src="/24764324_183446961832_2.jpg" 
+                                alt="联通Logo" 
+                                style={{ 
+                                    height: '36px', 
+                                    width: 'auto',
+                                    objectFit: 'contain'
+                                }} 
+                            />
                         </div>
                     </Nav.Header>
 

@@ -21,3 +21,36 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+products.db
+
+# Upload directory
+/uploads
+uploads/
+
+# Debug files
+debug-test.js
+test-server.js
+
+# Environment variables
+.env
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history

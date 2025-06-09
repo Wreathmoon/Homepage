@@ -1,6 +1,6 @@
 {
   "name": "quotation-helper",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "private": true,
   "homepage": "/",
   "dependencies": {
@@ -18,9 +18,8 @@
     "react-router-dom": "^6.28.0",
     "react-scripts": "5.0.1",
     "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
-  },
-  "devDependencies": {
+    "web-vitals": "^2.1.4",
+    "axios": "^1.6.0",
     "@google/generative-ai": "^0.21.0",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
@@ -31,13 +30,18 @@
     "sqlite3": "^5.1.7",
     "xlsx": "^0.18.5"
   },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "server": "node server.js",
-    "dev": "concurrently \"npm run server\" \"npm start\""
+    "dev": "concurrently \"npm run server\" \"npm start\"",
+    "postinstall": "npm run build",
+    "heroku-postbuild": "npm run build"
   },
   "eslintConfig": {
     "extends": [
@@ -56,5 +60,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
   }
 }

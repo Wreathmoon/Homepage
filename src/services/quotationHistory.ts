@@ -55,16 +55,28 @@ export const PRODUCT_CATEGORIES = [
     '其他'
 ] as const;
 
-// Mock地区
+// Mock地区 - 欧洲主流国家
 export const REGIONS = [
-    '华北',
-    '华东',
-    '华南',
-    '华中',
-    '西南',
-    '西北',
-    '东北',
-    '海外'
+    '德国',
+    '法国', 
+    '英国',
+    '意大利',
+    '西班牙',
+    '荷兰',
+    '比利时',
+    '瑞士',
+    '奥地利',
+    '瑞典',
+    '挪威',
+    '丹麦',
+    '芬兰',
+    '波兰',
+    '捷克',
+    '匈牙利',
+    '葡萄牙',
+    '爱尔兰',
+    '希腊',
+    '其他'
 ] as const;
 
 // Mock数据
@@ -73,7 +85,7 @@ export const mockQuotations: QuotationRecord[] = [
         id: '1',
         productName: '服务器Pro Max',
         category: '服务器',
-        region: '华北',
+        region: '德国',
         productSpec: 'CPU: 2.5GHz, 内存: 64GB, 硬盘: 2TB',
         vendor: '联想',
         originalPrice: 45000,
@@ -290,7 +302,7 @@ Linux发行版：
         id: '2',
         productName: 'NetSwitch Pro',
         category: '网络设备',
-        region: '华东',
+        region: '法国',
         productSpec: '48口千兆交换机，4个10G上联口',
         vendor: '华为',
         originalPrice: 12000,

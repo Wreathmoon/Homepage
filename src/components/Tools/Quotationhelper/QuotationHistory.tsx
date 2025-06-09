@@ -13,7 +13,7 @@ import {
     Toast
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-import { IconDownload } from '@douyinfe/semi-icons';
+import { IconDownload, IconFile } from '@douyinfe/semi-icons';
 import { 
     getQuotationList, 
     getQuotationDetail, 
@@ -24,6 +24,7 @@ import {
 } from '../../../services/quotationHistory';
 import type { QuotationRecord, QuotationQueryParams } from '../../../services/quotationHistory';
 import { ResizeObserverFix } from '../../../utils/resizeObserver';
+import { request } from '../../../utils/request';
 
 const { Title } = Typography;
 
@@ -64,6 +65,43 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
         }
     };
 
+    // 下载原始文件
+    const handleDownloadOriginal = async () => {
+        try {
+            Toast.info('正在准备下载...');
+            const response = await fetch(`http://localhost:3003/api/quotations/download/${record.id}`);
+            
+            if (!response.ok) {
+                throw new Error('下载失败');
+            }
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // 从响应头获取文件名，如果没有则使用默认名称
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let fileName = `${record.productName}_原始报价单`;
+            if (contentDisposition) {
+                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                if (matches != null && matches[1]) {
+                    fileName = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                }
+            }
+            
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            Toast.success('下载成功');
+        } catch (error) {
+            console.error('下载原始文件失败:', error);
+            Toast.error('下载失败，原始文件可能不存在');
+        }
+    };
+
     return (
         <Modal
             title={`产品详情 - ${record.productName}`}
@@ -93,25 +131,37 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
                 transform: ready ? 'none' : 'translateY(20px)',
                 transition: 'transform 0.3s ease-out',
             }}>
-                {record.attachments && record.attachments.length > 0 && (
-                    <div style={{
-                        marginBottom: '20px',
-                        paddingBottom: '20px',
-                        borderBottom: '1px solid var(--semi-color-border)'
-                    }}>
-                        {record.attachments.map(attachment => (
+                {/* 原始文件下载区域 */}
+                <div style={{
+                    marginBottom: '20px',
+                    paddingBottom: '20px',
+                    borderBottom: '1px solid var(--semi-color-border)'
+                }}>
+                    <Button
+                        icon={<IconFile />}
+                        theme="solid"
+                        type="primary"
+                        onClick={handleDownloadOriginal}
+                        style={{ marginRight: '8px' }}
+                    >
+                        下载原始报价单
+                    </Button>
+                    
+                    {record.attachments && record.attachments.length > 0 && (
+                        record.attachments.map(attachment => (
                             <Button
                                 key={attachment.id}
                                 icon={<IconDownload />}
-                                theme="solid"
-                                type="primary"
+                                theme="outline"
+                                type="secondary"
                                 onClick={() => handleDownload(attachment.id, attachment.name)}
+                                style={{ marginLeft: '8px' }}
                             >
-                                下载原厂报价单
+                                {attachment.name}
                             </Button>
-                        ))}
-                    </div>
-                )}
+                        ))
+                    )}
+                </div>
 
                 <div>
                     <div style={{
@@ -140,19 +190,48 @@ const QuotationHistory: React.FC = () => {
     const [currentRecord, setCurrentRecord] = useState<QuotationRecord | null>(null);
     const [filters, setFilters] = useState<Partial<QuotationQueryParams>>({});
 
-    const fetchData = useCallback(async (page: number, pageSize: number, queryFilters: Partial<QuotationQueryParams>) => {
+    const fetchData = useCallback(async (page: number, pageSize: number, filters: Partial<QuotationQueryParams>) => {
         setLoading(true);
         try {
-            const { data, total } = await getQuotationList({
-                ...queryFilters,
-                page,
-                pageSize
+            // 使用实际的后端API获取数据
+            const response = await request.get('/products', {
+                params: {
+                    page,
+                    pageSize,
+                    ...filters
+                }
             });
+            
+            // 转换数据格式以匹配前端接口
+            const data = response.data.map((item: any) => ({
+                id: item.id.toString(),
+                productName: item.productName,
+                productSpec: item.productSpec || '',
+                vendor: item.vendor,
+                originalPrice: item.originalPrice || 0,
+                finalPrice: item.finalPrice,
+                quantity: item.quantity,
+                discount: item.discount || 0,
+                quotationDate: item.quotationDate,
+                isValid: true, // 可以根据需要添加有效性判断逻辑
+                remark: item.remark || '',
+                category: item.category,
+                region: item.region || ''
+            }));
+            
             setQuotations(data);
-            setPagination(prev => ({ ...prev, total }));
+            setPagination(prev => ({ ...prev, total: data.length })); // 暂时使用数据长度，后续可以从响应头获取总数
         } catch (error) {
             Toast.error('获取报价记录失败');
             console.error('Error fetching quotations:', error);
+            // 如果API失败，使用mock数据作为后备
+            const { data, total } = await getQuotationList({
+                page,
+                pageSize,
+                ...filters
+            });
+            setQuotations(data);
+            setPagination(prev => ({ ...prev, total }));
         } finally {
             setLoading(false);
         }
@@ -235,7 +314,7 @@ const QuotationHistory: React.FC = () => {
             title: '单价(折前)',
             dataIndex: 'originalPrice',
             width: 120,
-            render: (value: number) => `¥${value.toFixed(2)}`
+            render: (value: number) => value ? `¥${value.toFixed(2)}` : '-'
         },
         {
             title: '到手价',
@@ -252,7 +331,7 @@ const QuotationHistory: React.FC = () => {
             title: '折扣率',
             dataIndex: 'discount',
             width: 100,
-            render: (value: number) => `${(value * 100).toFixed(0)}%`
+            render: (value: number) => value ? `${(value * 100).toFixed(0)}%` : '-'
         },
         {
             title: '报价时间',
@@ -272,7 +351,69 @@ const QuotationHistory: React.FC = () => {
         {
             title: '备注',
             dataIndex: 'remark',
-            width: 150
+            width: 150,
+            ellipsis: {
+                showTitle: false
+            },
+            render: (text: string) => (
+                <span title={text}>
+                    {text || '-'}
+                </span>
+            )
+        },
+        {
+            title: '原件下载',
+            key: 'download',
+            width: 120,
+            render: (_: any, record: QuotationRecord) => {
+                const handleDownloadFile = async () => {
+                    try {
+                        Toast.info('正在准备下载...');
+                        const response = await fetch(`http://localhost:3003/api/quotations/download/${record.id}`);
+                        
+                        if (!response.ok) {
+                            throw new Error('下载失败');
+                        }
+                        
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        
+                        // 从响应头获取文件名，如果没有则使用默认名称
+                        const contentDisposition = response.headers.get('Content-Disposition');
+                        let fileName = `${record.productName}_原始报价单`;
+                        if (contentDisposition) {
+                            const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                            if (matches != null && matches[1]) {
+                                fileName = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                            }
+                        }
+                        
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        Toast.success('下载成功');
+                    } catch (error) {
+                        console.error('下载原始文件失败:', error);
+                        Toast.error('下载失败，原始文件可能不存在');
+                    }
+                };
+
+                return (
+                    <Button
+                        icon={<IconFile />}
+                        theme="borderless"
+                        type="primary"
+                        size="small"
+                        onClick={handleDownloadFile}
+                    >
+                        下载
+                    </Button>
+                );
+            }
         }
     ];
 

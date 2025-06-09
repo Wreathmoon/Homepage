@@ -4,7 +4,7 @@ import { Toast } from '@douyinfe/semi-ui';
 // 创建 axios 实例
 const request = axios.create({
     baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api', // 指向server.js的3001端口
-    timeout: 10000,
+    timeout: 30000, // 增加到30秒
     headers: {
         'Content-Type': 'application/json',
     },

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Form, Row, Col, Button, Typography, Toast, Select, Switch, Space } from '@douyinfe/semi-ui';
+import { Form, Row, Col, Button, Typography, Toast, Select, Switch, Space, DatePicker } from '@douyinfe/semi-ui';
 import { TextArea, Input } from '@douyinfe/semi-ui';
 import { IconCopy } from '@douyinfe/semi-icons';
 
@@ -15,6 +15,8 @@ interface QuotationFormValues {
   endUserContactInfo?: string;
   currency: string;
   isFirst: boolean;
+  deliveryDate?: string;
+  quoteValidityDate?: string;
 }
 
 const currencyOptions = [
@@ -28,8 +30,21 @@ const Quotation: React.FC = () => {
   const handleGenerate = (values: QuotationFormValues) => {
     const {
       supplier, product, details, endUserName, endUserAddress,
-      endUserContact, endUserContactInfo, currency, isFirst
+      endUserContact, endUserContactInfo, currency, isFirst,
+      deliveryDate, quoteValidityDate
     } = values;
+    
+    // 格式化日期
+    const formatDate = (dateString?: string) => {
+      if (!dateString) return null;
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    };
+    
     let mail = `
 Hi ${supplier},
 
@@ -44,8 +59,9 @@ End-user: ${endUserName || 'xxx'} ${endUserAddress ? endUserAddress : ''}
 ${endUserContact ? `联系人：${endUserContact}` : ''}${endUserContactInfo ? `，联系方式：${endUserContactInfo}` : ''}
 
 Quotation Price Terms: Please provide DDP prices in ${currency}, excluding VAT. 
-ETA: Kindly include the estimated delivery time.
+ETA: Kindly include the estimated delivery time.${deliveryDate ? ` Our required delivery date is ${formatDate(deliveryDate)}.` : ''}
 Payment Terms: default payment term is invoice 30 days.
+${quoteValidityDate ? `Quote Validity: Please ensure the quotation is valid until ${formatDate(quoteValidityDate)}.` : ''}
 
 ${isFirst ? `China Unicom operates through 37 entities globally, with our UK entity serving as the European HQ since 2006. Below, I have listed two relevant entities. Please confirm which one would be most suitable to proceed with for this project. Please kindly provide your contracting entity information as well, thank you.\n\nPO entities` : ''}
     `.trim();
@@ -139,6 +155,26 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
           <Col span={12} style={{ display: 'flex', alignItems: 'center', marginTop: 24 }}>
             <Text style={{ marginRight: 12 }}>是否第一次向该供应商询价：</Text>
             <Form.Switch field="isFirst" initValue={true} checkedText="是" uncheckedText="否" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.DatePicker
+              field="deliveryDate"
+              label="需求交付日期"
+              placeholder="请选择需求交付日期"
+              style={{ width: '100%' }}
+              format="yyyy-MM-dd"
+            />
+          </Col>
+          <Col span={12}>
+            <Form.DatePicker
+              field="quoteValidityDate"
+              label="报价有效期"
+              placeholder="请选择报价有效期"
+              style={{ width: '100%' }}
+              format="yyyy-MM-dd"
+            />
           </Col>
         </Row>
         <Row>

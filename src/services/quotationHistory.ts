@@ -354,52 +354,66 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
 // API 函数：获取历史报价详情
 export async function getQuotationDetail(id: string): Promise<QuotationRecord> {
     // TODO: 替换为实际API调用
-    const response = await request(API_ENDPOINTS.QUOTATION_DETAIL.replace(':id', id), {
-        method: 'GET',
-        mock: true
-    });
-    return response;
+    // const response = await request(API_ENDPOINTS.QUOTATION_DETAIL.replace(':id', id), {
+    //     method: 'GET'
+    // });
+    // return response;
+    
+    // 暂时使用mock数据
+    const mockRecord = mockQuotations.find(item => item.id === id);
+    if (mockRecord) {
+        return mockRecord;
+    }
+    throw new Error('记录不存在');
 }
 
 // API 函数：添加历史报价
 export async function createQuotation(data: Omit<QuotationRecord, 'id'>): Promise<{ id: string }> {
     // TODO: 替换为实际API调用
-    const response = await request(API_ENDPOINTS.QUOTATION_CREATE, {
-        method: 'POST',
-        data,
-        mock: true
-    });
-    return response;
+    // const response = await request(API_ENDPOINTS.QUOTATION_CREATE, {
+    //     method: 'POST',
+    //     data
+    // });
+    // return response;
+    
+    // 暂时使用mock数据
+    return { id: Date.now().toString() };
 }
 
 // API 函数：更新历史报价
 export async function updateQuotation(id: string, data: Partial<QuotationRecord>): Promise<{ success: boolean }> {
     // TODO: 替换为实际API调用
-    const response = await request(API_ENDPOINTS.QUOTATION_UPDATE.replace(':id', id), {
-        method: 'PUT',
-        data,
-        mock: true
-    });
-    return response;
+    // const response = await request(API_ENDPOINTS.QUOTATION_UPDATE.replace(':id', id), {
+    //     method: 'PUT',
+    //     data
+    // });
+    // return response;
+    
+    // 暂时使用mock数据
+    return { success: true };
 }
 
 // API 函数：删除历史报价
 export async function deleteQuotation(id: string): Promise<{ success: boolean }> {
     // TODO: 替换为实际API调用
-    const response = await request(API_ENDPOINTS.QUOTATION_DELETE.replace(':id', id), {
-        method: 'DELETE',
-        mock: true
-    });
-    return response;
+    // const response = await request(API_ENDPOINTS.QUOTATION_DELETE.replace(':id', id), {
+    //     method: 'DELETE'
+    // });
+    // return response;
+    
+    // 暂时使用mock数据
+    return { success: true };
 }
 
 // API 函数：下载附件
 export async function downloadAttachment(attachmentId: string): Promise<Blob> {
     // TODO: 替换为实际API调用
-    const response = await request(API_ENDPOINTS.ATTACHMENT_DOWNLOAD.replace(':id', attachmentId), {
-        method: 'GET',
-        responseType: 'blob',
-        mock: true
-    });
-    return response;
+    // const response = await request(API_ENDPOINTS.ATTACHMENT_DOWNLOAD.replace(':id', attachmentId), {
+    //     method: 'GET',
+    //     responseType: 'blob'
+    // });
+    // return response;
+    
+    // 暂时使用mock数据
+    return new Blob(['mock attachment content']);
 } 

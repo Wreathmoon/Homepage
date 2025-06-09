@@ -25,13 +25,13 @@ interface QuotationFormData {
     productName: string;
     vendor: string;
     category: string;
-    region: string;
-    productSpec: string;
-    originalPrice: number;
+    region?: string;
+    productSpec?: string;
+    originalPrice?: number;
     finalPrice: number;
-    quantity: number;
-    discount: number;
-    quotationDate: string;
+    quantity?: number;
+    discount?: number;
+    quotationDate?: string;
     remark?: string;
 }
 
@@ -250,7 +250,6 @@ const QuotationImport: React.FC = () => {
                             field="region"
                             label="地区"
                             placeholder="请选择地区"
-                            rules={[{ required: true, message: '请选择地区' }]}
                             optionList={REGIONS.map(region => ({
                                 label: region,
                                 value: region
@@ -260,13 +259,11 @@ const QuotationImport: React.FC = () => {
                             field="productSpec"
                             label="产品规格"
                             placeholder="请输入产品规格详情"
-                            rules={[{ required: true, message: '请输入产品规格' }]}
                         />
                         <Form.InputNumber
                             field="originalPrice"
                             label="原始单价"
                             placeholder="请输入原始单价"
-                            rules={[{ required: true, message: '请输入原始单价' }]}
                             formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                             parser={value => value!.replace(/¥\s?|(,*)/g, '')}
                         />
@@ -282,13 +279,11 @@ const QuotationImport: React.FC = () => {
                             field="quantity"
                             label="数量"
                             placeholder="请输入数量"
-                            rules={[{ required: true, message: '请输入数量' }]}
                         />
                         <Form.InputNumber
                             field="discount"
                             label="折扣率"
                             placeholder="请输入折扣率"
-                            rules={[{ required: true, message: '请输入折扣率' }]}
                             formatter={value => `${value}%`}
                             parser={value => value!.replace('%', '')}
                             max={100}
@@ -298,7 +293,6 @@ const QuotationImport: React.FC = () => {
                             field="quotationDate"
                             label="报价日期"
                             placeholder="请选择报价日期"
-                            rules={[{ required: true, message: '请选择报价日期' }]}
                         />
                         <Form.TextArea
                             field="remark"
@@ -367,7 +361,6 @@ const QuotationImport: React.FC = () => {
                             field="region"
                             label="地区"
                             placeholder="请选择地区"
-                            rules={[{ required: true, message: '请选择地区' }]}
                             optionList={REGIONS.map(region => ({
                                 label: region,
                                 value: region
@@ -377,13 +370,11 @@ const QuotationImport: React.FC = () => {
                             field="productSpec"
                             label="产品规格"
                             placeholder="请输入产品规格详情"
-                            rules={[{ required: true, message: '请输入产品规格' }]}
                         />
                         <Form.InputNumber
                             field="originalPrice"
                             label="原始单价"
                             placeholder="请输入原始单价"
-                            rules={[{ required: true, message: '请输入原始单价' }]}
                             formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                             parser={value => value!.replace(/¥\s?|(,*)/g, '')}
                         />
@@ -399,13 +390,11 @@ const QuotationImport: React.FC = () => {
                             field="quantity"
                             label="数量"
                             placeholder="请输入数量"
-                            rules={[{ required: true, message: '请输入数量' }]}
                         />
                         <Form.InputNumber
                             field="discount"
                             label="折扣率"
                             placeholder="请输入折扣率"
-                            rules={[{ required: true, message: '请输入折扣率' }]}
                             formatter={value => `${value}%`}
                             parser={value => value!.replace('%', '')}
                             max={100}
@@ -415,7 +404,6 @@ const QuotationImport: React.FC = () => {
                             field="quotationDate"
                             label="报价日期"
                             placeholder="请选择报价日期"
-                            rules={[{ required: true, message: '请选择报价日期' }]}
                         />
                         <Form.TextArea
                             field="remark"

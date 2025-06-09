@@ -49,6 +49,6 @@ export async function uploadQuotationFile(file: File): Promise<{ message: string
 
     return request('/api/upload-quotation', {
         method: 'POST',
-        body: formData
+        data: formData
     });
 } 

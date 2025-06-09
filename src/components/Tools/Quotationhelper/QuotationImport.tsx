@@ -45,7 +45,7 @@ const QuotationImport: React.FC = () => {
     const handleSubmit = async (values: QuotationFormData) => {
         setLoading(true);
         try {
-            const response = await request.post('/api/quotations', values);
+            const response = await request.post('/quotations', values);
             Toast.success('报价记录添加成功');
             formRef.current?.reset();
             // 刷新列表
@@ -60,24 +60,58 @@ const QuotationImport: React.FC = () => {
     };
 
     const handleUpload = async (file: BeforeUploadProps): Promise<BeforeUploadObjectResult> => {
+        console.log('前端开始处理文件上传:', file);
+        console.log('🔍 完整file对象结构:', JSON.stringify(file, null, 2));
+        
+        // 尝试多种方式获取原生File对象
+        let actualFile: File | null = null;
+        
+        // 方式1：直接从file参数获取
+        if (file instanceof File) {
+            actualFile = file;
+            console.log('✅ 方式1成功: 直接是File对象');
+        }
+        // 方式2：从file.file获取
+        else if (file.file && file.file instanceof File) {
+            actualFile = file.file;
+            console.log('✅ 方式2成功: file.file是File对象');
+        }
+        // 方式3：从file.file.fileInstance获取（常见的包装方式）
+        else if (file.file?.fileInstance instanceof File) {
+            actualFile = file.file.fileInstance;
+            console.log('✅ 方式3成功: file.file.fileInstance是File对象');
+        }
+        
+        console.log('📄 最终文件对象:', actualFile);
+        console.log('📝 文件信息:', {
+            name: actualFile?.name,
+            size: actualFile?.size,
+            type: actualFile?.type
+        });
+        
+        if (!actualFile) {
+            console.error('❌ 无法获取到有效的File对象');
+            Toast.error('文件格式错误');
+            return { status: 'error' as const };
+        }
+        
         const formData = new FormData();
-        formData.append('file', file.file as unknown as File);
+        formData.append('file', actualFile);
 
         try {
-            const response = await request.post('/api/quotations/import', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            console.log('📤 向后端发送请求...');
+            const response = await request.post('/quotations/import', formData);
+            console.log('✅ 后端响应:', response);
             Toast.success('文件上传成功');
             setQuotations(response.data || []);
             return {
-                status: 'upload'
+                status: 'success' as const
             };
         } catch (error) {
+            console.error('❌ 文件上传失败:', error);
             Toast.error('文件上传失败，请重试');
             return {
-                status: 'upload'
+                status: 'error' as const
             };
         }
     };
@@ -104,7 +138,7 @@ const QuotationImport: React.FC = () => {
     // 处理删除
     const handleDelete = async (id: string) => {
         try {
-            await request.delete(`/api/quotations/${id}`);
+            await request.delete(`/quotations/${id}`);
             Toast.success('删除成功');
             setQuotations(quotations.filter(q => q.id !== id));
         } catch (error) {
@@ -200,7 +234,6 @@ const QuotationImport: React.FC = () => {
             }}>
                 <Form.Section text="导入报价单">
                     <Upload
-                        action=""
                         beforeUpload={handleUpload}
                         draggable
                         accept=".xlsx,.xls"

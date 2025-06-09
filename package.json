@@ -1,34 +1,43 @@
 {
   "name": "quotation-helper",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "private": true,
   "homepage": "/",
   "dependencies": {
-    "@douyinfe/semi-icons": "^2.80.0",
-    "@douyinfe/semi-ui": "^2.80.0",
-    "@types/node": "^16.18.126",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@types/react-router-dom": "^5.3.3",
-    "axios": "^1.9.0",
+    "@douyinfe/semi-icons": "^2.78.0",
+    "@douyinfe/semi-ui": "^2.78.0",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.111",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
     "react": "^18.3.1",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^7.5.2",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
     "react-scripts": "5.0.1",
     "typescript": "^4.9.5",
-    "web-vitals": "^3.5.0"
+    "web-vitals": "^2.1.4"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.1.5",
-    "@testing-library/react": "^14.1.2",
-    "@testing-library/user-event": "^14.5.1",
-    "@types/jest": "^29.5.11"
+    "@google/generative-ai": "^0.21.0",
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "mammoth": "^1.9.1",
+    "multer": "^1.4.5-lts.1",
+    "pdf-parse": "^1.1.1",
+    "sqlite3": "^5.1.7",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "server": "node server.js",
+    "dev": "concurrently \"npm run server\" \"npm start\""
   },
   "eslintConfig": {
     "extends": [
@@ -49,4 +58,3 @@
     ]
   }
 }
-

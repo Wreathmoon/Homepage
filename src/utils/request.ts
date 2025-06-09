@@ -3,7 +3,7 @@ import { Toast } from '@douyinfe/semi-ui';
 
 // 创建 axios 实例
 const request = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || '/api', // 从环境变量获取 API 地址
+    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api', // 指向server.js的3001端口
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
@@ -18,6 +18,12 @@ request.interceptors.request.use(
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        
+        // 如果是FormData，不要设置Content-Type，让浏览器自动设置
+        if (config.data instanceof FormData) {
+            delete config.headers['Content-Type'];
+        }
+        
         return config;
     },
     (error: AxiosError) => {

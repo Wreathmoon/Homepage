@@ -7,7 +7,6 @@ import Vendor from '../components/Tools/Quotationhelper/Vendor';
 import QuotationHistory from '../components/Tools/Quotationhelper/QuotationHistory';
 import QuotationImport from '../components/Tools/Quotationhelper/QuotationImport';
 
-
 const { Footer, Sider, Content } = Layout;
 
 const QuotationHelper = () => {
@@ -24,7 +23,19 @@ const QuotationHelper = () => {
             case 'Import':
                 return <QuotationImport />;
             default:
-                return null;
+                return (
+                    <div style={{ 
+                        padding: '20px', 
+                        fontSize: '24px', 
+                        textAlign: 'center',
+                        background: '#f0f0f0',
+                        minHeight: '100vh'
+                    }}>
+                        <h1>报价助手测试页面</h1>
+                        <p>当前选择: {selectedPage}</p>
+                        <p>如果你能看到这个页面，说明QuotationHelper基本结构正常。</p>
+                    </div>
+                );
         }
     };
 

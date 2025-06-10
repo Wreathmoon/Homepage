@@ -69,7 +69,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
     const handleDownloadOriginal = async () => {
         try {
             Toast.info('正在准备下载...');
-            const response = await fetch(`http://localhost:3003/api/quotations/download/${record.id}`);
+            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+            const response = await fetch(`${aiServerUrl}/api/quotations/download/${record.id}`);
             
             if (!response.ok) {
                 throw new Error('下载失败');
@@ -193,53 +194,37 @@ const QuotationHistory: React.FC = () => {
     const fetchData = useCallback(async (page: number, pageSize: number, filters: Partial<QuotationQueryParams>) => {
         setLoading(true);
         try {
-            // 使用实际的后端API获取数据
-            const response = await request.get('/products', {
-                params: {
-                    page,
-                    pageSize,
-                    ...filters
-                }
-            });
-            
-            // 转换数据格式以匹配前端接口
-            const data = response.data.map((item: any) => ({
-                id: item.id.toString(),
-                productName: item.productName,
-                productSpec: item.productSpec || '',
-                vendor: item.vendor,
-                originalPrice: item.originalPrice || 0,
-                finalPrice: item.finalPrice,
-                quantity: item.quantity,
-                discount: item.discount || 0,
-                quotationDate: item.quotationDate,
-                isValid: true, // 可以根据需要添加有效性判断逻辑
-                remark: item.remark || '',
-                category: item.category,
-                region: item.region || ''
-            }));
-            
-            setQuotations(data);
-            setPagination(prev => ({ ...prev, total: data.length })); // 暂时使用数据长度，后续可以从响应头获取总数
-        } catch (error) {
-            Toast.error('获取报价记录失败');
-            console.error('Error fetching quotations:', error);
-            // 如果API失败，使用mock数据作为后备
-            const { data, total } = await getQuotationList({
+            // 使用getQuotationList服务函数
+            const response = await getQuotationList({
                 page,
                 pageSize,
                 ...filters
             });
-            setQuotations(data);
-            setPagination(prev => ({ ...prev, total }));
+            
+            setQuotations(response.data);
+            setPagination(prev => ({ 
+                ...prev, 
+                total: response.total,
+                currentPage: page,
+                pageSize
+            }));
+        } catch (error) {
+            console.error('获取报价记录失败:', error);
+            Toast.error('获取报价记录失败');
         } finally {
             setLoading(false);
         }
     }, []);
 
+    // 初始加载数据
+    useEffect(() => {
+        fetchData(1, 10, {});
+    }, [fetchData]);
+
+    // 监听filters和pagination变化，触发数据获取
     useEffect(() => {
         fetchData(pagination.currentPage, pagination.pageSize, filters);
-    }, [fetchData, pagination.currentPage, pagination.pageSize, filters]);
+    }, [filters, pagination.currentPage, pagination.pageSize, fetchData]);
 
     const handleSubmit = (values: Record<string, any>) => {
         const newFilters: Partial<QuotationQueryParams> = {
@@ -369,7 +354,8 @@ const QuotationHistory: React.FC = () => {
                 const handleDownloadFile = async () => {
                     try {
                         Toast.info('正在准备下载...');
-                        const response = await fetch(`http://localhost:3003/api/quotations/download/${record.id}`);
+                        const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+                        const response = await fetch(`${aiServerUrl}/api/quotations/download/${record.id}`);
                         
                         if (!response.ok) {
                             throw new Error('下载失败');

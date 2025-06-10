@@ -100,21 +100,25 @@ const Vendor: React.FC = () => {
             setSuppliers(filteredData);
             setPagination(prev => ({ 
                 ...prev, 
-                total: filteredData.length,
-
+                total: response.total || filteredData.length,
                 currentPage: page,
                 pageSize 
             }));
         } catch (error) {
+            console.error('获取供应商列表失败:', error);
             Toast.error('获取供应商列表失败');
         } finally {
             setLoading(false);
         }
     }, []);
 
-    // 获取供应商产品
+    // 初始加载数据
+    useEffect(() => {
+        fetchSuppliers({}, 1, 10);
+    }, [fetchSuppliers]);
 
-    const fetchVendorProducts = useCallback(async (vendorId: number) => {
+    // 获取供应商产品
+    const fetchVendorProducts = useCallback(async (vendorId: string | number) => {
         setProductsLoading(true);
         try {
             const response = await getVendorProducts(vendorId);
@@ -220,7 +224,10 @@ const Vendor: React.FC = () => {
                     onClick={() => {
                         setCurrentSupplier(record);
                         setProductsVisible(true);
-                        fetchVendorProducts(record.id);
+                        const vendorId = record._id || record.id;
+                        if (vendorId) {
+                            fetchVendorProducts(vendorId);
+                        }
                     }}
                 >
                     查看产品类型

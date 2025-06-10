@@ -92,3 +92,90 @@ npm start
 ## 📝 版本历史
 - v0.1.5: 接入大模型初步成功 - 完成核心AI解析功能
 - v0.1.4: 大模型接入前-稳定版 - 基础CRUD功能完成 
+
+# 云端部署指南
+
+## 📋 部署前准备
+
+### 系统架构
+- **前端**: React应用 (端口3000 → 80/443)
+- **MongoDB服务器**: Express + MongoDB (端口3001 → 80/443)  
+- **AI分析服务器**: Express + Gemini AI (端口3002 → 8080)
+
+## 🔧 需要修改的配置
+
+### 1. 前端环境变量 (.env)
+```bash
+# 开发环境
+REACT_APP_API_URL=http://localhost:3001/api
+REACT_APP_AI_SERVER_URL=http://localhost:3002
+
+# 生产环境
+REACT_APP_API_URL=https://api.yourdomain.com/api
+REACT_APP_AI_SERVER_URL=https://ai.yourdomain.com
+```
+
+### 2. MongoDB服务器环境变量 (server/.env)
+```bash
+# 开发环境
+PORT=3001
+MONGODB_URI=mongodb://localhost:27017/quotation_system
+FRONTEND_URL=http://localhost:3000
+NODE_ENV=development
+
+# 生产环境
+PORT=80
+MONGODB_URI=mongodb://username:password@cloud-db-host:27017/quotation_system
+FRONTEND_URL=https://yourdomain.com
+NODE_ENV=production
+```
+
+### 3. AI服务器环境变量 (根目录/.env)
+```bash
+# 开发环境
+PORT=3002
+
+# 生产环境
+PORT=8080
+```
+
+## 🚀 部署步骤
+
+### 方案一：单服务器部署
+1. **前端**: 构建静态文件，用Nginx托管
+2. **MongoDB服务器**: 运行在80端口，配置反向代理
+3. **AI服务器**: 运行在8080端口，配置反向代理
+
+### 方案二：分布式部署
+1. **前端**: 部署到CDN (如Vercel, Netlify)
+2. **MongoDB服务器**: 部署到云服务器 (如阿里云, AWS)
+3. **AI服务器**: 独立部署到另一台服务器
+
+## 📝 修改摘要
+
+✅ **已经完成的优化**:
+- 前端API调用已使用环境变量
+- 后端CORS配置支持环境变量
+- AI服务器URL已改为环境变量
+
+❌ **不需要修改的部分**:
+- 数据库模型和业务逻辑
+- 组件结构和UI界面
+- AI分析逻辑
+
+## 🔍 部署检查清单
+
+- [ ] 配置环境变量
+- [ ] 修改数据库连接字符串
+- [ ] 配置域名和SSL证书
+- [ ] 测试跨域访问
+- [ ] 检查文件上传路径
+- [ ] 验证API接口可用性
+
+## 💡 推荐部署方案
+
+**阿里云/AWS部署**:
+1. ECS实例运行后端服务
+2. RDS/DocumentDB作为数据库
+3. OSS/S3存储上传文件
+4. CDN加速前端静态资源 

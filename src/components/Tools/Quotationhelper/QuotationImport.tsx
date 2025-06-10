@@ -1,27 +1,32 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
     Typography, 
     Form, 
     Button, 
     Table,
-    Space,
-    Tooltip,
-    Modal,
-    Toast,
-    Upload,
-    Card,
-    Progress,
-    Divider,
     Steps,
+    Row, 
+    Col,
+    Upload,
+    Toast,
+    Space,
+    Modal,
+    Card,
+    Descriptions,
+    Badge,
+    Avatar,
+    List,
+    Divider,
+    Tooltip,
     Tag,
-    Badge
+    Progress
 } from '@douyinfe/semi-ui';
-import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-import { IconUpload, IconPlay, IconTickCircle, IconEdit, IconTick, IconClose } from '@douyinfe/semi-icons';
-import { request } from '../../../utils/request';
-import { BeforeUploadProps, BeforeUploadObjectResult } from '@douyinfe/semi-ui/lib/es/upload';
+import { IconUpload, IconFile, IconTickCircle, IconClose, IconEdit, IconPlus, IconPlay, IconTick } from '@douyinfe/semi-icons';
+import type { BeforeUploadProps, BeforeUploadObjectResult } from '@douyinfe/semi-ui/lib/es/upload';
 import type { FormApi } from '@douyinfe/semi-ui/lib/es/form';
-import type { QuotationRecord } from '../../../services/quotationHistory';
+import { request } from '../../../utils/request';
+import { uploadQuotationFile, addQuotation } from '../../../services/quotation';
+import type { QuotationRecord } from '../../../services/quotation';
 import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory';
 
 const { Title, Text } = Typography;
@@ -66,9 +71,9 @@ const QuotationImport: React.FC = () => {
     const [savedQuotations, setSavedQuotations] = useState<QuotationRecord[]>([]);
     const formRef = useRef<FormApi<any>>();
 
-    // 第一步：仅上传文件
+    // 第一步：上传文件到AI服务器
     const handleUpload = async (file: BeforeUploadProps): Promise<BeforeUploadObjectResult> => {
-        console.log('📤 开始上传文件:', file);
+        console.log('📤 开始上传文件到AI服务器:', file);
         
         let actualFile: File | null = null;
         
@@ -85,18 +90,32 @@ const QuotationImport: React.FC = () => {
             Toast.error('文件格式错误');
             return { status: 'error' as const };
         }
-        
-        const formData = new FormData();
-        formData.append('file', actualFile);
 
         try {
-            console.log('📤 向后端发送上传请求...');
-            const response = await request.post('quotations/upload', formData) as any;
-            console.log('✅ 文件上传成功:', response);
+            console.log('📤 向AI服务器发送上传请求...');
+            const formData = new FormData();
+            formData.append('file', actualFile);
             
-            setUploadedFile(response.fileInfo);
+            // 调用AI服务器的上传API
+            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+            const response = await fetch(`${aiServerUrl}/api/quotations/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('服务器响应错误:', errorText);
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ 文件上传成功:', result);
+            
+            // 保存文件信息用于下一步分析
+            setUploadedFile(result.fileInfo);
             setCurrentStep(1);
-            Toast.success(`文件上传成功：${response.fileInfo.fileName}`);
+            Toast.success(`文件上传成功：${result.fileInfo.fileName}`);
             
             return { status: 'success' as const };
         } catch (error) {
@@ -106,7 +125,7 @@ const QuotationImport: React.FC = () => {
         }
     };
 
-    // 第二步：分析上传的文件
+    // 第二步：调用AI分析上传的文件
     const handleAnalyze = async () => {
         if (!uploadedFile) {
             Toast.error('请先上传文件');
@@ -115,49 +134,64 @@ const QuotationImport: React.FC = () => {
 
         setAnalyzing(true);
         try {
-            console.log('🔍 开始分析文件...');
-            const response = await request.post('quotations/analyze', {
-                filePath: uploadedFile.filePath,
-                fileName: uploadedFile.fileName
-            }, {
-                timeout: 60000 // AI分析设置60秒超时
-            }) as any;
+            console.log('🔍 开始AI分析文件...');
             
-            console.log('✅ 文件分析成功:', response);
+            // 调用AI服务器的分析API
+            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+            const response = await fetch(`${aiServerUrl}/api/quotations/analyze`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filePath: uploadedFile.filePath,
+                    fileName: uploadedFile.fileName
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('AI分析错误:', errorText);
+                throw new Error(`分析失败: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ AI分析成功:', result);
             
-            if (response && Array.isArray(response) && response.length > 0) {
-                const processedData = response.map((item: any) => ({
-                    ...item,
+            if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+                // 转换AI分析结果为前端格式
+                const processedData = result.data.map((item: any) => ({
+                    productName: item.productName,
+                    vendor: item.vendor,
+                    category: item.category,
+                    region: item.region,
+                    productSpec: item.productSpec,
+                    originalPrice: item.originalPrice,
+                    finalPrice: item.finalPrice,
+                    quantity: item.quantity,
+                    discount: item.discount,
+                    quotationDate: item.quotationDate,
+                    remark: item.remark,
                     status: 'pending' as const
                 }));
+                
                 setAnalyzedData(processedData);
                 setCurrentStep(2);
                 setCurrentIndex(0);
+                
+                // 自动填充第一条数据到表单
                 setTimeout(() => {
                     formRef.current?.setValues(processedData[0]);
                 }, 100);
-                Toast.success(`分析完成！识别到 ${response.length} 条产品记录`);
-            } else if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
-                const processedData = response.data.map((item: any) => ({
-                    ...item,
-                    status: 'pending' as const
-                }));
-                setAnalyzedData(processedData);
-                setCurrentStep(2);
-                setCurrentIndex(0);
-                setTimeout(() => {
-                    formRef.current?.setValues(processedData[0]);
-                }, 100);
-                Toast.success(`分析完成！识别到 ${response.data.length} 条产品记录`);
+                
+                Toast.success(`AI分析完成！识别到 ${processedData.length} 条产品记录`);
             } else {
-                console.log('❌ 响应数据结构:', response);
-                console.log('❌ 响应数据类型:', typeof response);
-                Toast.warning('未识别到有效的产品数据');
+                Toast.warning('AI分析完成，但未识别到有效的产品数据');
             }
             
         } catch (error) {
-            console.error('❌ 文件分析失败:', error);
-            Toast.error('文件分析失败，请重试');
+            console.error('❌ AI分析失败:', error);
+            Toast.error('AI分析失败，请重试');
         } finally {
             setAnalyzing(false);
         }
@@ -224,9 +258,26 @@ const QuotationImport: React.FC = () => {
 
         setSaving(true);
         try {
-            const promises = confirmedData.map(item => 
-                request.post('/products', item)
-            );
+            const promises = confirmedData.map(item => {
+                // 转换数据格式以匹配后端接口
+                const quotationData = {
+                    name: item.productName,
+                    productName: item.productName,
+                    supplier: item.vendor,
+                    quote_unit_price: item.finalPrice,
+                    list_price: item.originalPrice || item.finalPrice,
+                    quantity: item.quantity || 1,
+                    quote_total_price: (item.finalPrice * (item.quantity || 1)),
+                    quote_validity: item.quotationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    currency: 'EUR',
+                    notes: item.remark || '',
+                    configDetail: item.productSpec || '',
+                    category: item.category || '其他',
+                    ...(item.region && ['德国', '法国', '英国', '意大利', '西班牙', '荷兰', '比利时', '瑞士', '奥地利', '瑞典', '挪威', '丹麦', '芬兰', '波兰', '捷克', '匈牙利', '葡萄牙', '爱尔兰', '希腊', '美国', '加拿大', '其他'].includes(item.region) ? { region: item.region } : {}),
+                    status: 'active' as const
+                };
+                return addQuotation(quotationData);
+            });
             
             const responses = await Promise.all(promises);
             console.log('✅ 批量保存成功:', responses);
@@ -259,7 +310,25 @@ const QuotationImport: React.FC = () => {
     const handleManualSubmit = async (values: QuotationFormData) => {
         setLoading(true);
         try {
-            const response = await request.post('/products', values);
+            // 转换数据格式以匹配后端接口
+            const quotationData = {
+                name: values.productName,
+                productName: values.productName,
+                supplier: values.vendor,
+                quote_unit_price: values.finalPrice,
+                list_price: values.originalPrice || values.finalPrice,
+                quantity: values.quantity || 1,
+                quote_total_price: (values.finalPrice * (values.quantity || 1)),
+                quote_validity: values.quotationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                currency: 'EUR',
+                notes: values.remark || '',
+                configDetail: values.productSpec || '',
+                category: values.category || '其他',
+                ...(values.region && ['德国', '法国', '英国', '意大利', '西班牙', '荷兰', '比利时', '瑞士', '奥地利', '瑞典', '挪威', '丹麦', '芬兰', '波兰', '捷克', '匈牙利', '葡萄牙', '爱尔兰', '希腊', '美国', '加拿大', '其他'].includes(values.region) ? { region: values.region } : {}),
+                status: 'active' as const
+            };
+            
+            const response = await addQuotation(quotationData);
             Toast.success('手动添加成功');
             formRef.current?.reset();
             setSavedQuotations(prev => [...prev, response.data]);

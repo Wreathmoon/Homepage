@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
+  ],
+  "env": {
+    "GEMINI_API_KEY": "@gemini_api_key"
+  },
+  "build": {
+    "env": {
+      "REACT_APP_API_URL": "/api"
+    }
+  }
+} 

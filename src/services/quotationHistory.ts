@@ -10,41 +10,90 @@ const API_ENDPOINTS = {
     ATTACHMENT_DOWNLOAD: '/api/attachments/:id',
 };
 
-// 定义历史报价记录接口
+// 使用统一的QuotationRecord接口（与quotation.ts保持一致）
 export interface QuotationRecord {
-    id: string;
-    productName: string;    // 产品名称
-    productSpec: string;    // 产品详解/配置
-    configDetail?: string;  // 详细配置文档
-    vendor: string;        // 供应商
-    originalPrice: number; // 单价（折扣前）
-    finalPrice: number;   // 到手价（折扣后）
-    quantity: number;     // 数量
-    discount: number;     // 折扣率
-    quotationDate: string; // 报价日期
-    isValid: boolean;     // 报价是否有效
-    remark: string;       // 备注
-    category: string;     // 产品类别
-    region: string;       // 地区
-    attachments?: Array<{  // 附件列表
+    _id?: string;
+    id?: string | number;
+    productName: string;              // 产品名称
+    name?: string;                    // 向后兼容
+    supplier: string;                 // 供应商
+    vendor?: string;                  // 向后兼容字段
+    list_price?: number | null;       // List Price / originalPrice
+    originalPrice?: number;           // 向后兼容
+    quote_unit_price: number;         // 报价单价 / finalPrice
+    finalPrice?: number;              // 向后兼容
+    quantity: number;                 // 数量
+    discount_rate?: number | null;    // 折扣率
+    discount?: number;                // 向后兼容
+    quote_total_price: number;        // 报价总价
+    quote_validity: string | Date;    // 报价有效期
+    quotationDate?: string;           // 向后兼容
+    delivery_date?: string | Date;    // 交付日期
+    currency: string;                 // 币种
+    notes?: string | null;            // 备注
+    remark?: string;                  // 向后兼容
+    configDetail?: string;            // 配置详情
+    productSpec?: string;             // 产品规格
+    category?: string;                // 产品类别
+    region?: string;                  // 区域
+    status?: 'active' | 'expired' | 'pending' | 'cancelled';
+    isValid?: boolean;                // 向后兼容
+    endUser?: {                       // 最终用户信息
+        name?: string;
+        address?: string;
+        contact?: string;
+        contactInfo?: string;
+    };
+    attachments?: Array<{             // 附件信息
         id: string;
         name: string;
-        url: string;
+        originalName?: string;
+        filename?: string;
+        path?: string;
+        url?: string;                 // 向后兼容
+        size?: number;
+        mimetype?: string;
+        uploadedAt?: Date;
     }>;
+    originalFile?: {                  // 原始文件信息
+        filename: string;
+        originalName: string;
+        path: string;
+        uploadedAt: Date;
+    };
+    createdAt?: string | Date;
+    updatedAt?: string | Date;
 }
 
-// 定义查询参数接口
+// 定义查询参数接口（与后端API保持一致）
 export interface QuotationQueryParams {
-    vendor?: string;          // 供应商
-    productType?: string;     // 产品类型
-    region?: string;          // 地区
-    category?: string;        // 产品类别
-    productKeyword?: string;  // 产品关键字
+    page?: number;
+    pageSize?: number;
+    supplier?: string;
+    vendor?: string;                  // 向后兼容
+    productName?: string;
+    productType?: string;             // 向后兼容
+    productKeyword?: string;
+    category?: string;
+    region?: string;
+    currency?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    keyword?: string;
+}
+
+// 响应接口
+export interface QuotationResponse {
+    success: boolean;
+    data: QuotationRecord[];
+    total: number;
     page: number;
     pageSize: number;
+    totalPages: number;
 }
 
-// Mock产品类别
+// Mock产品类别（保持向后兼容）
 export const PRODUCT_CATEGORIES = [
     '服务器',
     '存储设备',
@@ -55,7 +104,7 @@ export const PRODUCT_CATEGORIES = [
     '其他'
 ] as const;
 
-// Mock地区 - 欧洲主流国家
+// Mock地区（保持向后兼容）
 export const REGIONS = [
     '德国',
     '法国', 
@@ -76,356 +125,251 @@ export const REGIONS = [
     '葡萄牙',
     '爱尔兰',
     '希腊',
+    '美国',
+    '加拿大',
     '其他'
 ] as const;
 
-// Mock数据
+// 获取历史报价列表（连接到真实MongoDB后端）
+export async function getQuotationList(params: QuotationQueryParams): Promise<{ data: QuotationRecord[]; total: number }> {
+    try {
+        // 处理向后兼容的参数映射
+        const apiParams: any = {
+            page: params.page || 1,
+            pageSize: params.pageSize || 10
+        };
+
+        if (params.supplier || params.vendor) {
+            apiParams.supplier = params.supplier || params.vendor;
+        }
+        if (params.productName) apiParams.productName = params.productName;
+        if (params.category || params.productType) {
+            apiParams.category = params.category || params.productType;
+        }
+        if (params.region) apiParams.region = params.region;
+        if (params.currency) apiParams.currency = params.currency;
+        if (params.status) apiParams.status = params.status;
+        if (params.startDate) apiParams.startDate = params.startDate;
+        if (params.endDate) apiParams.endDate = params.endDate;
+        if (params.keyword || params.productKeyword) {
+            apiParams.keyword = params.keyword || params.productKeyword;
+        }
+
+        const response: any = await request('/products', {
+            method: 'GET',
+            params: apiParams
+        });
+
+        // 数据格式转换，保持向后兼容
+        const rawData = response.data || response; // 兼容不同的响应格式
+        const convertedData = (Array.isArray(rawData) ? rawData : []).map((item: any) => ({
+            ...item,
+            id: item._id || item.id,
+            vendor: item.supplier,           // 向后兼容
+            originalPrice: item.list_price,  // 向后兼容
+            finalPrice: item.quote_unit_price, // 向后兼容
+            discount: item.discount_rate ? item.discount_rate / 100 : null, // 转换为小数
+            quotationDate: item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : '',
+            isValid: item.status === 'active',
+            remark: item.notes,
+            productSpec: item.configDetail || item.productSpec
+        }));
+
+        return {
+            data: convertedData,
+            total: response.total || rawData.length || 0
+        };
+    } catch (error) {
+        console.error('获取历史报价列表失败:', error);
+        throw error;
+    }
+}
+
+// 获取单个报价详情
+export async function getQuotationDetail(id: string): Promise<QuotationRecord> {
+    try {
+        const response: any = await request(`/products/${id}`, {
+            method: 'GET'
+        });
+
+        // 数据格式转换，保持向后兼容
+        const convertedData = {
+            ...response.data,
+            id: response.data._id || response.data.id,
+            vendor: response.data.supplier,
+            originalPrice: response.data.list_price,
+            finalPrice: response.data.quote_unit_price,
+            discount: response.data.discount_rate ? response.data.discount_rate / 100 : null,
+            quotationDate: response.data.createdAt ? new Date(response.data.createdAt).toISOString().split('T')[0] : '',
+            isValid: response.data.status === 'active',
+            remark: response.data.notes,
+            productSpec: response.data.configDetail || response.data.productSpec
+        };
+
+        return convertedData;
+    } catch (error) {
+        console.error('获取报价详情失败:', error);
+        throw error;
+    }
+}
+
+// 创建新报价
+export async function createQuotation(data: Omit<QuotationRecord, '_id' | 'id' | 'createdAt' | 'updatedAt'>): Promise<{ id: string }> {
+    try {
+        // 数据格式转换
+        const apiData = {
+            productName: data.productName,
+            name: data.productName, // 向后兼容
+            supplier: data.supplier || data.vendor,
+            list_price: data.list_price || data.originalPrice,
+            quote_unit_price: data.quote_unit_price || data.finalPrice,
+            quantity: data.quantity,
+            discount_rate: data.discount_rate || (data.discount ? data.discount * 100 : null),
+            quote_total_price: data.quote_total_price || (data.finalPrice ? data.finalPrice * data.quantity : 0),
+            quote_validity: data.quote_validity,
+            delivery_date: data.delivery_date,
+            currency: data.currency || 'EUR',
+            notes: data.notes || data.remark,
+            configDetail: data.configDetail || data.productSpec,
+            category: data.category,
+            region: data.region,
+            status: data.status || (data.isValid ? 'active' : 'inactive'),
+            endUser: data.endUser,
+            attachments: data.attachments
+        };
+
+        const response: any = await request('/products', {
+            method: 'POST',
+            data: apiData
+        });
+
+        return { id: response.id || response.data?._id };
+    } catch (error) {
+        console.error('创建报价失败:', error);
+        throw error;
+    }
+}
+
+// 更新报价
+export async function updateQuotation(id: string, data: Partial<QuotationRecord>): Promise<{ success: boolean }> {
+    try {
+        // 数据格式转换
+        const apiData: any = {};
+        
+        if (data.productName) apiData.productName = data.productName;
+        if (data.supplier || data.vendor) apiData.supplier = data.supplier || data.vendor;
+        if (data.list_price !== undefined || data.originalPrice !== undefined) {
+            apiData.list_price = data.list_price ?? data.originalPrice;
+        }
+        if (data.quote_unit_price !== undefined || data.finalPrice !== undefined) {
+            apiData.quote_unit_price = data.quote_unit_price ?? data.finalPrice;
+        }
+        if (data.quantity !== undefined) apiData.quantity = data.quantity;
+        if (data.discount_rate !== undefined || data.discount !== undefined) {
+            apiData.discount_rate = data.discount_rate ?? (data.discount ? data.discount * 100 : null);
+        }
+        if (data.quote_total_price !== undefined) apiData.quote_total_price = data.quote_total_price;
+        if (data.quote_validity) apiData.quote_validity = data.quote_validity;
+        if (data.delivery_date) apiData.delivery_date = data.delivery_date;
+        if (data.currency) apiData.currency = data.currency;
+        if (data.notes !== undefined || data.remark !== undefined) {
+            apiData.notes = data.notes ?? data.remark;
+        }
+        if (data.configDetail !== undefined || data.productSpec !== undefined) {
+            apiData.configDetail = data.configDetail ?? data.productSpec;
+        }
+        if (data.category) apiData.category = data.category;
+        if (data.region) apiData.region = data.region;
+        if (data.status !== undefined || data.isValid !== undefined) {
+            apiData.status = data.status ?? (data.isValid ? 'active' : 'inactive');
+        }
+        if (data.endUser) apiData.endUser = data.endUser;
+        if (data.attachments) apiData.attachments = data.attachments;
+
+        const response: any = await request(`/products/${id}`, {
+            method: 'PUT',
+            data: apiData
+        });
+
+        return { success: response.success || true };
+    } catch (error) {
+        console.error('更新报价失败:', error);
+        throw error;
+    }
+}
+
+// 删除报价
+export async function deleteQuotation(id: string): Promise<{ success: boolean }> {
+    try {
+        const response: any = await request(`/products/${id}`, {
+            method: 'DELETE'
+        });
+
+        return { success: response.success || true };
+    } catch (error) {
+        console.error('删除报价失败:', error);
+        throw error;
+    }
+}
+
+// 下载附件
+export async function downloadAttachment(attachmentId: string, quotationId?: string): Promise<Blob> {
+    try {
+        let url: string;
+        
+        if (quotationId) {
+            // 新的API端点格式
+            url = `${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/quotations/attachment/${quotationId}/${attachmentId}`;
+        } else {
+            // 兼容旧格式
+            url = `${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/attachments/${attachmentId}`;
+        }
+
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error('下载附件失败');
+        }
+        
+        return await response.blob();
+    } catch (error) {
+        console.error('下载附件失败:', error);
+        throw error;
+    }
+}
+
+// 导出向后兼容的模拟数据（如果需要降级）
 export const mockQuotations: QuotationRecord[] = [
     {
         id: '1',
+        _id: '1',
         productName: '服务器Pro Max',
         category: '服务器',
         region: '德国',
         productSpec: 'CPU: 2.5GHz, 内存: 64GB, 硬盘: 2TB',
+        configDetail: 'CPU: 2.5GHz, 内存: 64GB, 硬盘: 2TB',
+        supplier: '联想',
         vendor: '联想',
+        list_price: 45000,
         originalPrice: 45000,
+        quote_unit_price: 42000,
         finalPrice: 42000,
         quantity: 10,
+        quote_total_price: 420000,
+        discount_rate: 7,
         discount: 0.93,
+        currency: 'EUR',
+        quote_validity: '2024-06-15',
         quotationDate: '2024-03-15',
+        status: 'active',
         isValid: true,
-        remark: '含三年原厂质保',
-        configDetail: `详细配置清单：
-
-═══════════════════════════════════════════════
-
-【处理器配置】
-- CPU型号：Intel Xeon Gold 5318Y
-  - 核心数量：24核心
-  - 线程数量：48线程
-  - 基础频率：2.1GHz
-  - 最大睿频：3.4GHz
-  - 三级缓存：36MB
-  - 制程工艺：10nm
-  - TDP功耗：165W
-  - 支持指令集：AVX-512, SSE4.1/4.2
-  - 内存控制器：8通道DDR4-3200
-  - PCIe通道：48条PCIe 4.0
-
-【内存配置】
-- 总容量：64GB
-- 内存类型：DDR4 ECC RDIMM
-- 内存频率：3200MHz
-- 内存时序：CL22-22-22-52
-- 内存电压：1.2V
-- 可扩展至：2TB（最大支持）
-- 内存插槽总数：32个DIMM插槽
-- 已使用插槽：8个
-- 单条容量：8GB
-- 内存品牌：Samsung/Micron
-- 错误纠正：支持ECC错误纠正
-- 内存带宽：204.8 GB/s
-- 内存通道：8通道配置
-- 支持内存镜像：是
-- 支持内存热备：是
-
-【存储系统】
-系统盘：
-- 容量：2x 240GB SATA SSD
-- 配置：RAID 1镜像
-- 品牌：Intel DC S4510
-- 接口：SATA 3.0 6Gb/s
-- 顺序读取：560MB/s
-- 顺序写入：510MB/s
-- 随机读取IOPS：75,000
-- 随机写入IOPS：36,000
-- 耐久度：1.3 DWPD
-
-数据盘：
-- 容量：4x 960GB NVMe SSD
-- 配置：RAID 5（可用容量2.88TB）
-- 品牌：Samsung PM983
-- 接口：PCIe 3.0 x4 NVMe
-- 顺序读取：3,500MB/s
-- 顺序写入：3,000MB/s
-- 随机读取IOPS：500,000
-- 随机写入IOPS：50,000
-- 耐久度：1 DWPD（5年质保）
-
-存储扩展能力：
-- 支持硬盘数量：最多24个2.5寸硬盘位
-- 支持热插拔：是（所有硬盘位）
-- RAID控制器：LSI MegaRAID 9460-16i
-- RAID控制器缓存：4GB DDR4带BBU
-- RAID支持级别：0, 1, 5, 6, 10, 50, 60
-- 备用硬盘支持：全局和专用热备盘
-
-【主板与芯片组】
-- 主板型号：Intel C621A芯片组
-- 主板规格：双路服务器主板
-- BIOS：UEFI BIOS 2.7
-- 可信平台模块：TPM 2.0
-- 系统管理：IPMI 2.0
-- 远程管理：基于Web的BMC
-- 串行端口：2个RS232串口
-- USB端口：6个USB 3.0端口
-
-【网络配置】
-板载网络：
-- 网卡数量：4个千兆以太网端口
-- 网卡型号：Intel I350-AM4
-- 网卡功能：支持网络唤醒、PXE启动
-- 网络卸载：TCP/UDP/IP校验和卸载
-- VLAN支持：802.1Q VLAN标记
-- 链路聚合：支持LACP
-
-可选网络扩展：
-- 10GbE光纤网卡：Intel X710-DA2
-- 25GbE网卡：Mellanox ConnectX-4 Lx
-- InfiniBand：Mellanox ConnectX-6
-- 网络处理器：支持SR-IOV虚拟化
-
-【电源系统】
-- 电源类型：1+1冗余热插拔电源
-- 单电源功率：1100W 80Plus 铂金
-- 输入电压：100-240V AC自适应
-- 输入频率：50/60Hz
-- 功率因子：>0.95
-- 电源效率：>94%（80Plus铂金认证）
-- 电源接口：C19电源插头
-- 电源监控：实时功耗监控
-
-【散热系统】
-CPU散热：
-- 散热器类型：2U被动式散热器
-- 散热材料：铜质热管+铝质散热鳍片
-- 热设计功耗：支持165W TDP
-- 散热器数量：2个（双CPU配置）
-
-系统风扇：
-- 风扇数量：6个系统风扇
-- 风扇类型：热插拔冗余风扇
-- 风扇转速：可变速控制（PWM）
-- 噪音水平：<65dB（满载）
-- 风扇寿命：5年或50,000小时
-
-【机箱规格】
-- 机箱高度：2U机架式
-- 机箱深度：650mm
-- 机箱宽度：标准19英寸机架
-- 重量：约25kg（满配置）
-- 材质：优质钢材+铝合金面板
-- 防护等级：IP20
-- 机架导轨：滑轨式快装导轨
-
-【扩展插槽】
-- PCIe插槽总数：8个
-- PCIe 4.0 x16：4个全高全长
-- PCIe 4.0 x8：2个半高半长
-- PCIe 3.0 x4：2个M.2插槽
-- 显卡支持：最多2个双宽GPU
-- 扩展卡支持：RAID卡、网卡、加速卡
-
-【操作系统支持】
-Windows Server：
-- Windows Server 2022
-- Windows Server 2019
-- Windows Server 2016
-
-Linux发行版：
-- Red Hat Enterprise Linux 8.x/9.x
-- SUSE Linux Enterprise Server 15
-- Ubuntu Server 20.04/22.04 LTS
-- CentOS 7.x/8.x
-- Rocky Linux 8.x/9.x
-
-虚拟化平台：
-- VMware vSphere 7.0/8.0
-- Microsoft Hyper-V 2019/2022
-- Citrix XenServer 8.x
-- Red Hat Virtualization 4.x
-- Proxmox VE 7.x/8.x
-
-【管理功能】
-带外管理：
-- BMC芯片：Aspeed AST2600
-- 管理接口：1Gb专用管理网口
-- 远程控制：IPMI 2.0/Redfish
-- KVM功能：HTML5 Web KVM
-- 虚拟介质：ISO挂载支持
-- 系统监控：温度、电压、风扇转速
-- 告警通知：SNMP、邮件告警
-
-【安全功能】
-硬件安全：
-- TPM 2.0安全芯片
-- Secure Boot安全启动
-- 硬件信任根
-- 启动保护：UEFI固件验证
-- 内存保护：内存加密支持
-
-软件安全：
-- BIOS密码保护
-- 硬盘加密支持
-- 网络安全：802.1X认证
-- 审计日志：系统事件记录
-
-【认证与质保】
-产品认证：
-- FCC Class A认证
-- CE认证
-- CCC中国强制认证
-- Energy Star节能认证
-- EPEAT环保认证
-
-质保服务：
-- 硬件质保：3年现场服务
-- 7x24小时技术支持
-- 4小时硬件响应
-- 现场工程师服务
-- 备件库存保障
-
-【环境参数】
-工作环境：
-- 工作温度：10°C - 35°C
-- 存储温度：-40°C - 70°C
-- 工作湿度：8% - 90%（无冷凝）
-- 存储湿度：5% - 95%（无冷凝）
-- 工作海拔：0 - 3000米
-- 存储海拔：0 - 12000米
-
-═══════════════════════════════════════════════
-
-配置清单完毕，如需了解更多技术细节或定制化配置，请联系技术支持团队。`
-    },
-    {
-        id: '2',
-        productName: 'NetSwitch Pro',
-        category: '网络设备',
-        region: '法国',
-        productSpec: '48口千兆交换机，4个10G上联口',
-        vendor: '华为',
-        originalPrice: 12000,
-        finalPrice: 10800,
-        quantity: 5,
-        discount: 0.9,
-        quotationDate: '2024-03-14',
-        isValid: true,
-        remark: '含基础安装服务'
+        notes: '含三年原厂质保',
+        remark: '含三年原厂质保'
     }
 ];
 
-// API 函数：获取历史报价列表
-export async function getQuotationList(params: QuotationQueryParams): Promise<{ data: QuotationRecord[]; total: number }> {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // 过滤数据
-    let filteredData = [...mockQuotations];
-    
-    // 应用筛选条件
-    if (params.vendor) {
-        const vendorKeyword = params.vendor.toLowerCase();
-        filteredData = filteredData.filter(item => 
-            item.vendor.toLowerCase().includes(vendorKeyword)
-        );
-    }
-    
-    if (params.category) {
-        filteredData = filteredData.filter(item => 
-            item.category === params.category
-        );
-    }
-    
-    if (params.region) {
-        filteredData = filteredData.filter(item => 
-            item.region === params.region
-        );
-    }
-    
-    if (params.productKeyword) {
-        const keyword = params.productKeyword.toLowerCase();
-        filteredData = filteredData.filter(item => 
-            item.productName.toLowerCase().includes(keyword) ||
-            item.productSpec.toLowerCase().includes(keyword)
-        );
-    }
-
-    // 计算分页
-    const total = filteredData.length;
-    const start = (params.page - 1) * params.pageSize;
-    const end = start + params.pageSize;
-    const paginatedData = filteredData.slice(start, end);
-
-    return {
-        data: paginatedData,
-        total
-    };
-}
-
-// API 函数：获取历史报价详情
-export async function getQuotationDetail(id: string): Promise<QuotationRecord> {
-    // TODO: 替换为实际API调用
-    // const response = await request(API_ENDPOINTS.QUOTATION_DETAIL.replace(':id', id), {
-    //     method: 'GET'
-    // });
-    // return response;
-    
-    // 暂时使用mock数据
-    const mockRecord = mockQuotations.find(item => item.id === id);
-    if (mockRecord) {
-        return mockRecord;
-    }
-    throw new Error('记录不存在');
-}
-
-// API 函数：添加历史报价
-export async function createQuotation(data: Omit<QuotationRecord, 'id'>): Promise<{ id: string }> {
-    // TODO: 替换为实际API调用
-    // const response = await request(API_ENDPOINTS.QUOTATION_CREATE, {
-    //     method: 'POST',
-    //     data
-    // });
-    // return response;
-    
-    // 暂时使用mock数据
-    return { id: Date.now().toString() };
-}
-
-// API 函数：更新历史报价
-export async function updateQuotation(id: string, data: Partial<QuotationRecord>): Promise<{ success: boolean }> {
-    // TODO: 替换为实际API调用
-    // const response = await request(API_ENDPOINTS.QUOTATION_UPDATE.replace(':id', id), {
-    //     method: 'PUT',
-    //     data
-    // });
-    // return response;
-    
-    // 暂时使用mock数据
-    return { success: true };
-}
-
-// API 函数：删除历史报价
-export async function deleteQuotation(id: string): Promise<{ success: boolean }> {
-    // TODO: 替换为实际API调用
-    // const response = await request(API_ENDPOINTS.QUOTATION_DELETE.replace(':id', id), {
-    //     method: 'DELETE'
-    // });
-    // return response;
-    
-    // 暂时使用mock数据
-    return { success: true };
-}
-
-// API 函数：下载附件
-export async function downloadAttachment(attachmentId: string): Promise<Blob> {
-    // TODO: 替换为实际API调用
-    // const response = await request(API_ENDPOINTS.ATTACHMENT_DOWNLOAD.replace(':id', attachmentId), {
-    //     method: 'GET',
-    //     responseType: 'blob'
-    // });
-    // return response;
-    
-    // 暂时使用mock数据
-    return new Blob(['mock attachment content']);
+// 向后兼容的简化接口
+export async function getQuotationListLegacy(params: QuotationQueryParams): Promise<QuotationRecord[]> {
+    const response = await getQuotationList(params);
+    return response.data;
 } 

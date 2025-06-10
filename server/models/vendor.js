@@ -18,7 +18,7 @@ const vendorSchema = new mongoose.Schema({
     }],
     region: {
         type: String,
-        enum: ['华北', '华东', '华南', '华中', '西南', '西北', '东北', '海外']
+        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
     },
     contact: {
         type: String,
@@ -45,11 +45,6 @@ const vendorSchema = new mongoose.Schema({
         enum: ['active', 'inactive'],
         default: 'active'
     },
-    level: {
-        type: String,
-        enum: ['A', 'B', 'C'],
-        default: 'B'
-    },
     remarks: {
         type: String,
         trim: true
@@ -58,11 +53,6 @@ const vendorSchema = new mongoose.Schema({
         type: String,
         enum: ['HARDWARE', 'SOFTWARE', 'SERVICE'],
         required: true
-    },
-    country: {
-        type: String,
-        required: true,
-        trim: true
     },
     website: {
         type: String,
@@ -94,7 +84,7 @@ const vendorSchema = new mongoose.Schema({
 
 // 创建索引以提高查询性能
 vendorSchema.index({ name: 1 });
-vendorSchema.index({ country: 1 });
+vendorSchema.index({ region: 1 });
 vendorSchema.index({ type: 1 });
 vendorSchema.index({ category: 1 });
 vendorSchema.index({ brands: 1 });

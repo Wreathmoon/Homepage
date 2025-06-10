@@ -57,6 +57,7 @@ interface UploadedFileInfo {
 interface AnalyzedQuotation extends QuotationFormData {
     id?: string;
     status: 'pending' | 'editing' | 'confirmed' | 'saved';
+    originalFile?: any; // 保存AI分析返回的原始文件信息
 }
 
 const QuotationImport: React.FC = () => {
@@ -69,7 +70,24 @@ const QuotationImport: React.FC = () => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [editingData, setEditingData] = useState<QuotationFormData | null>(null);
     const [savedQuotations, setSavedQuotations] = useState<QuotationRecord[]>([]);
+    const [duplicateDialogVisible, setDuplicateDialogVisible] = useState(false);
+    const [duplicateInfo, setDuplicateInfo] = useState<any>(null);
+    const [pendingProducts, setPendingProducts] = useState<any[]>([]);
+    const [forceRender, setForceRender] = useState(0); // 强制重新渲染的标志
     const formRef = useRef<FormApi<any>>();
+
+    // 监听currentIndex变化，自动填充表单数据
+    useEffect(() => {
+        if (currentStep === 2 && analyzedData.length > 0 && currentIndex >= 0 && currentIndex < analyzedData.length) {
+            const currentData = analyzedData[currentIndex];
+            if (currentData && formRef.current) {
+                console.log(`🔄 Index变化，重新填充第${currentIndex + 1}条数据:`, currentData);
+                setTimeout(() => {
+                    formRef.current?.setValues(currentData);
+                }, 50); // 短延迟确保表单已准备好
+            }
+        }
+    }, [currentIndex, analyzedData, currentStep]);
 
     // 第一步：上传文件到AI服务器
     const handleUpload = async (file: BeforeUploadProps): Promise<BeforeUploadObjectResult> => {
@@ -133,6 +151,8 @@ const QuotationImport: React.FC = () => {
         }
 
         setAnalyzing(true);
+        let isDuplicateDetected = false;
+        
         try {
             console.log('🔍 开始AI分析文件...');
             
@@ -158,42 +178,92 @@ const QuotationImport: React.FC = () => {
             const result = await response.json();
             console.log('✅ AI分析成功:', result);
             
-            if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-                // 转换AI分析结果为前端格式
-                const processedData = result.data.map((item: any) => ({
-                    productName: item.productName,
-                    vendor: item.vendor,
-                    category: item.category,
-                    region: item.region,
-                    productSpec: item.productSpec,
-                    originalPrice: item.originalPrice,
-                    finalPrice: item.finalPrice,
-                    quantity: item.quantity,
-                    discount: item.discount,
-                    quotationDate: item.quotationDate,
-                    remark: item.remark,
-                    status: 'pending' as const
-                }));
+            // 检查是否有重复
+            if (result.isDuplicate) {
+                console.log('🔍 检测到重复，准备显示对话框');
+                console.log('📋 重复检测原始数据:', result);
+                console.log('📋 duplicateInfo:', result.duplicateInfo);
+                console.log('📋 validatedProducts:', result.validatedProducts);
+                console.log('📋 products:', result.products);
                 
-                setAnalyzedData(processedData);
-                setCurrentStep(2);
-                setCurrentIndex(0);
+                isDuplicateDetected = true;
                 
-                // 自动填充第一条数据到表单
+                // 先关闭loading状态
+                setAnalyzing(false);
+                
+                // 使用setTimeout确保状态更新完成后再显示对话框
                 setTimeout(() => {
-                    formRef.current?.setValues(processedData[0]);
+                    showDuplicateDialog(result);
+                    console.log('✅ 重复检测对话框应该已显示');
                 }, 100);
                 
-                Toast.success(`AI分析完成！识别到 ${processedData.length} 条产品记录`);
-            } else {
-                Toast.warning('AI分析完成，但未识别到有效的产品数据');
+                return;
             }
+            
+            // 转换为组件期望的格式
+            const productsData = result.products || result.data || [];
+            console.log('🔍 AI返回的原始产品数据:', productsData);
+            
+            const formattedData: AnalyzedQuotation[] = productsData.map((item: any, index: number) => {
+                const formatted = {
+                    id: `analyzed-${index}`,
+                    productName: item.productName || item.name || '',
+                    vendor: item.supplier || '',
+                    category: item.category || item.product_category || '其他',
+                    region: item.region || undefined,
+                    productSpec: item.productSpec || item.configDetail || '',
+                    originalPrice: item.list_price || undefined,
+                    finalPrice: item.quote_unit_price || 0,
+                    quantity: item.quantity || 1,
+                    discount: item.discount_rate ? item.discount_rate / 100 : undefined,
+                    quotationDate: item.quote_validity ? new Date(item.quote_validity).toISOString().split('T')[0] : '',
+                    remark: item.notes || '',
+                    status: 'pending' as const,
+                    originalFile: item.originalFile || null
+                };
+                
+                // 调试：输出每条转换后的数据
+                if (index < 5 || index === productsData.length - 1) { // 只输出前5条和最后一条，避免日志过多
+                    console.log(`📋 第${index + 1}条转换后数据:`, formatted);
+                }
+                
+                return formatted;
+            });
+
+            if (formattedData.length === 0) {
+                Toast.warning('未能解析出有效的报价数据');
+                return;
+            }
+
+            console.log(`✅ 数据转换完成，共${formattedData.length}条记录`);
+            setAnalyzedData(formattedData);
+            setCurrentStep(2);
+            setCurrentIndex(0);
+            
+            // 自动填充第一条数据到表单
+            setTimeout(() => {
+                console.log('🔄 填充第一条数据到表单:', formattedData[0]);
+                formRef.current?.setValues(formattedData[0]);
+            }, 100);
+            
+            Toast.success(`成功分析出 ${formattedData.length} 条报价记录`);
             
         } catch (error) {
             console.error('❌ AI分析失败:', error);
-            Toast.error('AI分析失败，请重试');
+            
+            // 检查是否是网络连接错误
+            if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口3002)');
+            } else if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
+                Toast.error('连接被拒绝，请检查AI服务器状态');
+            } else {
+                Toast.error(`AI分析失败：${error instanceof Error ? error.message : '未知错误'}`);
+            }
         } finally {
-            setAnalyzing(false);
+            // 只有在非重复检测的情况下才重置analyzing状态
+            if (!isDuplicateDetected) {
+                setAnalyzing(false);
+            }
         }
     };
 
@@ -258,37 +328,77 @@ const QuotationImport: React.FC = () => {
 
         setSaving(true);
         try {
-            const promises = confirmedData.map(item => {
-                // 转换数据格式以匹配后端接口
-                const quotationData = {
-                    name: item.productName,
-                    productName: item.productName,
-                    supplier: item.vendor,
-                    quote_unit_price: item.finalPrice,
-                    list_price: item.originalPrice || item.finalPrice,
-                    quantity: item.quantity || 1,
-                    quote_total_price: (item.finalPrice * (item.quantity || 1)),
-                    quote_validity: item.quotationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    currency: 'EUR',
-                    notes: item.remark || '',
-                    configDetail: item.productSpec || '',
-                    category: item.category || '其他',
-                    ...(item.region && ['德国', '法国', '英国', '意大利', '西班牙', '荷兰', '比利时', '瑞士', '奥地利', '瑞典', '挪威', '丹麦', '芬兰', '波兰', '捷克', '匈牙利', '葡萄牙', '爱尔兰', '希腊', '美国', '加拿大', '其他'].includes(item.region) ? { region: item.region } : {}),
-                    status: 'active' as const
-                };
-                return addQuotation(quotationData);
+            // 转换为AI服务器期望的格式
+            const productsData = confirmedData.map(item => ({
+                name: item.productName,
+                productName: item.productName,
+                supplier: item.vendor,
+                quote_unit_price: item.finalPrice,
+                list_price: item.originalPrice || item.finalPrice,
+                quantity: item.quantity || 1,
+                quote_total_price: (item.finalPrice * (item.quantity || 1)),
+                quote_validity: item.quotationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                currency: 'EUR',
+                notes: item.remark || '',
+                configDetail: item.productSpec || '',
+                category: item.category || '其他',
+                region: item.region || undefined,
+                status: 'active',
+                // 优先使用产品自带的originalFile信息，如果没有则不传递（让服务器端重建）
+                ...(item.originalFile ? { originalFile: item.originalFile } : {})
+            }));
+
+            console.log('🔄 使用AI服务器保存数据:', productsData.length, '条记录');
+            console.log('📁 文件信息:', uploadedFile);
+
+            // 调用AI服务器的确认保存API
+            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    products: productsData,
+                    action: 'save-all',
+                    skipDuplicates: false,
+                    fileInfo: uploadedFile ? {
+                        fileName: uploadedFile.fileName,
+                        filePath: uploadedFile.filePath,
+                        originalName: uploadedFile.originalName,
+                        size: uploadedFile.size
+                    } : null
+                })
             });
+
+            if (!response.ok) {
+                throw new Error(`保存失败: ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ 批量保存成功:', result);
             
-            const responses = await Promise.all(promises);
-            console.log('✅ 批量保存成功:', responses);
-            
-            setSavedQuotations(prev => [...prev, ...responses.map(r => r.data)]);
-            setCurrentStep(3);
-            Toast.success(`成功保存 ${confirmedData.length} 条记录到数据库`);
+            if (result.savedCount > 0) {
+                // 模拟原来的数据结构以保持兼容性
+                const savedData = result.data || [];
+                setSavedQuotations(prev => [...prev, ...savedData]);
+                setCurrentStep(3);
+                Toast.success(`成功保存 ${result.savedCount} 条记录到数据库`);
+            } else {
+                Toast.warning('没有数据被保存');
+            }
             
         } catch (error) {
             console.error('❌ 批量保存失败:', error);
-            Toast.error('保存失败，请重试');
+            
+            // 检查是否是网络连接错误
+            if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口3002)');
+            } else if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
+                Toast.error('连接被拒绝，请检查AI服务器状态');
+            } else {
+                Toast.error(`保存失败：${error instanceof Error ? error.message : '未知错误'}`);
+            }
         } finally {
             setSaving(false);
         }
@@ -302,6 +412,9 @@ const QuotationImport: React.FC = () => {
         setCurrentIndex(0);
         setEditingData(null);
         setSavedQuotations([]);
+        setDuplicateDialogVisible(false);
+        setDuplicateInfo(null);
+        setPendingProducts([]);
         formRef.current?.reset();
         Toast.info('已重置，可以重新上传文件');
     };
@@ -337,6 +450,125 @@ const QuotationImport: React.FC = () => {
             console.error('手动添加失败:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // 显示重复检测对话框
+    const showDuplicateDialog = (result: any) => {
+        console.log('🔔 showDuplicateDialog被调用');
+        console.log('📋 接收到的result:', result);
+        
+        const duplicateInfoData = result.duplicateInfo || result;
+        const productsData = result.validatedProducts || result.products || [];
+        const fileInfoData = result.fileInfo || null;
+        
+        console.log('📋 设置duplicateInfo:', duplicateInfoData);
+        console.log('📋 设置pendingProducts:', productsData);
+        console.log('📁 文件信息:', fileInfoData);
+        
+        // 批量更新状态
+        const updateStates = () => {
+            setDuplicateInfo(duplicateInfoData);
+            setPendingProducts(productsData);
+            setDuplicateDialogVisible(true);
+            setForceRender(prev => prev + 1); // 强制重新渲染
+            
+            // 保存文件信息到uploadedFile状态（如果还没有的话）
+            if (fileInfoData && !uploadedFile) {
+                setUploadedFile({
+                    fileName: fileInfoData.fileName,
+                    filePath: fileInfoData.filePath,
+                    originalName: fileInfoData.fileName,
+                    size: 0,
+                    uploadTime: new Date().toISOString()
+                });
+            }
+        };
+        
+        // 强制设置对话框可见
+        console.log('🔔 即将设置 duplicateDialogVisible = true');
+        
+        // 立即更新状态
+        updateStates();
+        
+        // 额外的延迟确保状态生效
+        setTimeout(() => {
+            console.log('⏰ 延迟确认状态更新');
+            setDuplicateDialogVisible(true);
+            setForceRender(prev => prev + 1);
+            console.log('📋 当前 duplicateDialogVisible 应该为 true');
+        }, 10);
+        
+        console.log('✅ 重复检测对话框状态已设置完成');
+    };
+
+    // 处理重复确认
+    const handleDuplicateAction = async (action: 'skip' | 'overwrite' | 'save-both') => {
+        try {
+            let products = pendingProducts;
+            let skipDuplicates = false;
+
+            if (action === 'skip') {
+                skipDuplicates = true;
+            } else if (action === 'overwrite') {
+                // 对于覆盖操作，可能需要先删除现有记录
+                // 这里暂时按正常保存处理
+            }
+
+            console.log('🔄 开始处理重复操作:', action);
+            console.log('📋 产品数据:', products);
+
+            // 调用确认保存API
+            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+            console.log('🌐 AI服务器地址:', aiServerUrl);
+            
+            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    products: products,
+                    action: action,
+                    skipDuplicates: skipDuplicates,
+                    fileInfo: uploadedFile ? {
+                        fileName: uploadedFile.fileName,
+                        filePath: uploadedFile.filePath,
+                        originalName: uploadedFile.originalName,
+                        size: uploadedFile.size
+                    } : null
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`保存失败: ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ 处理重复完成:', result);
+
+            setDuplicateDialogVisible(false);
+            setDuplicateInfo(null);
+            setPendingProducts([]);
+
+            if (result.savedCount > 0) {
+                Toast.success(`${result.message}`);
+                // 可以选择跳转到历史记录页面或刷新数据
+            } else {
+                Toast.info('未保存任何数据');
+            }
+
+        } catch (error) {
+            console.error('❌ 处理重复失败:', error);
+            
+            // 检查是否是网络连接错误
+            if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口3002)');
+            } else if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
+                Toast.error('连接被拒绝，请检查AI服务器状态');
+            } else {
+                Toast.error(`处理失败：${error instanceof Error ? error.message : '未知错误'}`);
+            }
         }
     };
 
@@ -583,7 +815,10 @@ const QuotationImport: React.FC = () => {
                                             setCurrentIndex(newIndex);
                                             // 自动填充表单数据
                                             if (analyzedData[newIndex]) {
+                                                console.log(`⬅️ 切换到第${newIndex + 1}条数据:`, analyzedData[newIndex]);
                                                 formRef.current?.setValues(analyzedData[newIndex]);
+                                            } else {
+                                                console.warn(`⚠️ 第${newIndex + 1}条数据不存在`);
                                             }
                                         }}
                                     >
@@ -596,7 +831,10 @@ const QuotationImport: React.FC = () => {
                                             setCurrentIndex(newIndex);
                                             // 自动填充表单数据
                                             if (analyzedData[newIndex]) {
+                                                console.log(`➡️ 切换到第${newIndex + 1}条数据:`, analyzedData[newIndex]);
                                                 formRef.current?.setValues(analyzedData[newIndex]);
+                                            } else {
+                                                console.warn(`⚠️ 第${newIndex + 1}条数据不存在`);
                                             }
                                         }}
                                     >
@@ -646,8 +884,157 @@ const QuotationImport: React.FC = () => {
         }
     };
 
+    // 渲染重复检测对话框
+    const renderDuplicateDialog = () => {
+        console.log('🎨 renderDuplicateDialog被调用');
+        console.log('📋 duplicateDialogVisible:', duplicateDialogVisible);
+        console.log('📋 duplicateInfo:', duplicateInfo);
+        
+        if (!duplicateDialogVisible || !duplicateInfo) {
+            console.log('❌ 对话框不显示 - visible:', duplicateDialogVisible, 'info:', duplicateInfo);
+            return null;
+        }
+
+        console.log('✅ 对话框将要渲染');
+        const { existingFile, productDuplicates } = duplicateInfo;
+
+        return (
+            <Modal
+                title="检测到重复内容"
+                visible={duplicateDialogVisible}
+                onCancel={() => {
+                    setDuplicateDialogVisible(false);
+                    setDuplicateInfo(null);
+                    setPendingProducts([]);
+                    // 取消重复检测后给出提示
+                    Toast.info('已取消处理，您可以重新进行AI分析或手动添加报价');
+                }}
+                footer={null}
+                width={800}
+                style={{ top: '10vh' }}
+            >
+                <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+                    {/* 文件重复提示 */}
+                    {existingFile && (
+                        <Card style={{ marginBottom: '16px', background: 'var(--semi-color-warning-light-default)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+                                <Badge count="!" type="warning" style={{ marginRight: '8px' }} />
+                                <Title heading={5} style={{ margin: 0, color: 'var(--semi-color-warning-6)' }}>
+                                    相同文件已存在
+                                </Title>
+                            </div>
+                            <Descriptions data={[
+                                { key: '原文件名', value: existingFile.fileName },
+                                { key: '产品名称', value: existingFile.productName },
+                                { key: '上传时间', value: new Date(existingFile.uploadDate).toLocaleString() },
+                            ]} />
+                        </Card>
+                    )}
+
+                    {/* 产品重复提示 */}
+                    {productDuplicates && productDuplicates.length > 0 && (
+                        <Card style={{ marginBottom: '16px', background: 'var(--semi-color-info-light-default)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+                                <Badge count={productDuplicates.length} type="primary" style={{ marginRight: '8px' }} />
+                                <Title heading={5} style={{ margin: 0, color: 'var(--semi-color-primary-6)' }}>
+                                    发现相似产品记录
+                                </Title>
+                            </div>
+                            
+                            {productDuplicates.map((dup: any, index: number) => (
+                                <div key={index} style={{ marginBottom: '16px' }}>
+                                    <Text strong>新产品：{dup.newProduct.productName}</Text>
+                                    <div style={{ marginTop: '8px', marginLeft: '16px' }}>
+                                        <Text type="secondary">
+                                            供应商：{dup.newProduct.supplier} | 
+                                            单价：¥{dup.newProduct.quote_unit_price} | 
+                                            数量：{dup.newProduct.quantity}
+                                        </Text>
+                                    </div>
+                                    
+                                    <div style={{ marginTop: '8px' }}>
+                                        <Text strong style={{ color: 'var(--semi-color-danger-6)' }}>
+                                            相似的现有记录：
+                                        </Text>
+                                        {dup.existingProducts.map((existing: any, i: number) => (
+                                            <div key={i} style={{ marginLeft: '16px', marginTop: '4px' }}>
+                                                <Text type="secondary">
+                                                    {existing.productName} - {existing.supplier} - 
+                                                    ¥{existing.unitPrice} × {existing.quantity} - 
+                                                    {new Date(existing.uploadDate).toLocaleDateString()}
+                                                    {existing.originalFileName && (
+                                                        <span> - {existing.originalFileName}</span>
+                                                    )}
+                                                </Text>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {index < productDuplicates.length - 1 && <Divider />}
+                                </div>
+                            ))}
+                        </Card>
+                    )}
+
+                    {/* 待保存的产品预览 */}
+                    <Card>
+                        <Title heading={5} style={{ marginBottom: '12px' }}>
+                            待保存的产品 ({pendingProducts.length} 个)
+                        </Title>
+                        <List
+                            dataSource={pendingProducts}
+                            size="small"
+                            renderItem={(item: any) => (
+                                <List.Item>
+                                    <div>
+                                        <Text strong>{item.productName}</Text>
+                                        <br />
+                                        <Text type="secondary">
+                                            {item.supplier} - ¥{item.quote_unit_price} × {item.quantity}
+                                        </Text>
+                                    </div>
+                                </List.Item>
+                            )}
+                        />
+                    </Card>
+                </div>
+
+                {/* 操作按钮 */}
+                <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--semi-color-border)' }}>
+                    <Space>
+                        <Button 
+                            type="tertiary" 
+                            onClick={() => handleDuplicateAction('skip')}
+                        >
+                            跳过重复项
+                        </Button>
+                        <Button 
+                            type="warning" 
+                            onClick={() => handleDuplicateAction('overwrite')}
+                        >
+                            全部保存
+                        </Button>
+                        <Button 
+                            onClick={() => {
+                                setDuplicateDialogVisible(false);
+                                setDuplicateInfo(null);
+                                setPendingProducts([]);
+                                // 取消重复检测后给出提示
+                                Toast.info('已取消处理，您可以重新进行AI分析或手动添加报价');
+                            }}
+                        >
+                            取消
+                        </Button>
+                    </Space>
+                </div>
+            </Modal>
+        );
+    };
+
     return (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+            {/* 重复检测对话框 */}
+            {renderDuplicateDialog()}
+            
             <Title heading={3}>智能报价单导入</Title>
             
             {/* 进度条 */}

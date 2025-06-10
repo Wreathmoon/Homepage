@@ -19,15 +19,14 @@ import { IconHelpCircle } from '@douyinfe/semi-icons';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
-import { getVendorList, getVendorProducts, PRODUCT_CATEGORIES } from '../../../services/vendor';
-import type { VendorQueryParams, Vendor as VendorType } from '../../../services/vendor';
+import { getVendorList, getVendorProducts, PRODUCT_CATEGORIES, VENDOR_REGIONS } from '../../../services/vendor';
+import type { VendorQueryParams, Vendor as VendorType, VendorRegion } from '../../../services/vendor';
 
 const { Title } = Typography;
 
 // 定义筛选条件接口
 interface FilterValues {
-    country?: string;
-
+    region?: VendorRegion;
     type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
     agentType?: 'GENERAL_AGENT' | 'AGENT' | 'DIRECT';
     productCategory?: string;
@@ -72,7 +71,7 @@ const Vendor: React.FC = () => {
             }
 
             const params: VendorQueryParams = {
-                country: values.country,
+                region: values.region,
                 type: values.type,
                 keyword: values.keyword,
                 productCategory: values.productCategory,
@@ -141,7 +140,7 @@ const Vendor: React.FC = () => {
     // 处理筛选条件提交
     const handleSubmit = (values: FilterValues) => {
         const params: VendorQueryParams = {
-            country: values.country,
+            region: values.region,
             type: values.type,
             productCategory: values.productCategory,
             productKeyword: values.productKeyword,
@@ -178,8 +177,8 @@ const Vendor: React.FC = () => {
             width: 100
         },
         { 
-            title: '国家/地区', 
-            dataIndex: 'country', 
+            title: '地区', 
+            dataIndex: 'region', 
             sorter: true,
             width: 120
         },
@@ -265,17 +264,15 @@ const Vendor: React.FC = () => {
                     </Col>
                     <Col span={6}>
                         <Form.Select
-                            field="country"
+                            field="region"
                             label="国家/地区"
                             style={{ width: '100%' }}
                             placeholder="请选择"
                             showClear
-                            optionList={[
-                                { label: '中国', value: 'CN' },
-                                { label: '美国', value: 'US' },
-                                { label: '德国', value: 'DE' },
-                                { label: '日本', value: 'JP' }
-                            ]}
+                            optionList={VENDOR_REGIONS.map(region => ({
+                                label: region,
+                                value: region
+                            }))}
                         />
                     </Col>
                     <Col span={6}>

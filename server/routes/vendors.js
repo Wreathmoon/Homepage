@@ -8,24 +8,22 @@ router.get('/', async (req, res) => {
         const {
             page = 1,
             pageSize = 10,
-            country,
+            region,
             type,
             keyword,
             productCategory,
             productKeyword,
             isGeneralAgent,
             isAgent,
-            status,
-            level
+            status
         } = req.query;
 
         // 构建查询条件
         let query = {};
 
-        if (country) query.country = country;
+        if (region) query.region = region;
         if (type) query.type = type;
         if (status) query.status = status;
-        if (level) query.level = level;
 
         // 代理类型筛选
         if (isGeneralAgent !== undefined) {

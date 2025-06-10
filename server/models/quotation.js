@@ -103,7 +103,7 @@ const quotationSchema = new mongoose.Schema({
     },
     region: {
         type: String,
-        enum: ['德国', '法国', '英国', '意大利', '西班牙', '荷兰', '比利时', '瑞士', '奥地利', '瑞典', '挪威', '丹麦', '芬兰', '波兰', '捷克', '匈牙利', '葡萄牙', '爱尔兰', '希腊', '美国', '加拿大', '其他']
+        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
     },
     
     // 状态信息
@@ -118,7 +118,13 @@ const quotationSchema = new mongoose.Schema({
         filename: String,
         originalName: String,
         path: String,
-        uploadedAt: Date
+        fileSize: Number,
+        mimetype: String,
+        fileHash: String,
+        uploadedAt: {
+            type: Date,
+            default: Date.now
+        }
     },
     
     created_at: {

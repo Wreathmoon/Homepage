@@ -69,11 +69,39 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
     const handleDownloadOriginal = async () => {
         try {
             Toast.info('正在准备下载...');
+            
+            // 获取正确的ID字段
+            const quotationId = record._id || record.id;
+            if (!quotationId) {
+                Toast.error('无法获取报价记录ID');
+                return;
+            }
+            
             const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
-            const response = await fetch(`${aiServerUrl}/api/quotations/download/${record.id}`);
+            const downloadUrl = `${aiServerUrl}/api/quotations/download/${quotationId}`;
+            console.log('📥 下载URL:', downloadUrl);
+            
+            const response = await fetch(downloadUrl);
             
             if (!response.ok) {
-                throw new Error('下载失败');
+                const errorText = await response.text();
+                console.error('下载失败:', response.status, errorText);
+                
+                let errorMessage = '下载失败';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    if (errorData.reason === 'missing_original_file') {
+                        errorMessage = '该记录没有关联的原始文件（可能是手动添加的记录）';
+                    } else if (errorData.reason === 'empty_file_path') {
+                        errorMessage = '文件路径信息丢失，无法下载原始文件';
+                    } else {
+                        errorMessage = errorData.error || errorMessage;
+                    }
+                } catch {
+                    // 解析失败，使用默认错误信息
+                }
+                
+                throw new Error(errorMessage);
             }
             
             const blob = await response.blob();
@@ -84,10 +112,46 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
             // 从响应头获取文件名，如果没有则使用默认名称
             const contentDisposition = response.headers.get('Content-Disposition');
             let fileName = `${record.productName}_原始报价单`;
+            
             if (contentDisposition) {
-                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
-                if (matches != null && matches[1]) {
-                    fileName = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                console.log('📋 Content-Disposition:', contentDisposition);
+                
+                // 支持新的 filename*=UTF-8'' 格式
+                const utf8Match = /filename\*=UTF-8''([^;]+)/.exec(contentDisposition);
+                if (utf8Match) {
+                    fileName = decodeURIComponent(utf8Match[1]);
+                } else {
+                    // 回退到旧的 filename= 格式
+                    const regularMatch = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                    if (regularMatch && regularMatch[1]) {
+                        fileName = decodeURIComponent(regularMatch[1].replace(/['"]/g, ''));
+                    }
+                }
+                
+                console.log('📁 解析的文件名:', fileName);
+            } else {
+                // 如果没有Content-Disposition头，尝试从记录中获取更好的文件名
+                if (record.originalFile?.originalName) {
+                    fileName = record.originalFile.originalName;
+                } else {
+                    // 根据文件扩展名生成合适的文件名
+                    const contentType = response.headers.get('Content-Type');
+                    let extension = '';
+                    
+                    if (contentType) {
+                        const typeMap: Record<string, string> = {
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+                            'application/vnd.ms-excel': 'xls',
+                            'application/pdf': 'pdf',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+                            'application/msword': 'doc',
+                            'text/csv': 'csv',
+                            'text/plain': 'txt'
+                        };
+                        extension = typeMap[contentType] || '';
+                    }
+                    
+                    fileName = extension ? `${record.productName}_原始报价单.${extension}` : `${record.productName}_原始报价单`;
                 }
             }
             
@@ -99,7 +163,14 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
             Toast.success('下载成功');
         } catch (error) {
             console.error('下载原始文件失败:', error);
-            Toast.error('下载失败，原始文件可能不存在');
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (errorMessage.includes('404')) {
+                Toast.error('原始文件不存在或已被删除');
+            } else if (errorMessage.includes('500')) {
+                Toast.error('服务器内部错误，请联系管理员');
+            } else {
+                Toast.error('下载失败：' + errorMessage);
+            }
         }
     };
 
@@ -354,11 +425,39 @@ const QuotationHistory: React.FC = () => {
                 const handleDownloadFile = async () => {
                     try {
                         Toast.info('正在准备下载...');
+                        
+                        // 获取正确的ID字段
+                        const quotationId = record._id || record.id;
+                        if (!quotationId) {
+                            Toast.error('无法获取报价记录ID');
+                            return;
+                        }
+                        
                         const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
-                        const response = await fetch(`${aiServerUrl}/api/quotations/download/${record.id}`);
+                        const downloadUrl = `${aiServerUrl}/api/quotations/download/${quotationId}`;
+                        console.log('📥 表格下载URL:', downloadUrl);
+                        
+                        const response = await fetch(downloadUrl);
                         
                         if (!response.ok) {
-                            throw new Error('下载失败');
+                            const errorText = await response.text();
+                            console.error('下载失败:', response.status, errorText);
+                            
+                            let errorMessage = '下载失败';
+                            try {
+                                const errorData = JSON.parse(errorText);
+                                if (errorData.reason === 'missing_original_file') {
+                                    errorMessage = '该记录没有关联的原始文件（可能是手动添加的记录）';
+                                } else if (errorData.reason === 'empty_file_path') {
+                                    errorMessage = '文件路径信息丢失，无法下载原始文件';
+                                } else {
+                                    errorMessage = errorData.error || errorMessage;
+                                }
+                            } catch {
+                                // 解析失败，使用默认错误信息
+                            }
+                            
+                            throw new Error(errorMessage);
                         }
                         
                         const blob = await response.blob();
@@ -369,10 +468,46 @@ const QuotationHistory: React.FC = () => {
                         // 从响应头获取文件名，如果没有则使用默认名称
                         const contentDisposition = response.headers.get('Content-Disposition');
                         let fileName = `${record.productName}_原始报价单`;
+                        
                         if (contentDisposition) {
-                            const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
-                            if (matches != null && matches[1]) {
-                                fileName = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                            console.log('📋 Content-Disposition:', contentDisposition);
+                            
+                            // 支持新的 filename*=UTF-8'' 格式
+                            const utf8Match = /filename\*=UTF-8''([^;]+)/.exec(contentDisposition);
+                            if (utf8Match) {
+                                fileName = decodeURIComponent(utf8Match[1]);
+                            } else {
+                                // 回退到旧的 filename= 格式
+                                const regularMatch = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                                if (regularMatch && regularMatch[1]) {
+                                    fileName = decodeURIComponent(regularMatch[1].replace(/['"]/g, ''));
+                                }
+                            }
+                            
+                            console.log('📁 解析的文件名:', fileName);
+                        } else {
+                            // 如果没有Content-Disposition头，尝试从记录中获取更好的文件名
+                            if (record.originalFile?.originalName) {
+                                fileName = record.originalFile.originalName;
+                            } else {
+                                // 根据文件扩展名生成合适的文件名
+                                const contentType = response.headers.get('Content-Type');
+                                let extension = '';
+                                
+                                if (contentType) {
+                                    const typeMap: Record<string, string> = {
+                                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+                                        'application/vnd.ms-excel': 'xls',
+                                        'application/pdf': 'pdf',
+                                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+                                        'application/msword': 'doc',
+                                        'text/csv': 'csv',
+                                        'text/plain': 'txt'
+                                    };
+                                    extension = typeMap[contentType] || '';
+                                }
+                                
+                                fileName = extension ? `${record.productName}_原始报价单.${extension}` : `${record.productName}_原始报价单`;
                             }
                         }
                         
@@ -384,7 +519,14 @@ const QuotationHistory: React.FC = () => {
                         Toast.success('下载成功');
                     } catch (error) {
                         console.error('下载原始文件失败:', error);
-                        Toast.error('下载失败，原始文件可能不存在');
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        if (errorMessage.includes('404')) {
+                            Toast.error('原始文件不存在或已被删除');
+                        } else if (errorMessage.includes('500')) {
+                            Toast.error('服务器内部错误，请联系管理员');
+                        } else {
+                            Toast.error('下载失败：' + errorMessage);
+                        }
                     }
                 };
 

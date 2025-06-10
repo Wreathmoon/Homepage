@@ -8,6 +8,73 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const xlsx = require('xlsx');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
+const crypto = require('crypto'); // 添加crypto模块用于计算文件hash
+
+// 计算文件MD5 hash
+const calculateFileHash = async (filePath) => {
+    const fileBuffer = await fs.readFile(filePath);
+    return crypto.createHash('md5').update(fileBuffer).digest('hex');
+};
+
+// 检测重复上传
+const checkDuplicates = async (filePath, fileName, validatedProducts) => {
+    const duplicates = {
+        fileHash: null,
+        existingFile: null,
+        productDuplicates: []
+    };
+
+    try {
+        // 1. 计算文件hash
+        const fileHash = await calculateFileHash(filePath);
+        duplicates.fileHash = fileHash;
+
+        // 2. 检查是否有相同hash的文件已上传
+        const existingFileRecord = await Quotation.findOne({
+            'originalFile.fileHash': fileHash
+        });
+
+        if (existingFileRecord) {
+            duplicates.existingFile = {
+                id: existingFileRecord._id,
+                fileName: existingFileRecord.originalFile.originalName,
+                uploadDate: existingFileRecord.originalFile.uploadedAt,
+                productName: existingFileRecord.productName
+            };
+        }
+
+        // 3. 检查产品信息重复
+        for (const product of validatedProducts) {
+            // 查找相似的产品记录
+            const similarProducts = await Quotation.find({
+                productName: { $regex: product.productName, $options: 'i' },
+                supplier: product.supplier,
+                quote_unit_price: product.quote_unit_price,
+                quantity: product.quantity
+            });
+
+            if (similarProducts.length > 0) {
+                duplicates.productDuplicates.push({
+                    newProduct: product,
+                    existingProducts: similarProducts.map(p => ({
+                        id: p._id,
+                        productName: p.productName,
+                        supplier: p.supplier,
+                        unitPrice: p.quote_unit_price,
+                        quantity: p.quantity,
+                        uploadDate: p.createdAt,
+                        originalFileName: p.originalFile?.originalName
+                    }))
+                });
+            }
+        }
+
+        return duplicates;
+    } catch (error) {
+        console.error('❌ 重复检测失败:', error);
+        return duplicates;
+    }
+};
 
 // 初始化Google Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyBie3GiTRzEnNrrj-kne9NNXwvgqnkgt5A');
@@ -137,7 +204,7 @@ const QuotationSchema = new mongoose.Schema({
     },
     region: {
         type: String,
-        enum: ['德国', '法国', '英国', '意大利', '西班牙', '荷兰', '比利时', '瑞士', '奥地利', '瑞典', '挪威', '丹麦', '芬兰', '波兰', '捷克', '匈牙利', '葡萄牙', '爱尔兰', '希腊', '美国', '加拿大', '其他']
+        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
     },
     
     // 状态信息
@@ -152,7 +219,13 @@ const QuotationSchema = new mongoose.Schema({
         filename: String,
         originalName: String,
         path: String,
-        uploadedAt: Date
+        fileSize: Number,
+        mimetype: String,
+        fileHash: String,
+        uploadedAt: {
+            type: Date,
+            default: Date.now
+        }
     },
     
     created_at: {
@@ -236,226 +309,732 @@ app.post('/api/quotations/upload', upload.single('file'), async (req, res) => {
     });
 });
 
-// API 2: 分析已上传的文件并保存到MongoDB
+// API 2: 分析已上传的文件
 app.post('/api/quotations/analyze', async (req, res) => {
-    console.log('🔍 收到文件分析请求');
-    const { filePath, fileName } = req.body;
+    console.log('🔍 收到分析请求');
     
-    if (!filePath || !fileName) {
-        return res.status(400).json({ error: '缺少文件路径或文件名' });
+    const { fileName, filePath } = req.body;
+    
+    console.log('📋 请求参数:');
+    console.log(`   fileName: ${fileName}`);
+    console.log(`   filePath: ${filePath}`);
+    
+    if (!fileName || !filePath) {
+        return res.status(400).json({ error: '缺少文件信息' });
     }
 
-    console.log(`📁 开始分析文件: ${fileName}`); 
-    console.log(`📂 文件路径: ${filePath}`);
-    
-    const fileExtension = fileName.split('.').pop().toLowerCase();
-    let extractedText = '';
-
     try {
-        // 检查文件是否存在
-        try {
-            await fs.access(filePath);
-        } catch (error) {
-            return res.status(404).json({ error: '文件不存在或已过期' });
+        console.log(`📊 开始分析文件: ${fileName}`);
+        
+        // 计算文件hash
+        const fileHash = await calculateFileHash(filePath);
+        console.log(`🔍 文件Hash: ${fileHash}`);
+        
+        // 检查是否有相同hash的文件已分析过
+        const existingFileRecord = await Quotation.findOne({
+            'originalFile.fileHash': fileHash
+        });
+        
+        if (existingFileRecord) {
+            console.log('⚠️ 检测到相同文件已存在');
+            return res.json({
+                success: true,
+                isDuplicate: true,
+                duplicateType: 'file',
+                existingRecord: {
+                    id: existingFileRecord._id,
+                    fileName: existingFileRecord.originalFile.originalName,
+                    productName: existingFileRecord.productName,
+                    uploadDate: existingFileRecord.originalFile.uploadedAt,
+                    supplier: existingFileRecord.supplier
+                },
+                message: '检测到相同文件已上传过，是否要继续处理？'
+            });
         }
-
-        // 根据文件类型提取文本
-        if (fileExtension === 'pdf') {
-            const dataBuffer = await fs.readFile(filePath);
-            const data = await pdf(dataBuffer);
-            extractedText = data.text;
-        } else if (fileExtension === 'xls' || fileExtension === 'xlsx') {
-            const workbook = xlsx.readFile(filePath);
+        
+        // 读取文件内容
+        let content;
+        const fullPath = path.resolve(filePath);
+        
+        if (fileName.toLowerCase().includes('.xlsx') || fileName.toLowerCase().includes('.xls')) {
+            const workbook = xlsx.readFile(fullPath);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            extractedText = xlsx.utils.sheet_to_txt(worksheet);
-        } else if (fileExtension === 'docx') {
-            const dataBuffer = await fs.readFile(filePath);
-            const result = await mammoth.extractRawText({ arrayBuffer: dataBuffer });
-            extractedText = result.value;
+            content = xlsx.utils.sheet_to_csv(worksheet);
+            console.log('📊 Excel文件已读取');
+        } else if (fileName.toLowerCase().includes('.pdf')) {
+            const dataBuffer = await fs.readFile(fullPath);
+            const data = await pdf(dataBuffer);
+            content = data.text;
+            console.log('📄 PDF文件已读取');
+        } else if (fileName.toLowerCase().includes('.docx') || fileName.toLowerCase().includes('.doc')) {
+            const result = await mammoth.extractRawText({ path: fullPath });
+            content = result.value;
+            console.log('📝 Word文档已读取');
         } else {
-            return res.status(400).json({ error: '不支持的文件格式。目前支持PDF、Excel和Word (.docx) 文件。' });
+            content = await fs.readFile(fullPath, 'utf8');
+            console.log('📄 文本文件已读取');
         }
 
-        console.log('📄 文本提取完成 (前500字符):\n', extractedText.substring(0, 500) + '...');
-
-        // 调用Gemini AI进行分析
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash"});
+        console.log('🤖 开始AI分析...');
         
-        const prompt = `从以下报价文本中提取产品信息。以 JSON 数组的形式返回，每个产品一个对象。每个对象应包含以下字段：
-        产品名称 (productName) - 必填，字符串。如果识别到文本描述的是服务器配件明细、"主机"或具体的服务器型号（如"PowerEdge R7625"），请不要展示各个配件信息，而是将其识别为一个服务器产品，产品名可以概括为"XX型号服务器报价"（例如："PowerEdge R7625 服务器报价"）。
-        供应商 (vendor) - 必填，字符串。如果报价文本中没有明确的供应商名称，请尝试从文件名的括号中提取（例如：文件名"报价单（天耘）.pdf"中的"天耘"）。
-        产品类别 (category) - 必填，字符串。请从以下选项中选择最合适的：服务器、存储设备、网络设备、安全设备、软件系统、云服务、其他。
-        地区 (region) - 可选，字符串。请从以下选项中选择：德国、法国、英国、意大利、西班牙、荷兰、比利时、瑞士、奥地利、瑞典、挪威、丹麦、芬兰、波兰、捷克、匈牙利、葡萄牙、爱尔兰、希腊、美国、加拿大、其他。如果无法确定请设为null。
-        产品规格 (productSpec) - 可选，字符串。产品的简要规格描述，例如"48口千兆交换机，4个10G上联口"。
-        原始单价 (originalPrice) - 可选，数字。折扣前的单价。
-        最终单价 (finalPrice) - 必填，数字。到手价/报价单价。对于服务器产品，请提供服务器整体的单价。
-        数量 (quantity) - 必填，整数。对于服务器产品，请提供服务器的整体数量。
-        折扣率 (discount) - 可选，数字。折扣率，例如0.9表示9折。
-        报价日期 (quotationDate) - 必填，字符串 (日期格式，如YYYY-MM-DD)。
-        备注 (remark) - 可选，字符串。如果项目是服务器，请将服务器的所有详细配置信息（例如处理器、内存、硬盘、RAID卡、网卡、电源等）整合并总结到此字段。对于非服务器产品，此字段可以为空。
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        请注意：如果报价中同一台服务器的各个配件单独列出价格，请不要将每个配件作为单独的记录插入数据库。而是将这些配件的信息整合到该服务器记录的"备注"字段中，并确保该服务器只生成一条记录，其价格和数量反映服务器的整体信息。
+        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，提取真实的产品报价信息。
 
-        如果无法识别某个必填字段，请将整个产品对象省略。如果可选字段无法识别，请将其设置为 null。如果无法提取任何产品，请返回一个空数组。
-        
-        报价文本：
-        ${extractedText}`;
+重要提示：
+1. 忽略表头、标题、公司信息、联系方式等非产品信息
+2. 只提取实际的产品/设备/服务的报价记录
+3. 如果某一行看起来像表头、说明文字或格式化文本，请跳过
+4. 供应商信息优先从文件头部、公司信息、签章处获取，而不是产品行中的品牌名
 
-        console.log('🤖 发送prompt给Gemini进行分析...');
+请以JSON数组格式返回，每个产品对象包含以下字段：
+
+产品基本信息：
+- productName: 产品的具体名称（如"戴尔PowerEdge R750服务器"、"思科Catalyst 9300交换机"等，避免提取"FACTORY INTEGRATED"、"ITEM"、"产品"等通用词汇）
+- supplier: 供应商/经销商名称（从文档抬头、公司信息或签名处获取，不是产品品牌）
+- region: 地区（美国、中国、韩国、日本、芬兰、瑞典、荷兰、德国、法国、印度、以色列、加拿大、澳大利亚、台湾、英国、瑞士、新加坡、其他）
+- product_category: 产品类别（服务器、存储设备、网络设备、安全设备、软件系统、云服务、其他）
+
+价格信息：
+- list_price: 列表价格/原价（如果有）
+- quote_unit_price: 实际报价单价（必填，数字）
+- quantity: 数量（必填，大于0的整数）
+- discount_rate: 折扣率（0-100之间的数字，如10表示10%折扣）
+- quote_total_price: 报价总价（单价×数量）
+- currency: 货币（CNY/USD/EUR等）
+
+时间和备注：
+- quote_validity: 报价有效期（YYYY-MM-DD格式）
+- delivery_date: 交付日期（如果有）
+- notes: 备注信息
+- configDetail: 产品配置详情
+- productSpec: 产品规格描述
+
+数据质量要求：
+- productName不能是"FACTORY"、"INTEGRATED"、"ITEM"、"产品"、"设备"等通用词
+- supplier不能是产品品牌（如"HPE"、"DELL"、"Cisco"），应该是经销商/供应商公司名
+- 如果无法识别有效的产品名称，请跳过该条记录
+- 如果价格为0或无法识别，请跳过该条记录
+
+请直接返回JSON数组，不要包含其他解释文字。
+
+文件内容：
+${content}`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        const text = response.text();
+        let text = response.text();
         
-        console.log('🤖 Gemini分析完成，响应长度:', text.length);
-
-        // 解析AI返回的JSON
-        let parsedProducts = [];
+        console.log('🤖 AI原始回复:', text);
+        
+        // 清理响应文本
+        text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        
+        let parsedData;
         try {
-            const jsonStartIndex = text.indexOf('[');
-            const jsonEndIndex = text.lastIndexOf(']') + 1;
-            if (jsonStartIndex !== -1 && jsonEndIndex !== -1 && jsonEndIndex > jsonStartIndex) {
-                const jsonString = text.substring(jsonStartIndex, jsonEndIndex);
-                parsedProducts = JSON.parse(jsonString);
-                console.log('✅ 成功解析产品数据，数量:', parsedProducts.length);
-            } else {
-                console.warn("❌ Gemini返回的JSON格式不正确:", text);
-                return res.status(500).json({ error: '大模型返回格式不正确，无法解析产品数据。' });
-            }
-        } catch (jsonError) {
-            console.error('❌ JSON解析错误:', jsonError);
-            return res.status(500).json({ error: '解析大模型响应时发生错误。' });
+            parsedData = JSON.parse(text);
+        } catch (parseError) {
+            console.error('❌ JSON解析失败:', parseError);
+            return res.status(500).json({ 
+                error: 'AI返回的JSON格式不正确',
+                rawResponse: text
+            });
         }
 
-        // 数据验证和格式转换
-        const validatedProducts = parsedProducts.filter(p => 
-            typeof p === 'object' && p !== null &&
-            p.productName && typeof p.productName === 'string' &&
-            p.vendor && typeof p.vendor === 'string' &&
-            p.category && typeof p.category === 'string' &&
-            p.finalPrice !== undefined && typeof p.finalPrice === 'number' &&
-            p.quantity !== undefined && typeof p.quantity === 'number' &&
-            p.quotationDate && typeof p.quotationDate === 'string'
-        ).map(p => {
-            // 从文件名提取供应商（如果AI未识别）
-            let finalSupplier = p.vendor;
-            if (!p.vendor && fileName) {
-                const match = fileName.match(/\((.*?)\)/);
-                if (match && match[1]) {
-                    finalSupplier = match[1];
+        // 确保返回的是数组
+        let products = Array.isArray(parsedData) ? parsedData : [parsedData];
+        
+        // 验证和标准化数据
+        const validatedProducts = products.map(product => {
+            // 价格字段清理函数
+            const cleanPrice = (value) => {
+                if (value === null || value === undefined) return null;
+                if (typeof value === 'string') {
+                    const cleanedValue = value.toString().replace(/[,\s]/g, '');
+                    const numValue = parseFloat(cleanedValue);
+                    return isNaN(numValue) ? null : numValue;
                 }
+                return typeof value === 'number' ? value : null;
+            };
+            
+            // 清理数量字段
+            const cleanQuantity = (value) => {
+                if (value === null || value === undefined) return 1;
+                if (typeof value === 'string') {
+                    const cleanedValue = value.toString().replace(/[,\s]/g, '');
+                    const numValue = parseInt(cleanedValue);
+                    return isNaN(numValue) ? 1 : Math.max(1, numValue);
+                }
+                return typeof value === 'number' ? Math.max(1, Math.floor(value)) : 1;
+            };
+            
+            const listPrice = cleanPrice(product.list_price);
+            const unitPrice = cleanPrice(product.quote_unit_price) || 0;
+            const quantity = cleanQuantity(product.quantity);
+            const discountRate = cleanPrice(product.discount_rate);
+            const totalPrice = cleanPrice(product.quote_total_price) || (unitPrice * quantity);
+            
+            // 获取文件信息
+            let fileSize = 0;
+            let mimeType = 'application/octet-stream';
+            
+            try {
+                const stats = require('fs').statSync(filePath);
+                fileSize = stats.size;
+            } catch (error) {
+                console.warn('⚠️ 无法获取文件大小:', error.message);
             }
-
-            // 转换为MongoDB格式
-            return {
-                name: p.productName, // 必填字段
-                productName: p.productName,
-                supplier: finalSupplier,
-                category: p.category,
-                region: p.region && ['德国', '法国', '英国', '意大利', '西班牙', '荷兰', '比利时', '瑞士', '奥地利', '瑞典', '挪威', '丹麦', '芬兰', '波兰', '捷克', '匈牙利', '葡萄牙', '爱尔兰', '希腊', '美国', '加拿大', '其他'].includes(p.region) ? p.region : null,
-                productSpec: p.productSpec || null,
-                configDetail: p.productSpec || null,
-                list_price: p.originalPrice || null,
-                quote_unit_price: p.finalPrice,
-                quantity: p.quantity,
-                discount_rate: p.discount ? p.discount * 100 : null,
-                quote_total_price: p.finalPrice * p.quantity,
-                quote_validity: new Date(p.quotationDate),
-                currency: 'EUR',
-                notes: p.remark || null,
+            
+            // 根据文件扩展名确定MIME类型
+            const ext = fileName.toLowerCase().split('.').pop();
+            const mimeTypes = {
+                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'xls': 'application/vnd.ms-excel',
+                'pdf': 'application/pdf',
+                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'doc': 'application/msword',
+                'csv': 'text/csv',
+                'txt': 'text/plain'
+            };
+            mimeType = mimeTypes[ext] || 'application/octet-stream';
+            
+            console.log(`🔧 正在为产品 "${product.productName}" 构建originalFile:`, {
+                fileName,
+                filePath,
+                fileSize,
+                mimeType,
+                fileHash
+            });
+            
+            const validated = {
+                name: product.productName || '未知产品',
+                productName: product.productName || '未知产品',
+                supplier: product.supplier || '未知供应商',
+                region: product.region || '其他',
+                product_category: product.product_category || '其他',
+                list_price: listPrice,
+                quote_unit_price: unitPrice,
+                quantity: quantity,
+                discount_rate: discountRate,
+                quote_total_price: totalPrice,
+                currency: product.currency || 'EUR',
+                quote_validity: product.quote_validity ? new Date(product.quote_validity) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                delivery_date: product.delivery_date ? new Date(product.delivery_date) : null,
+                notes: product.notes || '',
+                configDetail: product.configDetail || '',
+                productSpec: product.productSpec || '',
+                category: product.product_category || '其他',
                 status: 'active',
                 originalFile: {
-                    filename: path.basename(filePath),
+                    filename: fileName,
                     originalName: fileName,
                     path: filePath,
+                    fileSize: fileSize,
+                    mimetype: mimeType,
+                    fileHash: fileHash,
                     uploadedAt: new Date()
                 }
             };
+            
+            return validated;
         });
 
-        console.log('💾 准备保存到MongoDB的产品数量:', validatedProducts.length);
-
-        if (validatedProducts.length === 0) {
-            return res.status(200).json({ message: '文件分析完成，但未识别到有效产品数据。' });
-        }
-
-        // 保存到MongoDB
-        const savedQuotations = [];
-        for (const productData of validatedProducts) {
-            try {
-                const quotation = new Quotation(productData);
-                const saved = await quotation.save();
-                savedQuotations.push(saved);
-                console.log(`✅ 成功保存到MongoDB: ${productData.productName} (ID: ${saved._id})`);
-            } catch (error) {
-                console.error(`❌ 保存失败: ${productData.productName}`, error.message);
-                // 继续处理其他产品
-            }
-        }
-
-        res.json({ 
-            message: '文件分析完成！', 
-            data: savedQuotations,
-            fileInfo: {
-                fileName: fileName,
-                processedCount: savedQuotations.length,
-                totalCount: validatedProducts.length
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ 文件分析失败:', error);
+        console.log(`✅ 数据验证完成，产品数量: ${validatedProducts.length}`);
         
-        let errorMessage = '文件分析失败';
-        if (error.name === 'GoogleGenerativeAIFetchError') {
-            errorMessage = `大模型错误：${error.message}`;
+        // 🔍 检测重复
+        console.log('🔍 开始检测重复...');
+        const duplicates = await checkDuplicates(filePath, fileName, validatedProducts);
+        
+        // 如果检测到重复，返回重复信息供用户选择
+        if (duplicates.existingFile || duplicates.productDuplicates.length > 0) {
+            console.log('⚠️ 检测到重复内容');
+            return res.json({
+                success: true,
+                isDuplicate: true,
+                duplicateInfo: duplicates,
+                validatedProducts: validatedProducts,
+                fileInfo: {
+                    fileName: fileName,
+                    filePath: filePath,
+                    fileHash: fileHash
+                },
+                message: '检测到重复内容，请选择处理方式'
+            });
         }
-
-        res.status(500).json({ error: errorMessage });
+        
+        // 没有重复，直接返回分析结果
+        console.log('✅ 无重复内容，分析完成');
+        res.json({
+            success: true,
+            isDuplicate: false,
+            products: validatedProducts,
+            message: `成功分析 ${validatedProducts.length} 个产品`
+        });
+        
+    } catch (error) {
+        console.error('❌ 分析文件失败:', error);
+        res.status(500).json({ 
+            error: '文件分析失败',
+            details: error.message 
+        });
     }
 });
 
-// API 3: 下载原始文件
+// API: 查询历史报价列表
+app.get('/api/quotations/list', async (req, res) => {
+    console.log('📋 收到历史报价查询请求');
+    
+    try {
+        const {
+            page = 1,
+            pageSize = 10,
+            supplier,
+            productName,
+            category,
+            region,
+            currency,
+            status,
+            startDate,
+            endDate,
+            keyword
+        } = req.query;
+
+        // 构建查询条件
+        const filter = {};
+        
+        if (supplier) {
+            filter.supplier = { $regex: supplier, $options: 'i' };
+        }
+        
+        if (productName) {
+            filter.productName = { $regex: productName, $options: 'i' };
+        }
+        
+        if (category) {
+            filter.category = category;
+        }
+        
+        if (region) {
+            filter.region = region;
+        }
+        
+        if (currency) {
+            filter.currency = currency;
+        }
+        
+        if (status) {
+            filter.status = status;
+        }
+        
+        if (startDate || endDate) {
+            filter.created_at = {};
+            if (startDate) {
+                filter.created_at.$gte = new Date(startDate);
+            }
+            if (endDate) {
+                filter.created_at.$lte = new Date(endDate + 'T23:59:59.999Z');
+            }
+        }
+        
+        if (keyword) {
+            filter.$or = [
+                { productName: { $regex: keyword, $options: 'i' } },
+                { supplier: { $regex: keyword, $options: 'i' } },
+                { notes: { $regex: keyword, $options: 'i' } },
+                { configDetail: { $regex: keyword, $options: 'i' } }
+            ];
+        }
+
+        console.log('🔍 查询条件:', JSON.stringify(filter, null, 2));
+
+        // 计算分页
+        const skip = (parseInt(page) - 1) * parseInt(pageSize);
+        
+        // 执行查询
+        const [data, total] = await Promise.all([
+            Quotation.find(filter)
+                .sort({ created_at: -1 })
+                .skip(skip)
+                .limit(parseInt(pageSize))
+                .lean(),
+            Quotation.countDocuments(filter)
+        ]);
+
+        console.log(`📊 查询结果: ${data.length} 条记录，总计 ${total} 条`);
+
+        res.json({
+            success: true,
+            data: data,
+            total: total,
+            page: parseInt(page),
+            pageSize: parseInt(pageSize),
+            totalPages: Math.ceil(total / parseInt(pageSize))
+        });
+
+    } catch (error) {
+        console.error('❌ 查询历史报价失败:', error);
+        res.status(500).json({ 
+            error: '查询失败',
+            details: error.message 
+        });
+    }
+});
+
+// API: 获取单个报价详情
+app.get('/api/quotations/detail/:id', async (req, res) => {
+    const quotationId = req.params.id;
+    
+    console.log(`📋 收到单个报价查询请求，ID: ${quotationId}`);
+    
+    try {
+        const quotation = await Quotation.findById(quotationId).lean();
+        
+        if (!quotation) {
+            console.log('❌ 未找到对应的报价记录');
+            return res.status(404).json({ error: '找不到报价记录' });
+        }
+        
+        console.log(`✅ 找到报价记录: ${quotation.productName}`);
+        
+        res.json({
+            success: true,
+            data: quotation
+        });
+        
+    } catch (error) {
+        console.error('❌ 查询报价详情失败:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ error: '无效的记录ID格式' });
+        }
+        res.status(500).json({ 
+            error: '查询失败',
+            details: error.message 
+        });
+    }
+});
+
+// API: 下载原始文件
 app.get('/api/quotations/download/:id', async (req, res) => {
     const quotationId = req.params.id;
     
+    console.log(`📥 收到下载请求，ID: ${quotationId}`);
+    
     try {
+        console.log('🔍 开始查询数据库...');
         const quotation = await Quotation.findById(quotationId);
         
-        if (!quotation || !quotation.originalFile || !quotation.originalFile.path) {
-            return res.status(404).json({ error: '找不到原始文件' });
+        console.log(`📋 查询结果: ${quotation ? '找到记录' : '未找到记录'}`);
+        
+        if (!quotation) {
+            console.log('❌ 数据库中没有找到对应记录');
+            return res.status(404).json({ error: '找不到报价记录' });
+        }
+        
+        console.log(`📋 查询结果: ${quotation ? '找到记录' : '未找到记录'}`);
+        
+        if (!quotation.originalFile) {
+            console.log('❌ 记录没有原始文件信息');
+            return res.status(404).json({ 
+                error: '该记录没有关联的原始文件',
+                reason: 'missing_original_file',
+                suggestion: '此记录可能是手动添加的，或者在文件信息保存时出现了问题'
+            });
         }
         
         const filePath = quotation.originalFile.path;
-        const productName = quotation.productName || 'quotation';
+        const originalFileName = quotation.originalFile.originalName || quotation.originalFile.filename;
+        const storedMimeType = quotation.originalFile.mimetype;
+        
+        console.log(`📂 文件路径: ${filePath}`);
+        console.log(`📝 原始文件名: ${originalFileName}`);
+        console.log(`🎭 MIME类型: ${storedMimeType}`);
+        
+        if (!filePath) {
+            console.log('❌ 原始文件路径为空');
+            return res.status(404).json({ 
+                error: '原始文件路径不存在',
+                reason: 'empty_file_path',
+                suggestion: '文件路径信息丢失，可能是数据保存时出现了问题'
+            });
+        }
         
         // 检查文件是否存在
+        console.log('🔍 检查文件是否存在...');
         try {
             await fs.access(filePath);
-        } catch {
+            console.log('✅ 文件存在');
+        } catch (fileError) {
+            console.log(`❌ 文件不存在: ${fileError.message}`);
+            console.log(`🔍 检查的路径: ${filePath}`);
             return res.status(404).json({ error: '原始文件不存在或已被删除' });
         }
         
-        // 获取文件扩展名
-        const fileExtension = filePath.split('.').pop();
-        const downloadFileName = `${productName}.${fileExtension}`;
+        // 确定MIME类型
+        let mimeType = storedMimeType || 'application/octet-stream';
         
-        console.log(`📤 开始下载文件: ${downloadFileName}`);
+        // 根据文件扩展名确定MIME类型（如果数据库中没有存储）
+        if (!storedMimeType || storedMimeType === 'application/octet-stream') {
+            const ext = originalFileName ? originalFileName.toLowerCase().split('.').pop() : 
+                        filePath.toLowerCase().split('.').pop();
+            
+            const mimeTypes = {
+                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'xls': 'application/vnd.ms-excel',
+                'pdf': 'application/pdf',
+                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'doc': 'application/msword',
+                'csv': 'text/csv',
+                'txt': 'text/plain'
+            };
+            
+            mimeType = mimeTypes[ext] || 'application/octet-stream';
+        }
         
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadFileName)}"`);
-        res.setHeader('Content-Type', 'application/octet-stream');
+        // 使用原始文件名或生成合适的文件名
+        let downloadFileName = originalFileName;
+        if (!downloadFileName) {
+            const productName = quotation.productName || 'quotation';
+            const fileExtension = filePath.split('.').pop();
+            downloadFileName = `${productName}.${fileExtension}`;
+        }
+        
+        console.log(`📤 开始下载文件: ${downloadFileName} (MIME: ${mimeType})`);
+        console.log(`📂 文件路径: ${filePath}`);
+        
+        // 设置正确的响应头
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(downloadFileName)}`);
+        
+        // 可选：添加文件大小信息
+        if (quotation.originalFile.fileSize) {
+            res.setHeader('Content-Length', quotation.originalFile.fileSize);
+        }
         
         const fileStream = require('fs').createReadStream(filePath);
         fileStream.pipe(res);
         
         fileStream.on('error', (error) => {
             console.error('❌ 文件读取错误:', error);
-            res.status(500).json({ error: '文件读取失败' });
+            if (!res.headersSent) {
+                res.status(500).json({ error: '文件读取失败' });
+            }
         });
+        
+        fileStream.on('end', () => {
+            console.log('✅ 文件下载完成');
+        });
+        
     } catch (error) {
         console.error('❌ 查询报价记录失败:', error);
+        if (error.name === 'CastError') {
+            console.log('❌ 无效的MongoDB ObjectId格式');
+            return res.status(400).json({ error: '无效的记录ID格式' });
+        }
         res.status(500).json({ error: '查询失败' });
+    }
+});
+
+// API 3: 确认保存（处理重复情况）
+app.post('/api/quotations/confirm-save', async (req, res) => {
+    console.log('✅ 收到确认保存请求');
+    
+    const { products, action, skipDuplicates, fileInfo } = req.body;
+    
+    console.log('📋 确认保存请求参数:');
+    console.log(`   action: ${action}`);
+    console.log(`   skipDuplicates: ${skipDuplicates}`);
+    console.log(`   products数量: ${products ? products.length : 0}`);
+    console.log(`   fileInfo:`, fileInfo);
+    
+    if (products && products.length > 0) {
+        console.log('🔍 检查第一个产品的结构:');
+        const firstProduct = products[0];
+        console.log({
+            productName: firstProduct.productName,
+            supplier: firstProduct.supplier,
+            hasOriginalFile: !!firstProduct.originalFile,
+            originalFileKeys: firstProduct.originalFile ? Object.keys(firstProduct.originalFile) : []
+        });
+        
+        if (firstProduct.originalFile) {
+            console.log('📁 第一个产品的originalFile详情:', firstProduct.originalFile);
+        }
+    }
+    
+    if (!products || !Array.isArray(products)) {
+        return res.status(400).json({ error: '缺少产品数据' });
+    }
+
+    // 数据清理函数 - 处理价格字段中的逗号
+    const cleanPriceData = async (productData) => {
+        const cleaned = { ...productData };
+        
+        // 如果产品数据没有originalFile信息，但有fileInfo，则重新构建
+        if (!cleaned.originalFile && fileInfo) {
+            console.log(`🔧 为产品 "${cleaned.productName}" 重新构建originalFile`);
+            
+            // 计算文件大小和MIME类型
+            let fileSize = fileInfo.size || 0;
+            let mimeType = 'application/octet-stream';
+            
+            // 根据文件扩展名确定MIME类型
+            const ext = fileInfo.fileName ? fileInfo.fileName.toLowerCase().split('.').pop() : '';
+            const mimeTypes = {
+                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'xls': 'application/vnd.ms-excel',
+                'pdf': 'application/pdf',
+                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'doc': 'application/msword',
+                'csv': 'text/csv',
+                'txt': 'text/plain'
+            };
+            mimeType = mimeTypes[ext] || 'application/octet-stream';
+            
+            // 计算文件hash（如果需要的话）
+            let fileHash = null;
+            if (fileInfo.filePath) {
+                try {
+                    fileHash = await calculateFileHash(fileInfo.filePath);
+                } catch (error) {
+                    console.warn('⚠️ 无法计算文件hash:', error.message);
+                }
+            }
+            
+            cleaned.originalFile = {
+                filename: fileInfo.fileName,
+                originalName: fileInfo.originalName || fileInfo.fileName,
+                path: fileInfo.filePath,
+                fileSize: fileSize,
+                mimetype: mimeType,
+                fileHash: fileHash,
+                uploadedAt: new Date()
+            };
+            
+            console.log('✅ 重新构建的originalFile:', cleaned.originalFile);
+        }
+        
+        // 清理价格字段，移除逗号并转换为数字
+        const priceFields = ['list_price', 'quote_unit_price', 'quote_total_price'];
+        
+        priceFields.forEach(field => {
+            if (cleaned[field] !== null && cleaned[field] !== undefined) {
+                if (typeof cleaned[field] === 'string') {
+                    // 移除逗号、空格和其他非数字字符（保留小数点和负号）
+                    const cleanedValue = cleaned[field].toString().replace(/[,\s]/g, '');
+                    const numValue = parseFloat(cleanedValue);
+                    cleaned[field] = isNaN(numValue) ? null : numValue;
+                } else if (typeof cleaned[field] === 'number') {
+                    // 已经是数字，保持不变
+                    cleaned[field] = cleaned[field];
+                } else {
+                    // 其他类型设为null
+                    cleaned[field] = null;
+                }
+            }
+        });
+        
+        // 清理折扣率
+        if (cleaned.discount_rate !== null && cleaned.discount_rate !== undefined) {
+            if (typeof cleaned.discount_rate === 'string') {
+                const cleanedValue = cleaned.discount_rate.toString().replace(/[%,\s]/g, '');
+                const numValue = parseFloat(cleanedValue);
+                cleaned.discount_rate = isNaN(numValue) ? null : numValue;
+            } else if (typeof cleaned.discount_rate !== 'number') {
+                cleaned.discount_rate = null;
+            }
+        }
+        
+        // 清理数量
+        if (cleaned.quantity !== null && cleaned.quantity !== undefined) {
+            if (typeof cleaned.quantity === 'string') {
+                const cleanedValue = cleaned.quantity.toString().replace(/[,\s]/g, '');
+                const numValue = parseInt(cleanedValue);
+                cleaned.quantity = isNaN(numValue) ? 1 : Math.max(1, numValue);
+            } else if (typeof cleaned.quantity === 'number') {
+                cleaned.quantity = Math.max(1, Math.floor(cleaned.quantity));
+            } else {
+                cleaned.quantity = 1;
+            }
+        } else {
+            cleaned.quantity = 1;
+        }
+        
+        // 确保必填的数字字段不为null
+        if (cleaned.quote_unit_price === null || cleaned.quote_unit_price === undefined) {
+            cleaned.quote_unit_price = 0;
+        }
+        if (cleaned.quote_total_price === null || cleaned.quote_total_price === undefined) {
+            cleaned.quote_total_price = cleaned.quote_unit_price * cleaned.quantity;
+        }
+        
+        return cleaned;
+    };
+
+    try {
+        const savedQuotations = [];
+        const errors = [];
+        
+        for (const productData of products) {
+            try {
+                // 清理价格数据
+                const cleanedProductData = await cleanPriceData(productData);
+                
+                console.log(`🧹 清理后的产品数据:`, {
+                    productName: cleanedProductData.productName,
+                    list_price: cleanedProductData.list_price,
+                    quote_unit_price: cleanedProductData.quote_unit_price,
+                    quote_total_price: cleanedProductData.quote_total_price,
+                    quantity: cleanedProductData.quantity,
+                    hasOriginalFile: !!cleanedProductData.originalFile
+                });
+                
+                // 如果选择跳过重复，检查是否已存在相似产品
+                if (skipDuplicates) {
+                    const existingProduct = await Quotation.findOne({
+                        productName: { $regex: cleanedProductData.productName, $options: 'i' },
+                        supplier: cleanedProductData.supplier,
+                        quote_unit_price: cleanedProductData.quote_unit_price,
+                        quantity: cleanedProductData.quantity
+                    });
+                    
+                    if (existingProduct) {
+                        console.log(`⏭️ 跳过重复产品: ${cleanedProductData.productName}`);
+                        continue;
+                    }
+                }
+                
+                const quotation = new Quotation(cleanedProductData);
+                const saved = await quotation.save();
+                savedQuotations.push(saved);
+                console.log(`✅ 成功保存: ${cleanedProductData.productName} (ID: ${saved._id})`);
+                
+            } catch (error) {
+                console.error(`❌ 保存失败: ${productData.productName}`, error.message);
+                errors.push({
+                    productName: productData.productName,
+                    error: error.message
+                });
+            }
+        }
+        
+        console.log(`💾 保存完成: ${savedQuotations.length} 个产品成功, ${errors.length} 个失败`);
+        
+        res.json({
+            success: true,
+            message: `保存完成！成功: ${savedQuotations.length} 个，失败: ${errors.length} 个`,
+            data: savedQuotations,
+            errors: errors,
+            savedCount: savedQuotations.length,
+            totalCount: products.length
+        });
+        
+    } catch (error) {
+        console.error('❌ 确认保存失败:', error);
+        res.status(500).json({ 
+            error: '保存失败',
+            details: error.message 
+        });
     }
 });
 

@@ -225,10 +225,10 @@ async function parseExcelFile(filePath) {
         
         // 验证枚举值，如果无效则使用默认值
         const validCategories = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他'];
-        const validRegions = ['华北', '华东', '华南', '华中', '西南', '西北', '东北', '海外'];
+        const validRegions = ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'];
         
         const finalCategory = validCategories.includes(category) ? category : '其他';
-        const finalRegion = validRegions.includes(region) ? region : '华北';
+        const finalRegion = validRegions.includes(region) ? region : '其他';
 
         // 处理日期
         let validityDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 默认30天后

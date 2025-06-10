@@ -104,33 +104,13 @@ export const PRODUCT_CATEGORIES = [
     '其他'
 ] as const;
 
-// Mock地区（保持向后兼容）
+// 地区选项 - 主流ICT供应商国家
 export const REGIONS = [
-    '德国',
-    '法国', 
-    '英国',
-    '意大利',
-    '西班牙',
-    '荷兰',
-    '比利时',
-    '瑞士',
-    '奥地利',
-    '瑞典',
-    '挪威',
-    '丹麦',
-    '芬兰',
-    '波兰',
-    '捷克',
-    '匈牙利',
-    '葡萄牙',
-    '爱尔兰',
-    '希腊',
-    '美国',
-    '加拿大',
-    '其他'
-] as const;
+    '美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', 
+    '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'
+];
 
-// 获取历史报价列表（连接到真实MongoDB后端）
+// 获取历史报价列表（连接到AI服务器的MongoDB数据）
 export async function getQuotationList(params: QuotationQueryParams): Promise<{ data: QuotationRecord[]; total: number }> {
     try {
         // 处理向后兼容的参数映射
@@ -155,13 +135,18 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
             apiParams.keyword = params.keyword || params.productKeyword;
         }
 
-        const response: any = await request('/products', {
-            method: 'GET',
-            params: apiParams
-        });
+        // 连接到AI服务器获取数据，因为AI服务器有完整的originalFile信息
+        const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+        const response = await fetch(`${aiServerUrl}/api/quotations/list?${new URLSearchParams(apiParams).toString()}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
 
         // 数据格式转换，保持向后兼容
-        const rawData = response.data || response; // 兼容不同的响应格式
+        const rawData = result.data || result; // 兼容不同的响应格式
         const convertedData = (Array.isArray(rawData) ? rawData : []).map((item: any) => ({
             ...item,
             id: item._id || item.id,
@@ -169,7 +154,8 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
             originalPrice: item.list_price,  // 向后兼容
             finalPrice: item.quote_unit_price, // 向后兼容
             discount: item.discount_rate ? item.discount_rate / 100 : null, // 转换为小数
-            quotationDate: item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : '',
+            quotationDate: item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : 
+                          item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : '',
             isValid: item.status === 'active',
             remark: item.notes,
             productSpec: item.configDetail || item.productSpec
@@ -177,7 +163,7 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
 
         return {
             data: convertedData,
-            total: response.total || rawData.length || 0
+            total: result.total || rawData.length || 0
         };
     } catch (error) {
         console.error('获取历史报价列表失败:', error);
@@ -188,22 +174,29 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
 // 获取单个报价详情
 export async function getQuotationDetail(id: string): Promise<QuotationRecord> {
     try {
-        const response: any = await request(`/products/${id}`, {
-            method: 'GET'
-        });
+        // 连接到AI服务器获取数据，因为AI服务器有完整的originalFile信息
+        const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+        const response = await fetch(`${aiServerUrl}/api/quotations/detail/${id}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
 
         // 数据格式转换，保持向后兼容
         const convertedData = {
-            ...response.data,
-            id: response.data._id || response.data.id,
-            vendor: response.data.supplier,
-            originalPrice: response.data.list_price,
-            finalPrice: response.data.quote_unit_price,
-            discount: response.data.discount_rate ? response.data.discount_rate / 100 : null,
-            quotationDate: response.data.createdAt ? new Date(response.data.createdAt).toISOString().split('T')[0] : '',
-            isValid: response.data.status === 'active',
-            remark: response.data.notes,
-            productSpec: response.data.configDetail || response.data.productSpec
+            ...result.data,
+            id: result.data._id || result.data.id,
+            vendor: result.data.supplier,
+            originalPrice: result.data.list_price,
+            finalPrice: result.data.quote_unit_price,
+            discount: result.data.discount_rate ? result.data.discount_rate / 100 : null,
+            quotationDate: result.data.created_at ? new Date(result.data.created_at).toISOString().split('T')[0] : 
+                          result.data.createdAt ? new Date(result.data.createdAt).toISOString().split('T')[0] : '',
+            isValid: result.data.status === 'active',
+            remark: result.data.notes,
+            productSpec: result.data.configDetail || result.data.productSpec
         };
 
         return convertedData;

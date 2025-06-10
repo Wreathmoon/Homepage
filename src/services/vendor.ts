@@ -13,14 +13,8 @@ export const PRODUCT_CATEGORIES = [
 
 // 供应商区域
 export const VENDOR_REGIONS = [
-    '华北',
-    '华东',
-    '华南',
-    '华中',
-    '西南',
-    '西北',
-    '东北',
-    '海外'
+    '美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', 
+    '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'
 ] as const;
 
 export type ProductCategory = typeof PRODUCT_CATEGORIES[number];
@@ -39,10 +33,8 @@ export interface Vendor {
     email: string;
     address: string;
     status: 'active' | 'inactive';
-    level: 'A' | 'B' | 'C';
     remarks?: string;
     type: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
-    country: string;
     website?: string;
     brands: string[];
     isGeneralAgent: boolean;
@@ -58,9 +50,7 @@ export interface VendorQueryParams {
     category?: ProductCategory;
     region?: VendorRegion;
     status?: 'active' | 'inactive';
-    level?: 'A' | 'B' | 'C';
     type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
-    country?: string;
     keyword?: string;
     productCategory?: string;
     productKeyword?: string;
@@ -206,87 +196,78 @@ export async function uploadVendorFile(file: File): Promise<{ message: string; d
 export const mockVendors: Vendor[] = [
     {
         id: 1,
-        name: '北京科技有限公司',
-        code: 'BJ001',
-        category: ['服务器', '存储设备'],
-        region: '华北',
-        contact: '张三',
-        phone: '13800138000',
-        email: 'zhangsan@example.com',
-        address: '北京市海淀区中关村科技园',
+        _id: '1',
+        name: '联想（中国）',
+        code: 'LENOVO_CN',
+        category: ['服务器', '网络设备'],
+        region: '中国',
+        contact: '张经理',
+        phone: '+86-10-1234-5678',
+        email: 'zhang@lenovo.com',
+        address: '北京市海淀区上地信息产业基地',
         status: 'active',
-        level: 'A',
-        remarks: '战略合作伙伴',
         type: 'HARDWARE',
-        country: '中国',
-        website: 'http://www.bjtech.com',
-        brands: ['联想', '浪潮'],
+        website: 'https://www.lenovo.com.cn',
+        brands: ['ThinkPad', 'ThinkCentre', 'ThinkSystem'],
         isGeneralAgent: true,
         isAgent: false,
-        account: 'zhangsan',
-        password: 'password123'
+        createdAt: '2023-01-15'
     },
     {
         id: 2,
-        name: '上海网络科技公司',
-        code: 'SH001',
-        category: ['网络设备', '安全设备'],
-        region: '华东',
-        contact: '李四',
-        phone: '13900139000',
-        email: 'lisi@example.com',
-        address: '上海市浦东新区张江高科技园区',
+        _id: '2',
+        name: 'HPE（美国）',
+        code: 'HPE_US',
+        category: ['服务器', '存储设备'],
+        region: '美国',
+        contact: 'John Smith',
+        phone: '+1-408-555-0123',
+        email: 'john.smith@hpe.com',
+        address: 'San Jose, CA 95110, USA',
         status: 'active',
-        level: 'B',
         type: 'HARDWARE',
-        country: '中国',
-        website: 'http://www.shnetwork.com',
-        brands: ['华为', 'H3C'],
+        website: 'https://www.hpe.com',
+        brands: ['ProLiant', 'Apollo', 'Synergy'],
         isGeneralAgent: false,
         isAgent: true,
-        account: 'lisi',
-        password: 'password456'
+        createdAt: '2023-02-20'
     },
     {
         id: 3,
-        name: 'American Software Solutions',
-        code: 'US001',
+        _id: '3',
+        name: 'Microsoft（美国）',
+        code: 'MSFT_US',
         category: ['软件系统', '云服务'],
-        region: '海外',
-        contact: 'John Smith',
-        phone: '+1-123-456-7890',
-        email: 'john@example.com',
-        address: '123 Tech Street, Silicon Valley',
+        region: '其他',
+        contact: 'Sarah Johnson',
+        phone: '+1-425-555-0199',
+        email: 'sarah.johnson@microsoft.com',
+        address: 'Redmond, WA 98052, USA',
         status: 'active',
-        level: 'A',
         type: 'SOFTWARE',
-        country: '美国',
-        website: 'http://www.ussoftware.com',
-        brands: ['Microsoft', 'Oracle'],
+        website: 'https://www.microsoft.com',
+        brands: ['Windows Server', 'Azure', 'Office 365'],
         isGeneralAgent: true,
         isAgent: false,
-        account: 'john',
-        password: 'password789'
+        createdAt: '2023-03-10'
     },
     {
         id: 4,
-        name: '深圳智能科技有限公司',
-        code: 'SZ001',
-        category: ['安全设备', '网络设备'],
-        region: '华南',
-        contact: '王五',
-        phone: '13700137000',
-        email: 'wangwu@example.com',
-        address: '深圳市南山区科技园',
+        _id: '4',
+        name: '华为（中国）',
+        code: 'HUAWEI_CN',
+        category: ['网络设备', '存储设备', '服务器'],
+        region: '中国',
+        contact: '李总监',
+        phone: '+86-755-2878-8888',
+        email: 'li@huawei.com',
+        address: '深圳市龙岗区坂田华为基地',
         status: 'active',
-        level: 'B',
-        type: 'SERVICE',
-        country: '中国',
-        website: 'http://www.sztech.com',
-        brands: ['深信服', '绿盟'],
-        isGeneralAgent: false,
-        isAgent: true,
-        account: 'wangwu',
-        password: 'password101'
+        type: 'HARDWARE',
+        website: 'https://www.huawei.com',
+        brands: ['FusionServer', 'CloudEngine', 'OceanStor'],
+        isGeneralAgent: true,
+        isAgent: false,
+        createdAt: '2023-04-05'
     }
 ]; 

@@ -18,7 +18,7 @@ const vendorSchema = new mongoose.Schema({
     }],
     region: {
         type: String,
-        enum: ['华北', '华东', '华南', '华中', '西南', '西北', '东北', '海外']
+        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
     },
     contact: {
         type: String,

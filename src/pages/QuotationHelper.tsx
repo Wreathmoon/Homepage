@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { IconMailStroked1, IconSearch, IconHistory, IconUpload } from '@douyinfe/semi-icons';
+import { IconMailStroked1, IconSearch, IconHistory, IconUpload, IconPlus, IconUserGroup } from '@douyinfe/semi-icons';
 import { Layout, Nav } from '@douyinfe/semi-ui';
 import Header from '../components/Header';
 import Quotation from '../components/Tools/Quotationhelper/Quotation';
 import Vendor from '../components/Tools/Quotationhelper/Vendor';
+import VendorAdd from '../components/Tools/Quotationhelper/VendorAdd';
 import QuotationHistory from '../components/Tools/Quotationhelper/QuotationHistory';
 import QuotationImport from '../components/Tools/Quotationhelper/QuotationImport';
 
@@ -18,6 +19,8 @@ const QuotationHelper = () => {
                 return <Quotation />;
             case 'Vendor':
                 return <Vendor />;
+            case 'VendorAdd':
+                return <VendorAdd />;
             case 'History':
                 return <QuotationHistory />;
             case 'Import':
@@ -58,6 +61,7 @@ const QuotationHelper = () => {
                         items={[
                             { itemKey: 'Quotation', text: '询价邮件', icon: <IconMailStroked1 size="large" /> },
                             { itemKey: 'Vendor', text: '供应商查询', icon: <IconSearch size="large" /> },
+                            { itemKey: 'VendorAdd', text: '供应商录入', icon: <IconPlus size="large" /> },
                             { itemKey: 'History', text: '历史报价', icon: <IconHistory size="large" /> },
                             { itemKey: 'Import', text: '报价上传', icon: <IconUpload size="large" /> },
                         ]}

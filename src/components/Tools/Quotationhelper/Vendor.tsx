@@ -15,7 +15,7 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed } from '@douyinfe/semi-icons';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
@@ -44,6 +44,17 @@ const Vendor: React.FC = () => {
     const [currentSupplier, setCurrentSupplier] = useState<VendorType | null>(null);
     const [products, setProducts] = useState<string[]>([]);
     const [productsLoading, setProductsLoading] = useState(false);
+    const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
+    const [remarksVisible, setRemarksVisible] = useState(false);
+    const [currentRemarks, setCurrentRemarks] = useState('');
+
+    // 切换密码可见性
+    const togglePasswordVisibility = (vendorId: string) => {
+        setPasswordVisibility(prev => ({
+            ...prev,
+            [vendorId]: !prev[vendorId]
+        }));
+    };
 
     // 获取供应商列表
     const fetchSuppliers = useCallback(async (values: FilterValues, page: number, pageSize: number) => {
@@ -187,50 +198,102 @@ const Vendor: React.FC = () => {
             dataIndex: 'contact',
             width: 120
         },
+        { 
+            title: '邮箱', 
+            dataIndex: 'email',
+            width: 180
+        },
         {
             title: '网站',
             dataIndex: 'website',
-            render: (website: string) => website ? (
-                <a href={website} target="_blank" rel="noopener noreferrer">
-                    访问网站
-                </a>
-            ) : '-',
+            render: (website: string) => {
+                if (!website) return '-';
+                
+                // 确保URL有协议前缀
+                let url = website;
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    url = 'https://' + url;
+                }
+                
+                return (
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                        访问网站
+                    </a>
+                );
+            },
             width: 100
         },
         {
             title: '供应品牌',
             dataIndex: 'brands',
-            render: (brands: string[]) => brands.join(', '),
+            render: (brands: string[]) => Array.isArray(brands) ? brands.join(', ') : (brands || '-'),
             width: 200
         },
         {
             title: '账号信息',
-            render: (record: VendorType) => (
-                <Tooltip content={`密码: ${record.password}`}>
-                    {record.account}
-                </Tooltip>
-            ),
-            width: 150
+            render: (record: VendorType) => {
+                const vendorId = String(record._id || record.id || record.name);
+                const isPasswordVisible = passwordVisibility[vendorId];
+                
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>{record.account || '无账号'}</span>
+                        {record.password && (
+                            <Button
+                                theme="borderless"
+                                type="tertiary"
+                                size="small"
+                                icon={isPasswordVisible ? <IconEyeOpened /> : <IconEyeClosed />}
+                                onClick={() => togglePasswordVisibility(vendorId)}
+                                style={{ padding: '2px 4px' }}
+                            />
+                        )}
+                        {record.password && isPasswordVisible && (
+                            <span style={{ 
+                                fontSize: '12px', 
+                                color: 'var(--semi-color-text-2)',
+                                marginLeft: '4px'
+                            }}>
+                                {record.password}
+                            </span>
+                        )}
+                    </div>
+                );
+            },
+            width: 200
         },
         {
             title: '操作',
             fixed: 'right' as const,
-            width: 120,
+            width: 180,
             render: (_: any, record: VendorType) => (
-                <Button
-                    theme="borderless"
-                    type="primary"
-                    onClick={() => {
-                        setCurrentSupplier(record);
-                        setProductsVisible(true);
-                        const vendorId = record._id || record.id;
-                        if (vendorId) {
-                            fetchVendorProducts(vendorId);
-                        }
-                    }}
-                >
-                    查看产品类型
-                </Button>
+                <Space>
+                    <Button
+                        theme="borderless"
+                        type="primary"
+                        size="small"
+                        onClick={() => {
+                            setCurrentSupplier(record);
+                            setProductsVisible(true);
+                            // 直接显示产品类别，不需要额外API调用
+                            const categories = Array.isArray(record.category) ? record.category : [];
+                            setProducts(categories);
+                        }}
+                    >
+                        查看产品类型
+                    </Button>
+                    <Button
+                        theme="borderless"
+                        type="secondary"
+                        size="small"
+                        onClick={() => {
+                            setCurrentRemarks(record.remarks || '暂无备注信息');
+                            setRemarksVisible(true);
+                        }}
+                    >
+                        查看备注
+                    </Button>
+                </Space>
             )
         }
     ];
@@ -356,7 +419,7 @@ const Vendor: React.FC = () => {
                     }
                 }}
                 loading={loading}
-                scroll={{ x: 1500 }}
+                scroll={{ x: 1600 }}
                 empty={
                     <div style={{ textAlign: 'center', padding: '20px' }}>
                         暂无符合条件的供应商
@@ -389,6 +452,32 @@ const Vendor: React.FC = () => {
                         )}
                     </div>
                 </Spin>
+            </Modal>
+
+            {/* 备注查看模态框 */}
+            <Modal
+                visible={remarksVisible}
+                title="供应商备注信息"
+                onCancel={() => setRemarksVisible(false)}
+                footer={null}
+                width={500}
+            >
+                <div style={{ padding: '16px' }}>
+                    <div
+                        style={{
+                            background: 'var(--semi-color-fill-0)',
+                            padding: '16px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--semi-color-border)',
+                            minHeight: '100px',
+                            lineHeight: '1.6',
+                            color: 'var(--semi-color-text-0)',
+                            whiteSpace: 'pre-wrap'
+                        }}
+                    >
+                        {currentRemarks}
+                    </div>
+                </div>
             </Modal>
         </div>
     );

@@ -4,6 +4,8 @@
 /node_modules
 /.pnp
 .pnp.js
+server/node_modules/
+server/node_modules
 
 # testing
 /coverage
@@ -31,6 +33,7 @@ products.db
 # Upload directory
 /uploads
 uploads/
+server/uploads/
 
 # Debug files
 debug-test.js
@@ -38,6 +41,7 @@ test-server.js
 
 # Environment variables
 .env
+server/.env
 
 # Logs
 logs
@@ -54,3 +58,6 @@ pids
 
 # Optional REPL history
 .node_repl_history
+
+# Package locks for server
+server/package-lock.json

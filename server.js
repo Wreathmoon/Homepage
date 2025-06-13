@@ -95,12 +95,38 @@ async function callYuanJingAI(prompt) {
 
 // 计算文件MD5 hash
 const calculateFileHash = async (filePath) => {
-    const fileBuffer = await fs.readFile(filePath);
-    return crypto.createHash('md5').update(fileBuffer).digest('hex');
+    try {
+        console.log(`📊 开始计算文件hash: ${filePath}`);
+        
+        // 检查文件是否存在
+        try {
+            await fs.access(filePath);
+            console.log('✅ 文件存在，开始读取...');
+        } catch (accessError) {
+            console.error('❌ 文件不存在:', filePath);
+            throw new Error(`文件不存在: ${filePath}`);
+        }
+        
+        const fileBuffer = await fs.readFile(filePath);
+        console.log(`📊 文件读取完成，大小: ${fileBuffer.length} 字节`);
+        
+        const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+        console.log(`✅ Hash计算完成: ${hash}`);
+        
+        return hash;
+    } catch (error) {
+        console.error('❌ 计算文件hash失败:', error.message);
+        throw error;
+    }
 };
 
 // 检测重复上传
 const checkDuplicates = async (filePath, fileName, validatedProducts) => {
+    console.log('🔍 开始重复检测...');
+    console.log(`   文件路径: ${filePath}`);
+    console.log(`   文件名: ${fileName}`);
+    console.log(`   产品数量: ${validatedProducts.length}`);
+    
     const duplicates = {
         fileHash: null,
         existingFile: null,
@@ -109,25 +135,38 @@ const checkDuplicates = async (filePath, fileName, validatedProducts) => {
 
     try {
         // 1. 计算文件hash
+        console.log('📊 正在计算文件hash...');
         const fileHash = await calculateFileHash(filePath);
         duplicates.fileHash = fileHash;
+        console.log(`✅ 文件hash计算完成: ${fileHash}`);
 
         // 2. 检查是否有相同hash的文件已上传
+        console.log('🔍 检查文件hash重复...');
         const existingFileRecord = await Quotation.findOne({
             'originalFile.fileHash': fileHash
         });
 
         if (existingFileRecord) {
+            console.log('⚠️ 发现相同hash的文件:', existingFileRecord.originalFile.originalName);
             duplicates.existingFile = {
                 id: existingFileRecord._id,
                 fileName: existingFileRecord.originalFile.originalName,
                 uploadDate: existingFileRecord.originalFile.uploadedAt,
                 productName: existingFileRecord.productName
             };
+        } else {
+            console.log('✅ 未发现相同hash的文件');
         }
 
         // 3. 检查产品信息重复
-        for (const product of validatedProducts) {
+        console.log('🔍 检查产品信息重复...');
+        for (let i = 0; i < validatedProducts.length; i++) {
+            const product = validatedProducts[i];
+            console.log(`   检查产品 ${i + 1}/${validatedProducts.length}: ${product.productName}`);
+            console.log(`   供应商: ${product.supplier}`);
+            console.log(`   单价: ${product.quote_unit_price}`);
+            console.log(`   数量: ${product.quantity}`);
+            
             // 查找相似的产品记录
             const similarProducts = await Quotation.find({
                 productName: { $regex: product.productName, $options: 'i' },
@@ -136,7 +175,10 @@ const checkDuplicates = async (filePath, fileName, validatedProducts) => {
                 quantity: product.quantity
             });
 
+            console.log(`   找到 ${similarProducts.length} 个相似产品`);
+            
             if (similarProducts.length > 0) {
+                console.log('⚠️ 发现产品重复:', product.productName);
                 duplicates.productDuplicates.push({
                     newProduct: product,
                     existingProducts: similarProducts.map(p => ({
@@ -152,9 +194,15 @@ const checkDuplicates = async (filePath, fileName, validatedProducts) => {
             }
         }
 
+        console.log('✅ 重复检测完成');
+        console.log(`   文件重复: ${duplicates.existingFile ? '是' : '否'}`);
+        console.log(`   产品重复数量: ${duplicates.productDuplicates.length}`);
+        
         return duplicates;
     } catch (error) {
         console.error('❌ 重复检测失败:', error);
+        console.error('   错误详情:', error.message);
+        console.error('   错误堆栈:', error.stack);
         return duplicates;
     }
 };
@@ -544,26 +592,6 @@ app.post('/api/quotations/analyze', async (req, res) => {
         // 计算文件hash
         const fileHash = await calculateFileHash(filePath);
         
-        // 检查是否有相同hash的文件已分析过
-        const existingFileRecord = await Quotation.findOne({
-            'originalFile.fileHash': fileHash
-        });
-        
-        if (existingFileRecord) {
-            return res.json({
-                success: true,
-                isDuplicate: true,
-                duplicateType: 'file',
-                existingRecord: {
-                    id: existingFileRecord._id,
-                    fileName: existingFileRecord.originalFile.originalName,
-                    productName: existingFileRecord.productName,
-                    uploadDate: existingFileRecord.originalFile.uploadedAt,
-                    supplier: existingFileRecord.supplier
-                },
-                message: '检测到相同文件已上传过，是否要继续处理？'
-            });
-        }
         
         // 读取文件内容
         let content;
@@ -1031,6 +1059,7 @@ ${content}`;
                     path: filePath,
                     fileSize: fileSize,
                     mimetype: mimeType,
+                    fileHash: fileHash, // 确保fileHash被正确传递
                     uploadedAt: new Date()
                 }
             };
@@ -1053,7 +1082,7 @@ ${content}`;
                 fileInfo: {
                     fileName: fileName,
                     filePath: filePath,
-                    fileHash: fileHash
+                    fileHash: fileHash // 确保fileHash在这里也被正确传递
                 },
                 message: '检测到重复内容，请选择处理方式'
             });

@@ -21,7 +21,7 @@ import {
     Tag,
     Progress
 } from '@douyinfe/semi-ui';
-import { IconUpload, IconFile, IconTickCircle, IconClose, IconEdit, IconPlus, IconPlay, IconTick } from '@douyinfe/semi-icons';
+import { IconUpload, IconFile, IconTickCircle, IconClose, IconEdit, IconPlus, IconPlay, IconTick, IconAlertTriangle } from '@douyinfe/semi-icons';
 import type { BeforeUploadProps, BeforeUploadObjectResult } from '@douyinfe/semi-ui/lib/es/upload';
 import type { FormApi } from '@douyinfe/semi-ui/lib/es/form';
 import { request } from '../../../utils/request';
@@ -91,6 +91,11 @@ const QuotationImport: React.FC = () => {
     const [pendingProducts, setPendingProducts] = useState<any[]>([]);
     const [forceRender, setForceRender] = useState(0); // 强制重新渲染的标志
     const [currentCurrency, setCurrentCurrency] = useState('CNY'); // 当前选择的币种
+    
+    // 文件重复相关状态
+    const [fileExistsDialogVisible, setFileExistsDialogVisible] = useState(false);
+    const [existingFileInfo, setExistingFileInfo] = useState<any>(null);
+    
     const formRef = useRef<FormApi<any>>();
 
     // 监听currentIndex变化，自动填充表单数据
@@ -279,20 +284,26 @@ const QuotationImport: React.FC = () => {
             if (result.isDuplicate) {
                 console.log('🔍 检测到重复，准备显示对话框');
                 console.log('📋 重复检测原始数据:', result);
-                console.log('📋 duplicateInfo:', result.duplicateInfo);
-                console.log('📋 validatedProducts:', result.validatedProducts);
-                console.log('📋 products:', result.products);
                 
                 isDuplicateDetected = true;
                 
                 // 先关闭loading状态
                 setAnalyzing(false);
                 
-                // 使用setTimeout确保状态更新完成后再显示对话框
-                setTimeout(() => {
-                    showDuplicateDialog(result);
-                    console.log('✅ 重复检测对话框应该已显示');
-                }, 100);
+                // 检查是否是文件重复
+                if (result.duplicateType === 'file') {
+                    // 文件重复 - 显示专门的文件重复弹窗
+                    setTimeout(() => {
+                        showFileExistsDialog(result);
+                        console.log('✅ 文件重复对话框应该已显示');
+                    }, 100);
+                } else {
+                    // 产品重复 - 显示原有的重复检测弹窗
+                    setTimeout(() => {
+                        showDuplicateDialog(result);
+                        console.log('✅ 重复检测对话框应该已显示');
+                    }, 100);
+                }
                 
                 return;
             }
@@ -671,6 +682,17 @@ const QuotationImport: React.FC = () => {
         console.log('✅ 重复检测对话框状态已设置完成');
     };
 
+    // 显示文件已存在对话框
+    const showFileExistsDialog = (result: any) => {
+        console.log('🔔 showFileExistsDialog被调用');
+        console.log('📋 接收到的result:', result);
+        
+        setExistingFileInfo(result);
+        setFileExistsDialogVisible(true);
+        
+        console.log('✅ 文件重复对话框状态已设置完成');
+    };
+
     // 处理重复确认
     const handleDuplicateAction = async (action: 'skip' | 'overwrite' | 'save-both') => {
         try {
@@ -939,7 +961,24 @@ const QuotationImport: React.FC = () => {
                                             {currentData.productSpec && (
                                                 <div>
                                                     <Text style={{ color: 'rgba(255, 255, 255, 0.8)', display: 'block', marginBottom: '4px' }}>产品规格:</Text>
-                                                    <Text style={{ color: 'white' }}>{currentData.productSpec}</Text>
+                                                    <div style={{ 
+                                                        color: 'white',
+                                                        whiteSpace: 'pre-wrap',
+                                                        wordBreak: 'break-word',
+                                                        lineHeight: '1.5'
+                                                    }}>
+                                                        {(() => {
+                                                            const content = currentData.productSpec;
+                                                            return content
+                                                                .replace(/,\s*/g, ',\n')
+                                                                .replace(/;\s*/g, ';\n')
+                                                                .replace(/\|\s*/g, '|\n')
+                                                                .replace(/，\s*/g, '，\n')
+                                                                .replace(/；\s*/g, '；\n')
+                                                                .replace(/\n\s*\n/g, '\n')
+                                                                .trim();
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             )}
                                             {currentData.quotationDate && (
@@ -951,7 +990,24 @@ const QuotationImport: React.FC = () => {
                                             {currentData.remark && (
                                                 <div style={{ gridColumn: 'span 2' }}>
                                                     <Text style={{ color: 'rgba(255, 255, 255, 0.8)', display: 'block', marginBottom: '4px' }}>备注:</Text>
-                                                    <Text style={{ color: 'white' }}>{currentData.remark}</Text>
+                                                    <div style={{ 
+                                                        color: 'white',
+                                                        whiteSpace: 'pre-wrap',
+                                                        wordBreak: 'break-word',
+                                                        lineHeight: '1.5'
+                                                    }}>
+                                                        {(() => {
+                                                            const content = currentData.remark;
+                                                            return content
+                                                                .replace(/,\s*/g, ',\n')
+                                                                .replace(/;\s*/g, ';\n')
+                                                                .replace(/\|\s*/g, '|\n')
+                                                                .replace(/，\s*/g, '，\n')
+                                                                .replace(/；\s*/g, '；\n')
+                                                                .replace(/\n\s*\n/g, '\n')
+                                                                .trim();
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -1241,7 +1297,7 @@ const QuotationImport: React.FC = () => {
                 style={{ top: '10vh', left: '5vw' }}
                 centered={false}
             >
-                <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+                <div style={{ maxHeight: '70vh', overflow: 'auto' }}>
                     {/* 文件重复提示 */}
                     {existingFile && (
                         <Card style={{ marginBottom: '16px', background: 'var(--semi-color-warning-light-default)' }}>
@@ -1304,30 +1360,32 @@ const QuotationImport: React.FC = () => {
                     )}
 
                     {/* 待保存的产品预览 */}
-                    <Card>
-                        <Title heading={5} style={{ marginBottom: '12px' }}>
-                            待保存的产品 ({pendingProducts.length} 个)
-                        </Title>
-                        <List
-                            dataSource={pendingProducts}
-                            size="small"
-                            renderItem={(item: any) => (
-                                <List.Item>
-                                    <div>
-                                        <Text strong>{item.productName}</Text>
-                                        <br />
-                                        <Text type="secondary">
-                                            {item.supplier} - ¥{item.quote_unit_price} × {item.quantity}
-                                        </Text>
-                                    </div>
-                                </List.Item>
-                            )}
-                        />
-                    </Card>
+                    {pendingProducts && pendingProducts.length > 0 && (
+                        <Card>
+                            <Title heading={5} style={{ marginBottom: '12px' }}>
+                                待保存的产品 ({pendingProducts.length} 个)
+                            </Title>
+                            <List
+                                dataSource={pendingProducts}
+                                size="small"
+                                renderItem={(item: any) => (
+                                    <List.Item>
+                                        <div>
+                                            <Text strong>{item.productName}</Text>
+                                            <br />
+                                            <Text type="secondary">
+                                                {item.supplier} - ¥{item.quote_unit_price} × {item.quantity}
+                                            </Text>
+                                        </div>
+                                    </List.Item>
+                                )}
+                            />
+                        </Card>
+                    )}
                 </div>
 
                 {/* 操作按钮 */}
-                <div style={{ textAlign: 'left', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--semi-color-border)' }}>
+                <div style={{ marginTop: '20px', textAlign: 'right' }}>
                     <Space>
                         <Button 
                             type="tertiary" 
@@ -1358,10 +1416,194 @@ const QuotationImport: React.FC = () => {
         );
     };
 
+    // 渲染文件已存在对话框
+    const renderFileExistsDialog = () => {
+        if (!fileExistsDialogVisible || !existingFileInfo) {
+            return null;
+        }
+
+        const { existingRecord, allRecords } = existingFileInfo;
+        
+        // 格式化价格显示
+        const formatPrice = (price: number, currency: string = 'CNY') => {
+            if (!price) return '-';
+            const currencySymbols: Record<string, string> = {
+                'CNY': '¥',
+                'USD': '$',
+                'EUR': '€',
+                'GBP': '£',
+                'JPY': '¥',
+                'KRW': '₩',
+                'INR': '₹',
+                'CAD': 'C$',
+                'AUD': 'A$',
+                'CHF': 'CHF'
+            };
+            const symbol = currencySymbols[currency] || currency;
+            return `${symbol}${price.toLocaleString()}`;
+        };
+
+        return (
+            <Modal
+                title="文件已被上传过"
+                visible={fileExistsDialogVisible}
+                onCancel={() => {
+                    setFileExistsDialogVisible(false);
+                    setExistingFileInfo(null);
+                    Toast.info('已取消，您可以重新上传其他文件');
+                }}
+                footer={null}
+                width={900}
+                style={{ top: '5vh' }}
+                bodyStyle={{ maxHeight: '80vh', overflow: 'auto' }}
+            >
+                <div>
+                    {/* 文件信息提示 */}
+                    <Card style={{ marginBottom: '20px', background: 'var(--semi-color-warning-light-default)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+                            <IconAlertTriangle size="large" style={{ color: 'var(--semi-color-warning-6)', marginRight: '12px' }} />
+                            <div>
+                                <Title heading={4} style={{ margin: 0, color: 'var(--semi-color-warning-6)' }}>
+                                    该文件已被上传过
+                                </Title>
+                                <Text type="secondary" style={{ marginTop: '4px' }}>
+                                    系统检测到相同的文件已存在于数据库中
+                                </Text>
+                            </div>
+                        </div>
+                        
+                        <Descriptions 
+                            data={[
+                                { key: '文件名', value: existingRecord.fileName },
+                                { key: '首次上传时间', value: new Date(existingRecord.uploadDate).toLocaleString() },
+                                { key: '状态', value: existingRecord.status === 'active' ? '有效' : '已失效' }
+                            ]}
+                            row
+                            size="small"
+                        />
+                    </Card>
+
+                    {/* 历史记录详情 */}
+                    <Card>
+                        <Title heading={5} style={{ marginBottom: '16px' }}>
+                            历史记录详情 ({allRecords?.length || 1} 条记录)
+                        </Title>
+                        
+                        {allRecords && allRecords.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {allRecords.map((record: any, index: number) => (
+                                    <Card 
+                                        key={record.id} 
+                                        style={{ 
+                                            border: '1px solid var(--semi-color-border)',
+                                            background: index === 0 ? 'var(--semi-color-fill-0)' : 'white'
+                                        }}
+                                    >
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <Title heading={6} style={{ margin: 0, color: 'var(--semi-color-text-0)' }}>
+                                                {record.productName}
+                                                {index === 0 && (
+                                                    <Badge count="最新" type="primary" style={{ marginLeft: '8px' }} />
+                                                )}
+                                            </Title>
+                                        </div>
+                                        
+                                        <Descriptions 
+                                            data={[
+                                                { key: '供应商', value: record.supplier || '-' },
+                                                { key: '产品类别', value: record.category || '-' },
+                                                { key: '地区', value: record.region || '-' },
+                                                { key: '数量', value: record.quantity ? `${record.quantity} 个` : '-' },
+                                                { key: '折扣前总价', value: formatPrice(record.totalPrice, record.currency) },
+                                                { key: '折扣后总价', value: formatPrice(record.discountedTotalPrice, record.currency) },
+                                                { key: '设备单价', value: formatPrice(record.unitPrice, record.currency) },
+                                                { key: '报价有效期', value: record.quote_validity ? new Date(record.quote_validity).toLocaleDateString() : '-' },
+                                                { key: '上传时间', value: new Date(record.uploadDate).toLocaleString() }
+                                            ]}
+                                            row
+                                            size="small"
+                                        />
+                                        
+                                        {/* 详细配置信息 */}
+                                        {(record.detailedComponents || record.configDetail || record.notes) && (
+                                            <div style={{ marginTop: '12px' }}>
+                                                <Text strong style={{ fontSize: '13px' }}>详细信息：</Text>
+                                                <div style={{
+                                                    marginTop: '8px',
+                                                    padding: '12px',
+                                                    background: 'var(--semi-color-fill-1)',
+                                                    borderRadius: '4px',
+                                                    fontSize: '12px',
+                                                    lineHeight: '1.6',
+                                                    maxHeight: '200px',
+                                                    overflow: 'auto',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-word'
+                                                }}>
+                                                    {(() => {
+                                                        const content = record.detailedComponents || record.configDetail || record.notes || '暂无详细信息';
+                                                        // 处理分行显示：将逗号、分号、管道符等替换为换行
+                                                        return content
+                                                            .replace(/,\s*/g, ',\n')  // 逗号后换行
+                                                            .replace(/;\s*/g, ';\n')  // 分号后换行
+                                                            .replace(/\|\s*/g, '|\n') // 管道符后换行
+                                                            .replace(/，\s*/g, '，\n') // 中文逗号后换行
+                                                            .replace(/；\s*/g, '；\n') // 中文分号后换行
+                                                            .replace(/\n\s*\n/g, '\n') // 去除多余空行
+                                                            .trim();
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </Card>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '20px' }}>
+                                <Text type="secondary">暂无详细记录</Text>
+                            </div>
+                        )}
+                    </Card>
+                </div>
+
+                {/* 操作按钮 */}
+                <div style={{ marginTop: '24px', textAlign: 'right' }}>
+                    <Space>
+                        <Button 
+                            type="tertiary"
+                            onClick={() => {
+                                setFileExistsDialogVisible(false);
+                                setExistingFileInfo(null);
+                                // 重置到第一步，允许用户重新上传
+                                handleRestart();
+                                Toast.info('已重置，您可以上传其他文件');
+                            }}
+                        >
+                            重新上传其他文件
+                        </Button>
+                        <Button 
+                            type="primary"
+                            onClick={() => {
+                                setFileExistsDialogVisible(false);
+                                setExistingFileInfo(null);
+                                Toast.info('已关闭，您可以查看历史记录或上传新文件');
+                            }}
+                        >
+                            知道了
+                        </Button>
+                    </Space>
+                </div>
+            </Modal>
+        );
+    };
+
     return (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
             {/* 重复检测对话框 */}
             {renderDuplicateDialog()}
+            
+            {/* 文件已存在对话框 */}
+            {renderFileExistsDialog()}
             
             <Title heading={3}>智能报价单导入</Title>
             

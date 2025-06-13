@@ -1,14 +1,176 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const mongoose = require('mongoose');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const crypto = require('crypto'); // 添加crypto模块用于计算文件hash
+const bodyParser = require('body-parser');
+// 替换Google Gemini AI为axios，用于调用元景大模型API
+const axios = require('axios');
 const xlsx = require('xlsx');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
-const crypto = require('crypto'); // 添加crypto模块用于计算文件hash
+
+// 初始化元景大模型配置 - 使用70B强化版模型
+const YUANJING_CONFIG = {
+    apiKey: process.env.YUANJING_API_KEY || 'sk-59454f95d79b4d5d9ad8d5d9d6237bc1',
+    model: process.env.YUANJING_MODEL || 'yuanjing-70b-chat', // 使用更强大的70B模型
+    baseUrl: process.env.YUANJING_API_ENDPOINT || 'https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1' // 正确的API端点
+};
+
+// 备用AI服务配置 (可以配置为Azure OpenAI、百度文心等)
+const BACKUP_AI_CONFIG = {
+    provider: process.env.BACKUP_AI_PROVIDER || 'azure', // azure, baidu, zhipu等
+    apiKey: process.env.BACKUP_AI_API_KEY || '',
+    endpoint: process.env.BACKUP_AI_ENDPOINT || '',
+    model: process.env.BACKUP_AI_MODEL || 'gpt-3.5-turbo'
+};
+
+// 元景AI调用函数 - 优化70B模型支持
+async function callYuanJingAI(prompt) {
+    console.log('🤖 正在调用元景70B大模型...');
+    console.log(`📝 Prompt长度: ${prompt.length} 字符`);
+    
+    try {
+        const startTime = Date.now();
+        
+        const response = await axios.post(
+            `${YUANJING_CONFIG.baseUrl}/chat/completions`,
+            {
+                model: YUANJING_CONFIG.model,
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 4000,
+                top_p: 0.9,
+                stream: false
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${YUANJING_CONFIG.apiKey}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout: 180000 // 3分钟超时，70B模型需要更多时间
+            }
+        );
+
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        
+        console.log(`✅ 元景70B模型调用成功！耗时: ${duration}ms`);
+        console.log(`📊 Token使用: 输入${response.data.usage.prompt_tokens}, 输出${response.data.usage.completion_tokens}, 总计${response.data.usage.total_tokens}`);
+        
+        // 安全地提取响应内容
+        if (response.data && response.data.choices && response.data.choices.length > 0) {
+            const content = response.data.choices[0].message.content;
+            if (content && content.trim()) {
+                console.log(`📤 AI响应长度: ${content.length} 字符`);
+                return content;
+            } else {
+                throw new Error('AI返回内容为空');
+            }
+        } else {
+            throw new Error('AI响应格式异常，未找到choices');
+        }
+        
+    } catch (error) {
+        const errorInfo = {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            message: error.message,
+            code: error.code
+        };
+        
+        console.error('❌ 元景70B模型调用失败:', errorInfo);
+        
+        // 详细的错误分类和处理
+        if (error.code === 'ECONNABORTED') {
+            throw new Error('AI调用超时，70B模型处理时间较长，请稍后重试');
+        } else if (error.response?.status === 422) {
+            throw new Error(`AI调用参数错误: ${error.response.data?.msg || 'Unavailable'} (代码: ${error.response.data?.code || '14'})`);
+        } else if (error.response?.status === 401) {
+            throw new Error('AI API密钥无效或已过期');
+        } else if (error.response?.status === 429) {
+            throw new Error('AI调用频率超限，请稍后重试');
+        } else if (error.response?.status >= 500) {
+            throw new Error(`AI服务器内部错误 (${error.response.status})，请稍后重试`);
+        } else {
+            throw new Error(`AI调用失败: ${error.message}`);
+        }
+    }
+}
+
+// 智能AI调用函数 - 自动切换到可用的AI服务
+async function callAIService(prompt) {
+    console.log('🧠 开始智能AI分析...');
+    
+    // 首先尝试元景大模型
+    try {
+        console.log('🎯 尝试使用元景大模型...');
+        return await callYuanJingAI(prompt);
+    } catch (error) {
+        console.warn('⚠️ 元景大模型不可用，尝试备用服务:', error.message);
+        
+        // 如果元景失败，尝试备用AI服务
+        if (BACKUP_AI_CONFIG.apiKey && BACKUP_AI_CONFIG.provider === 'azure') {
+            try {
+                console.log('🔄 切换到Azure OpenAI...');
+                return await callAzureOpenAI(prompt);
+            } catch (backupError) {
+                console.error('❌ 备用AI服务也失败:', backupError.message);
+            }
+        }
+        
+        // 如果所有AI服务都失败，返回默认错误
+        throw new Error('所有AI服务都不可用，请检查配置或稍后重试');
+    }
+}
+
+// Azure OpenAI备用服务
+async function callAzureOpenAI(prompt) {
+    if (!BACKUP_AI_CONFIG.apiKey || !BACKUP_AI_CONFIG.endpoint) {
+        throw new Error('Azure OpenAI配置不完整');
+    }
+    
+    console.log('🌟 正在调用Azure OpenAI...');
+    
+    try {
+        const response = await axios.post(
+            `${BACKUP_AI_CONFIG.endpoint}/openai/deployments/${BACKUP_AI_CONFIG.model}/chat/completions?api-version=2024-02-15-preview`,
+            {
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 4000
+            },
+            {
+                headers: {
+                    'api-key': BACKUP_AI_CONFIG.apiKey,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 60000
+            }
+        );
+
+        console.log('✅ Azure OpenAI调用成功');
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error('❌ Azure OpenAI调用失败:', error.message);
+        throw error;
+    }
+}
 
 // 计算文件MD5 hash
 const calculateFileHash = async (filePath) => {
@@ -76,29 +238,28 @@ const checkDuplicates = async (filePath, fileName, validatedProducts) => {
     }
 };
 
-// 初始化Google Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyBie3GiTRzEnNrrj-kne9NNXwvgqnkgt5A');
-
 const app = express();
-app.use(express.json());
-app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    credentials: true,
-    optionsSuccessStatus: 200
-}));
 
-// MongoDB连接
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/quotation_system';
+// 中间件配置
+app.use(cors());
+app.use(bodyParser.json({ limit: process.env.UPLOAD_LIMIT || '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: process.env.UPLOAD_LIMIT || '10mb' }));
 
-mongoose.connect(mongoUri)
-    .then(() => {
-        console.log('✅ AI服务器MongoDB连接成功');
-        console.log('📦 数据库:', mongoUri);
-    })
-    .catch(err => {
-        console.error('❌ AI服务器MongoDB连接失败:', err);
-        process.exit(1);
-    });
+// 静态文件服务
+app.use(express.static(path.join(__dirname, 'build')));
+
+// 数据库连接 - 提供默认本地MongoDB配置
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quotation_db';
+
+console.log('🔗 尝试连接MongoDB:', MONGODB_URI);
+
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('✅ MongoDB连接成功'))
+  .catch(err => {
+    console.error('❌ MongoDB连接失败:', err.message);
+    console.log('💡 请确保MongoDB服务正在运行，或者设置MONGODB_URI环境变量');
+    console.log('💡 如果没有MongoDB，可以使用MongoDB Atlas云服务或本地安装MongoDB');
+  });
 
 // MongoDB模型定义
 const QuotationSchema = new mongoose.Schema({
@@ -378,8 +539,6 @@ app.post('/api/quotations/analyze', async (req, res) => {
 
         console.log('🤖 开始AI分析...');
         
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
         const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，提取真实的产品报价信息。
 
 重要提示：
@@ -422,9 +581,8 @@ app.post('/api/quotations/analyze', async (req, res) => {
 文件内容：
 ${content}`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let text = response.text();
+        const result = await callAIService(prompt);
+        let text = result;
         
         console.log('🤖 AI原始回复:', text);
         
@@ -1036,6 +1194,23 @@ app.post('/api/quotations/confirm-save', async (req, res) => {
             details: error.message 
         });
     }
+});
+
+// API路由
+app.use('/api', require('./server/routes'));
+
+// 前端路由处理
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
+// 错误处理中间件
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    error: '服务器内部错误',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
 });
 
 const PORT = process.env.PORT || 3002;

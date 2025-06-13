@@ -32,17 +32,33 @@ import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory'
 const { Title, Text } = Typography;
 const { Step } = Steps;
 
+// 币种选项
+const CURRENCIES = [
+    { label: '人民币 (¥)', value: 'CNY', symbol: '¥' },
+    { label: '美元 ($)', value: 'USD', symbol: '$' },
+    { label: '欧元 (€)', value: 'EUR', symbol: '€' },
+    { label: '英镑 (£)', value: 'GBP', symbol: '£' },
+    { label: '日元 (¥)', value: 'JPY', symbol: '¥' },
+    { label: '韩元 (₩)', value: 'KRW', symbol: '₩' },
+    { label: '印度卢比 (₹)', value: 'INR', symbol: '₹' },
+    { label: '加拿大元 (C$)', value: 'CAD', symbol: 'C$' },
+    { label: '澳大利亚元 (A$)', value: 'AUD', symbol: 'A$' },
+    { label: '瑞士法郎 (CHF)', value: 'CHF', symbol: 'CHF' },
+];
+
 interface QuotationFormData {
     productName: string;
     vendor: string;
     category: string;
     region?: string;
     productSpec?: string;
-    originalPrice?: number;
-    finalPrice: number;
+    originalPrice?: number; // List Price
+    unitPrice?: number; // 设备单价（单个设备价格）
+    finalPrice: number; // 折后总价（到手价）
     quantity?: number;
     discount?: number;
     quotationDate?: string;
+    currency?: string;
     remark?: string;
 }
 
@@ -74,6 +90,7 @@ const QuotationImport: React.FC = () => {
     const [duplicateInfo, setDuplicateInfo] = useState<any>(null);
     const [pendingProducts, setPendingProducts] = useState<any[]>([]);
     const [forceRender, setForceRender] = useState(0); // 强制重新渲染的标志
+    const [currentCurrency, setCurrentCurrency] = useState('CNY'); // 当前选择的币种
     const formRef = useRef<FormApi<any>>();
 
     // 监听currentIndex变化，自动填充表单数据
@@ -82,6 +99,8 @@ const QuotationImport: React.FC = () => {
             const currentData = analyzedData[currentIndex];
             if (currentData && formRef.current) {
                 console.log(`🔄 Index变化，重新填充第${currentIndex + 1}条数据:`, currentData);
+                // 更新当前币种
+                setCurrentCurrency(currentData.currency || 'CNY');
                 setTimeout(() => {
                     formRef.current?.setValues(currentData);
                 }, 50); // 短延迟确保表单已准备好
@@ -165,7 +184,85 @@ const QuotationImport: React.FC = () => {
                 },
                 body: JSON.stringify({
                     filePath: uploadedFile.filePath,
-                    fileName: uploadedFile.fileName
+                    fileName: uploadedFile.fileName,
+                    // 添加详细的AI识别提示词
+                    analysisPrompt: `
+请仔细分析这个报价单文档，提取以下关键信息：
+
+1. 报价单标题识别：
+   - 优先识别文档标题、表头或第一行的主要产品名称
+   - 如果没有明确标题，则提取最主要的产品或服务名称
+   - 避免提取公司名称作为产品名称
+
+2. 供应商信息识别（关键重点）：
+   ⚠️ 重要：正确区分供应商和设备制造商！
+   
+   - 供应商(Supplier/Vendor)：实际提供报价的公司、经销商、代理商
+   - 设备商/制造商(Manufacturer)：产品品牌方（如Dell、HP、Cisco、IBM等）
+   
+   识别规则：
+   - 优先识别报价单抬头、联系信息、签名处的公司名称作为供应商
+   - Dell、HP、Cisco、IBM、Lenovo等是设备制造商，不是供应商
+   - 如果只能识别到设备制造商，供应商字段留空或标注"未识别"
+   - 在备注中说明："制造商: Dell" 等信息
+
+3. 价格信息识别（重要更新）：
+   ⚠️ 绝对禁止：不要用总价除以数量来计算任何价格！
+   
+   价格字段定义：
+   - List Price：产品的官方标准定价（单个设备的标价）
+   - 设备单价：单个设备的实际价格（如表格中明确标注的单价）
+   - 折后总价：客户最终需要支付的总金额（包含所有费用）
+   
+   识别规则：
+   a) List Price：从产品规格或价格表中找到官方标价
+   b) 设备单价：直接从表格的单价列读取，不要计算
+   c) 折后总价：使用文档最终的总金额（包含运费、税费等）
+   d) 绝对不要进行任何价格计算或除法运算
+   
+   币种识别：
+   * 符号形式：$、€、£、¥、₹、₩、C$、A$等
+   * 文字形式：USD、EUR、GBP、CNY、JPY、INR、KRW、CAD、AUD等
+
+4. 折扣率识别：
+   ⚠️ 重要：只识别明确标注的折扣率，不要计算！
+   
+   - 只有当文档中明确写明"折扣率"、"Discount"、"折扣%"时才提取
+   - 不要根据价格差异计算折扣率
+   - 如果没有明确标注，折扣率字段留空
+
+5. 数量和规格识别：
+   - 数量字段：Qty、Quantity、数量、件数、Units、Pieces等
+   - 如果没有明确数量，默认为1
+   - 产品规格：配置详情、技术参数、型号规格
+   - 产品型号：完整的产品型号或SKU
+
+6. 费用结构分析：
+   - 识别产品基础费用和附加费用（运费、税费、服务费）
+   - 折后总价应包含所有费用
+   - 在备注中说明费用构成
+
+7. 数据验证要求：
+   - 不进行任何价格计算
+   - 直接从文档中读取明确标注的数值
+   - 如果某些信息无法明确识别，标注"未识别"
+   - 供应商不能是设备制造商品牌
+
+示例说明：
+如果表格显示：
+- 产品：Dell Server，数量：3，单价：$15,895，小计：$47,685
+- 运费：$5,100，税费：$9,060，总计：$61,845
+- 报价方：ABC Technology Company
+
+则应提取：
+- 供应商：ABC Technology Company（不是Dell）
+- 设备单价：$15,895（直接读取，不计算）
+- 折后总价：$61,845（最终总金额）
+- 数量：3
+- 备注：制造商: Dell | 运费: $5,100 | 税费: $9,060
+
+请严格按照以上要求分析，不要进行任何计算。
+                    `
                 })
             });
 
@@ -205,26 +302,91 @@ const QuotationImport: React.FC = () => {
             console.log('🔍 AI返回的原始产品数据:', productsData);
             
             const formattedData: AnalyzedQuotation[] = productsData.map((item: any, index: number) => {
+                // 产品名称识别 - 优先级更新
+                const productName = item.quotationTitle || item.productName || item.name || 
+                                   item.title || item.description || item.product_name || 
+                                   item.detailedComponents || '未识别产品';
+                
+                // 价格字段映射 - 不进行任何计算，直接使用AI返回的值
+                const listPrice = item.totalPrice || item.list_price || item.listPrice || 
+                                 item.standardPrice || item.msrp || item.retail_price || undefined;
+                
+                const unitPrice = item.unitPrice || item.unit_price || item.single_price || 
+                                 item.item_price || item.device_price || undefined;
+                
+                const finalPrice = item.discountedTotalPrice || item.final_price || item.finalPrice || 
+                                  item.total_price || item.quote_total_price || item.grand_total || 
+                                  item.quote_total || item.amount_due || item.totalPrice || 0;
+                
+                const quantity = item.quantity || item.qty || item.units || item.pieces || 1;
+                
+                // 供应商识别 - 排除设备制造商
+                const deviceBrands = ['Dell', 'HP', 'Cisco', 'IBM', 'Lenovo', 'Microsoft', 'VMware', 'Oracle', 'Intel', 'AMD'];
+                let vendor = '';
+                let manufacturer = '';
+                
+                if (item.supplier && !deviceBrands.includes(item.supplier)) {
+                    vendor = item.supplier;
+                } else if (item.vendor && !deviceBrands.includes(item.vendor)) {
+                    vendor = item.vendor;
+                } else if (item.company && !deviceBrands.includes(item.company)) {
+                    vendor = item.company;
+                } else {
+                    vendor = '未识别'; // 供应商未识别
+                }
+                
+                // 识别制造商
+                if (deviceBrands.includes(item.supplier)) {
+                    manufacturer = item.supplier;
+                } else if (deviceBrands.includes(item.vendor)) {
+                    manufacturer = item.vendor;
+                } else if (item.manufacturer) {
+                    manufacturer = item.manufacturer;
+                } else if (deviceBrands.includes(item.brand)) {
+                    manufacturer = item.brand;
+                }
+                
                 const formatted = {
                     id: `analyzed-${index}`,
-                    productName: item.productName || item.name || '',
-                    vendor: item.supplier || '',
-                    category: item.category || item.product_category || '其他',
-                    region: item.region || undefined,
-                    productSpec: item.productSpec || item.configDetail || '',
-                    originalPrice: item.list_price || undefined,
-                    finalPrice: item.quote_unit_price || 0,
-                    quantity: item.quantity || 1,
-                    discount: item.discount_rate ? item.discount_rate / 100 : undefined,
-                    quotationDate: item.quote_validity ? new Date(item.quote_validity).toISOString().split('T')[0] : '',
-                    remark: item.notes || '',
+                    productName: productName,
+                    vendor: vendor,
+                    category: item.quotationCategory || item.category || item.product_category || item.type || '其他',
+                    region: item.region || item.location || undefined,
+                    productSpec: item.detailedComponents || item.productSpec || item.configDetail || 
+                                item.specifications || item.description || item.model || item.sku || '',
+                    // 价格处理 - 直接使用识别的值，不计算
+                    originalPrice: listPrice,
+                    unitPrice: unitPrice,
+                    finalPrice: finalPrice,
+                    quantity: quantity,
+                    // 折扣率 - 只使用明确标注的值，不计算
+                    discount: item.discount_rate ? item.discount_rate / 100 : 
+                             item.discount_percent ? item.discount_percent / 100 : 
+                             item.discount ? item.discount : undefined,
+                    quotationDate: item.quote_validity || item.quoteDate || item.validityDate || item.date ? 
+                                  new Date(item.quote_validity || item.quoteDate || item.validityDate || item.date).toISOString().split('T')[0] : '',
+                    // 币种处理
+                    currency: item.currency || item.curr || 'USD',
+                    // 备注信息整合
+                    remark: [
+                        item.notes || '',
+                        manufacturer ? `制造商: ${manufacturer}` : '',
+                        item.sku ? `SKU: ${item.sku}` : '',
+                        item.partNumber ? `型号: ${item.partNumber}` : '',
+                        item.shipping_cost ? `运费: ${item.shipping_cost}` : '',
+                        item.tax_amount ? `税费: ${item.tax_amount}` : '',
+                        item.service_fee ? `服务费: ${item.service_fee}` : ''
+                    ].filter(Boolean).join(' | '),
                     status: 'pending' as const,
                     originalFile: item.originalFile || null
                 };
                 
                 // 调试：输出每条转换后的数据
-                if (index < 5 || index === productsData.length - 1) { // 只输出前5条和最后一条，避免日志过多
+                if (index < 3 || index === productsData.length - 1) {
                     console.log(`📋 第${index + 1}条转换后数据:`, formatted);
+                    console.log(`📝 产品名称: ${productName}`);
+                    console.log(`💰 价格信息: List Price=${listPrice}, 设备单价=${unitPrice}, 折后总价=${finalPrice}, 数量=${quantity}`);
+                    console.log(`🏢 供应商信息: 供应商=${vendor}, 制造商=${manufacturer}`);
                 }
                 
                 return formatted;
@@ -333,18 +495,21 @@ const QuotationImport: React.FC = () => {
                 name: item.productName,
                 productName: item.productName,
                 supplier: item.vendor,
-                quote_unit_price: item.finalPrice,
-                list_price: item.originalPrice || item.finalPrice,
+                list_price: item.originalPrice || undefined,
+                unit_price: item.unitPrice || undefined,
+                quote_unit_price: item.unitPrice || (item.finalPrice && item.quantity ? Math.round((item.finalPrice / item.quantity) * 100) / 100 : item.finalPrice),
                 quantity: item.quantity || 1,
-                quote_total_price: (item.finalPrice * (item.quantity || 1)),
+                quote_total_price: item.finalPrice,
+                totalPrice: item.originalPrice || item.finalPrice,
+                discountedTotalPrice: item.finalPrice,
+                unitPrice: item.unitPrice,
                 quote_validity: item.quotationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                currency: 'EUR',
+                currency: item.currency || 'CNY',
                 notes: item.remark || '',
                 configDetail: item.productSpec || '',
                 category: item.category || '其他',
                 region: item.region || undefined,
                 status: 'active',
-                // 优先使用产品自带的originalFile信息，如果没有则不传递（让服务器端重建）
                 ...(item.originalFile ? { originalFile: item.originalFile } : {})
             }));
 
@@ -428,12 +593,16 @@ const QuotationImport: React.FC = () => {
                 name: values.productName,
                 productName: values.productName,
                 supplier: values.vendor,
-                quote_unit_price: values.finalPrice,
-                list_price: values.originalPrice || values.finalPrice,
+                list_price: values.originalPrice || undefined,
+                unit_price: values.unitPrice || undefined,
+                quote_unit_price: values.unitPrice || (values.finalPrice && values.quantity ? Math.round((values.finalPrice / values.quantity) * 100) / 100 : values.finalPrice),
                 quantity: values.quantity || 1,
-                quote_total_price: (values.finalPrice * (values.quantity || 1)),
+                quote_total_price: values.finalPrice,
+                totalPrice: values.originalPrice || values.finalPrice,
+                discountedTotalPrice: values.finalPrice,
+                unitPrice: values.unitPrice,
                 quote_validity: values.quotationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                currency: 'EUR',
+                currency: values.currency || 'CNY',
                 notes: values.remark || '',
                 configDetail: values.productSpec || '',
                 category: values.category || '其他',
@@ -604,7 +773,6 @@ const QuotationImport: React.FC = () => {
                             background: 'var(--semi-color-success-light-default)',
                             borderRadius: '8px'
                         }}>
-                            <IconTickCircle size="large" style={{ color: 'var(--semi-color-success)', marginBottom: '16px' }} />
                             <Title heading={4} style={{ color: 'var(--semi-color-success)', marginBottom: '16px' }}>
                                 文件上传成功
                             </Title>
@@ -617,7 +785,6 @@ const QuotationImport: React.FC = () => {
                             
                             <Button
                                 type="primary"
-                                icon={<IconPlay />}
                                 onClick={handleAnalyze}
                                 loading={analyzing}
                                 size="large"
@@ -662,6 +829,137 @@ const QuotationImport: React.FC = () => {
                             </div>
                         </Card>
 
+                        {/* AI识别结果展示 */}
+                        {currentData && (
+                            <Card 
+                                style={{ 
+                                    marginBottom: '20px',
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    color: 'white',
+                                    border: 'none'
+                                }}
+                            >
+                                <Title heading={4} style={{ color: 'white', marginBottom: '20px' }}>
+                                    AI识别结果
+                                </Title>
+                                
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                                    {/* 基本信息 */}
+                                    <div style={{ 
+                                        background: 'rgba(255, 255, 255, 0.1)', 
+                                        padding: '16px', 
+                                        borderRadius: '8px',
+                                        backdropFilter: 'blur(10px)'
+                                    }}>
+                                        <Title heading={6} style={{ color: 'white', marginBottom: '12px' }}>基本信息</Title>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>产品名称:</Text>
+                                                <Text style={{ color: 'white', fontWeight: 'bold' }}>{currentData.productName || '未识别'}</Text>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>供应商:</Text>
+                                                <Text style={{ color: 'white', fontWeight: 'bold' }}>{currentData.vendor || '未识别'}</Text>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>产品类别:</Text>
+                                                <Text style={{ color: 'white', fontWeight: 'bold' }}>{currentData.category || '其他'}</Text>
+                                            </div>
+                                            {currentData.region && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>地区:</Text>
+                                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>{currentData.region}</Text>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 价格信息 */}
+                                    <div style={{ 
+                                        background: 'rgba(255, 255, 255, 0.1)', 
+                                        padding: '16px', 
+                                        borderRadius: '8px',
+                                        backdropFilter: 'blur(10px)'
+                                    }}>
+                                        <Title heading={6} style={{ color: 'white', marginBottom: '12px' }}>价格信息</Title>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {currentData.currency && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>币种:</Text>
+                                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>
+                                                        {CURRENCIES.find(c => c.value === currentCurrency)?.label || currentData.currency}
+                                                    </Text>
+                                                </div>
+                                            )}
+                                            {currentData.originalPrice && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>List Price:</Text>
+                                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>
+                                                        {CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥'}{currentData.originalPrice.toLocaleString()}
+                                                    </Text>
+                                                </div>
+                                            )}
+                                            {currentData.unitPrice && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>设备单价:</Text>
+                                                    <Text style={{ color: '#fbbf24', fontWeight: 'bold', fontSize: '16px' }}>
+                                                        {CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥'}{currentData.unitPrice.toLocaleString()}
+                                                    </Text>
+                                                </div>
+                                            )}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>折后总价:</Text>
+                                                <Text style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '18px' }}>
+                                                    {CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥'}{currentData.finalPrice.toLocaleString()}
+                                                </Text>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>数量:</Text>
+                                                <Text style={{ color: 'white', fontWeight: 'bold' }}>{currentData.quantity || 1}</Text>
+                                            </div>
+                                            {currentData.discount && (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>折扣率:</Text>
+                                                    <Text style={{ color: '#f87171', fontWeight: 'bold' }}>{(currentData.discount * 100).toFixed(1)}%</Text>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 详细信息 */}
+                                    <div style={{ 
+                                        background: 'rgba(255, 255, 255, 0.1)', 
+                                        padding: '16px', 
+                                        borderRadius: '8px',
+                                        backdropFilter: 'blur(10px)',
+                                        gridColumn: 'span 2'
+                                    }}>
+                                        <Title heading={6} style={{ color: 'white', marginBottom: '12px' }}>详细信息</Title>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
+                                            {currentData.productSpec && (
+                                                <div>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)', display: 'block', marginBottom: '4px' }}>产品规格:</Text>
+                                                    <Text style={{ color: 'white' }}>{currentData.productSpec}</Text>
+                                                </div>
+                                            )}
+                                            {currentData.quotationDate && (
+                                                <div>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)', display: 'block', marginBottom: '4px' }}>报价日期:</Text>
+                                                    <Text style={{ color: 'white' }}>{currentData.quotationDate}</Text>
+                                                </div>
+                                            )}
+                                            {currentData.remark && (
+                                                <div style={{ gridColumn: 'span 2' }}>
+                                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)', display: 'block', marginBottom: '4px' }}>备注:</Text>
+                                                    <Text style={{ color: 'white' }}>{currentData.remark}</Text>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
+
                         {/* 数据编辑区域 */}
                         <Card>
                             <Form<any> 
@@ -678,23 +976,13 @@ const QuotationImport: React.FC = () => {
                                     <Space>
                                         <Button 
                                             type="secondary" 
-                                            icon={<IconEdit />}
                                             onClick={handleEditCurrent}
                                             disabled={currentData?.status === 'editing'}
                                         >
                                             编辑
                                         </Button>
                                         <Button 
-                                            type="primary" 
-                                            icon={<IconTick />}
-                                            onClick={() => handleConfirmCurrent()}
-                                            disabled={currentData?.status === 'confirmed'}
-                                        >
-                                            确认
-                                        </Button>
-                                        <Button 
                                             type="danger" 
-                                            icon={<IconClose />}
                                             onClick={handleSkipCurrent}
                                         >
                                             跳过
@@ -740,20 +1028,37 @@ const QuotationImport: React.FC = () => {
                                     />
                                     <Form.InputNumber
                                         field="originalPrice"
-                                        label="原始单价"
-                                        placeholder="请输入原始单价"
+                                        label="List Price"
+                                        placeholder="请输入List Price"
                                         disabled={currentData?.status !== 'editing'}
-                                        formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                        parser={value => value!.replace(/¥\s?|(,*)/g, '')}
+                                        formatter={value => {
+                                            const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
+                                            return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                        }}
+                                        parser={value => value!.replace(/[^\d.]/g, '')}
+                                    />
+                                    <Form.InputNumber
+                                        field="unitPrice"
+                                        label="设备单价（如有）"
+                                        placeholder="请输入设备单价"
+                                        disabled={currentData?.status !== 'editing'}
+                                        formatter={value => {
+                                            const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
+                                            return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                        }}
+                                        parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
                                     <Form.InputNumber
                                         field="finalPrice"
-                                        label="最终单价"
-                                        placeholder="请输入最终单价"
-                                        rules={[{ required: true, message: '请输入最终单价' }]}
+                                        label="折后总价（到手价）"
+                                        placeholder="请输入折后总价"
+                                        rules={[{ required: true, message: '请输入折后总价' }]}
                                         disabled={currentData?.status !== 'editing'}
-                                        formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                        parser={value => value!.replace(/¥\s?|(,*)/g, '')}
+                                        formatter={value => {
+                                            const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
+                                            return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                        }}
+                                        parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
                                     <Form.InputNumber
                                         field="quantity"
@@ -776,6 +1081,17 @@ const QuotationImport: React.FC = () => {
                                         label="报价日期"
                                         placeholder="请选择报价日期"
                                         disabled={currentData?.status !== 'editing'}
+                                    />
+                                    <Form.Select
+                                        field="currency"
+                                        label="币种"
+                                        placeholder="请选择币种"
+                                        disabled={currentData?.status !== 'editing'}
+                                        optionList={CURRENCIES.map(currency => ({
+                                            label: currency.label,
+                                            value: currency.value
+                                        }))}
+                                        onChange={(value) => setCurrentCurrency(value as string)}
                                     />
                                 </div>
                                 
@@ -806,7 +1122,8 @@ const QuotationImport: React.FC = () => {
 
                             {/* 导航按钮 */}
                             <Divider />
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '16px' }}>
+                                {/* 上一条和下一条按钮 */}
                                 <Space>
                                     <Button 
                                         disabled={currentIndex === 0}
@@ -842,15 +1159,26 @@ const QuotationImport: React.FC = () => {
                                     </Button>
                                 </Space>
                                 
-                                <Button 
-                                    type="primary" 
-                                    size="large"
-                                    loading={saving}
-                                    onClick={handleSaveAll}
-                                    disabled={confirmedCount === 0}
-                                >
-                                    保存全部已确认数据 ({confirmedCount})
-                                </Button>
+                                {/* 确认和保存按钮 */}
+                                <Space>
+                                    <Button 
+                                        type="primary" 
+                                        onClick={() => handleConfirmCurrent()}
+                                        disabled={currentData?.status === 'confirmed'}
+                                        size="large"
+                                    >
+                                        确认当前数据
+                                    </Button>
+                                    <Button 
+                                        type="primary" 
+                                        size="large"
+                                        loading={saving}
+                                        onClick={handleSaveAll}
+                                        disabled={confirmedCount === 0}
+                                    >
+                                        保存全部已确认数据 ({confirmedCount})
+                                    </Button>
+                                </Space>
                             </div>
                         </Card>
                     </div>
@@ -860,7 +1188,6 @@ const QuotationImport: React.FC = () => {
                 return (
                     <Card style={{ marginTop: '20px' }}>
                         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                            <IconTickCircle size="extra-large" style={{ color: 'var(--semi-color-success)', marginBottom: '20px' }} />
                             <Title heading={3} style={{ color: 'var(--semi-color-success)', marginBottom: '16px' }}>
                                 导入完成！
                             </Title>
@@ -911,7 +1238,8 @@ const QuotationImport: React.FC = () => {
                 }}
                 footer={null}
                 width={800}
-                style={{ top: '10vh' }}
+                style={{ top: '10vh', left: '5vw' }}
+                centered={false}
             >
                 <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
                     {/* 文件重复提示 */}
@@ -999,7 +1327,7 @@ const QuotationImport: React.FC = () => {
                 </div>
 
                 {/* 操作按钮 */}
-                <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--semi-color-border)' }}>
+                <div style={{ textAlign: 'left', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--semi-color-border)' }}>
                     <Space>
                         <Button 
                             type="tertiary" 
@@ -1092,18 +1420,34 @@ const QuotationImport: React.FC = () => {
                         />
                         <Form.InputNumber
                             field="originalPrice"
-                            label="原始单价"
-                            placeholder="请输入原始单价"
-                            formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                            parser={value => value!.replace(/¥\s?|(,*)/g, '')}
+                            label="List Price"
+                            placeholder="请输入List Price"
+                            formatter={value => {
+                                const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
+                                return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                            }}
+                            parser={value => value!.replace(/[^\d.]/g, '')}
+                        />
+                        <Form.InputNumber
+                            field="unitPrice"
+                            label="设备单价（如有）"
+                            placeholder="请输入设备单价"
+                            formatter={value => {
+                                const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
+                                return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                            }}
+                            parser={value => value!.replace(/[^\d.]/g, '')}
                         />
                         <Form.InputNumber
                             field="finalPrice"
-                            label="最终单价"
-                            placeholder="请输入最终单价"
-                            rules={[{ required: true, message: '请输入最终单价' }]}
-                            formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                            parser={value => value!.replace(/¥\s?|(,*)/g, '')}
+                            label="折后总价（到手价）"
+                            placeholder="请输入折后总价"
+                            rules={[{ required: true, message: '请输入折后总价' }]}
+                            formatter={value => {
+                                const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
+                                return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                            }}
+                            parser={value => value!.replace(/[^\d.]/g, '')}
                         />
                         <Form.InputNumber
                             field="quantity"
@@ -1123,6 +1467,15 @@ const QuotationImport: React.FC = () => {
                             field="quotationDate"
                             label="报价日期"
                             placeholder="请选择报价日期"
+                        />
+                        <Form.Select
+                            field="currency"
+                            label="币种"
+                            placeholder="请选择币种"
+                            optionList={CURRENCIES.map(currency => ({
+                                label: currency.label,
+                                value: currency.value
+                            }))}
                         />
                     </div>
                     
@@ -1147,6 +1500,9 @@ const QuotationImport: React.FC = () => {
                     </div>
                 </Form>
             </Card>
+            
+            {/* 底部留白 */}
+            <div style={{ height: '200px' }}></div>
         </div>
     );
 };

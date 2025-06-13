@@ -26,7 +26,45 @@ import type { QuotationRecord, QuotationQueryParams } from '../../../services/qu
 import { ResizeObserverFix } from '../../../utils/resizeObserver';
 import { request } from '../../../utils/request';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
+
+// 货币符号映射函数
+const getCurrencySymbol = (currency: string): string => {
+    const currencySymbols: { [key: string]: string } = {
+        'CNY': '¥',
+        'USD': '$',
+        'EUR': '€',
+        'GBP': '£',
+        'JPY': '¥',
+        'HKD': 'HK$',
+        'AUD': 'A$',
+        'CAD': 'C$',
+        'SGD': 'S$',
+        'CHF': 'CHF',
+        'SEK': 'kr',
+        'NOK': 'kr',
+        'DKK': 'kr',
+        'INR': '₹',
+        'KRW': '₩',
+        'THB': '฿',
+        'MYR': 'RM',
+        'TWD': 'NT$',
+        'VND': '₫',
+        'IDR': 'Rp',
+        'BRL': 'R$',
+        'ZAR': 'R',
+        'MXN': '$',
+        'NZD': 'NZ$',
+        'PLN': 'zł',
+        'HUF': 'Ft',
+        'CZK': 'Kč',
+        'TRY': '₺',
+        'SAR': '﷼',
+        'AED': 'د.إ',
+        'ILS': '₪'
+    };
+    return currencySymbols[currency] || currency;
+};
 
 interface DetailModalProps {
     visible: boolean;
@@ -236,17 +274,83 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
                 </div>
 
                 <div>
-                    <div style={{
-                        fontSize: '14px',
-                        lineHeight: '1.6',
-                        whiteSpace: 'pre-wrap',
-                        background: 'var(--semi-color-fill-0)',
-                        padding: '16px',
-                        borderRadius: '4px',
-                        maxHeight: '60vh',
-                        overflow: 'auto'
-                    }}>
-                        {record.configDetail || record.productSpec}
+                    {/* 价格信息区域 */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <Title heading={5} style={{ marginBottom: '12px' }}>价格信息</Title>
+                        <Descriptions
+                            data={[
+                                {
+                                    key: 'List Price',
+                                    value: record.originalPrice || record.totalPrice ? 
+                                        `${getCurrencySymbol(record.currency || 'EUR')}${(record.originalPrice || record.totalPrice || 0).toLocaleString()}` : 
+                                        '-'
+                                },
+                                {
+                                    key: '折扣后总价',
+                                    value: record.finalPrice || record.discountedTotalPrice ? 
+                                        `${getCurrencySymbol(record.currency || 'EUR')}${(record.finalPrice || record.discountedTotalPrice || 0).toLocaleString()}` : 
+                                        '-'
+                                },
+                                {
+                                    key: '单价',
+                                    value: (() => {
+                                        // 优先显示unitPrice
+                                        if ((record as any).unitPrice) {
+                                            return `${getCurrencySymbol(record.currency || 'EUR')}${(record as any).unitPrice.toLocaleString()}`;
+                                        }
+                                        // 尝试从总价和数量计算单价
+                                        const totalPrice = record.finalPrice || record.quote_unit_price;
+                                        const quantity = record.quantity || 1;
+                                        if (totalPrice && quantity > 0) {
+                                            const calculatedUnitPrice = totalPrice / quantity;
+                                            return `${getCurrencySymbol(record.currency || 'EUR')}${calculatedUnitPrice.toLocaleString()}`;
+                                        }
+                                        return '-';
+                                    })()
+                                },
+                                {
+                                    key: '数量',
+                                    value: record.quantity || 1
+                                },
+                                {
+                                    key: '折扣率',
+                                    value: record.discount || record.discount_rate ? 
+                                        `${((record.discount || record.discount_rate || 0) * 100).toFixed(1)}%` : 
+                                        '-'
+                                },
+                                {
+                                    key: '币种',
+                                    value: `${record.currency || 'EUR'} (${getCurrencySymbol(record.currency || 'EUR')})`
+                                },
+                                {
+                                    key: '供应商',
+                                    value: record.vendor || record.supplier || '-'
+                                },
+                                {
+                                    key: '报价日期',
+                                    value: record.quotationDate || (record.createdAt ? new Date(record.createdAt).toLocaleDateString() : '-')
+                                }
+                            ]}
+                            row
+                            size="small"
+                        />
+                    </div>
+
+                    {/* 详细配置信息 */}
+                    <div>
+                        <Title heading={5} style={{ marginBottom: '12px' }}>详细配置信息</Title>
+                        <div style={{
+                            fontSize: '14px',
+                            lineHeight: '1.6',
+                            whiteSpace: 'pre-wrap',
+                            background: 'var(--semi-color-fill-0)',
+                            padding: '16px',
+                            borderRadius: '4px',
+                            maxHeight: '40vh',
+                            overflow: 'auto'
+                        }}>
+                            {record.configDetail || record.productSpec || record.detailedComponents || '暂无详细配置信息'}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -255,44 +359,45 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
 };
 
 const QuotationHistory: React.FC = () => {
+    const [data, setData] = useState<QuotationRecord[]>([]);
     const [loading, setLoading] = useState(false);
-    const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
-    const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 10, total: 0 });
+    const [pagination, setPagination] = useState({
+        currentPage: 1,
+        pageSize: 10,
+        total: 0
+    });
+    const [filters, setFilters] = useState<Partial<QuotationQueryParams>>({});
     const [detailVisible, setDetailVisible] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<QuotationRecord | null>(null);
-    const [filters, setFilters] = useState<Partial<QuotationQueryParams>>({});
+    
+    // 添加备注弹窗状态
+    const [remarkModalVisible, setRemarkModalVisible] = useState(false);
+    const [currentRemark, setCurrentRemark] = useState<string>('');
+    const [currentProductName, setCurrentProductName] = useState<string>('');
 
-    const fetchData = useCallback(async (page: number, pageSize: number, filters: Partial<QuotationQueryParams>) => {
+    const fetchData = useCallback(async (page: number, pageSize: number, searchFilters: Partial<QuotationQueryParams>) => {
         setLoading(true);
         try {
-            // 使用getQuotationList服务函数
-            const response = await getQuotationList({
+            const params: QuotationQueryParams = {
                 page,
                 pageSize,
-                ...filters
-            });
+                ...searchFilters
+            };
             
-            setQuotations(response.data);
-            setPagination(prev => ({ 
-                ...prev, 
-                total: response.total,
-                currentPage: page,
-                pageSize
+            const response = await getQuotationList(params);
+            setData(response.data);
+            setPagination(prev => ({
+                ...prev,
+                total: response.total
             }));
         } catch (error) {
-            console.error('获取报价记录失败:', error);
-            Toast.error('获取报价记录失败');
+            console.error('获取数据失败:', error);
+            Toast.error('获取数据失败');
         } finally {
             setLoading(false);
         }
     }, []);
 
-    // 初始加载数据
-    useEffect(() => {
-        fetchData(1, 10, {});
-    }, [fetchData]);
-
-    // 监听filters和pagination变化，触发数据获取
     useEffect(() => {
         fetchData(pagination.currentPage, pagination.pageSize, filters);
     }, [filters, pagination.currentPage, pagination.pageSize, fetchData]);
@@ -328,6 +433,21 @@ const QuotationHistory: React.FC = () => {
         setDetailVisible(false);
         setTimeout(() => {
             setCurrentRecord(null);
+        }, 300);
+    };
+
+    // 添加备注弹窗处理函数
+    const handleShowRemark = (record: QuotationRecord) => {
+        setCurrentRemark(record.remark || record.notes || '');
+        setCurrentProductName(record.productName);
+        setRemarkModalVisible(true);
+    };
+
+    const handleCloseRemark = () => {
+        setRemarkModalVisible(false);
+        setTimeout(() => {
+            setCurrentRemark('');
+            setCurrentProductName('');
         }, 300);
     };
 
@@ -367,16 +487,35 @@ const QuotationHistory: React.FC = () => {
             width: 150
         },
         {
-            title: '单价(折前)',
+            title: 'List Price',
             dataIndex: 'originalPrice',
             width: 120,
-            render: (value: number) => value ? `¥${value.toFixed(2)}` : '-'
+            render: (value: number, record: QuotationRecord) => value ? `${getCurrencySymbol(record.currency || 'EUR')}${value.toLocaleString()}` : '-'
         },
         {
-            title: '到手价',
+            title: '折扣后总价',
             dataIndex: 'finalPrice',
             width: 120,
-            render: (value: number) => `¥${value.toFixed(2)}`
+            render: (value: number, record: QuotationRecord) => `${getCurrencySymbol(record.currency || 'EUR')}${value.toLocaleString()}`
+        },
+        {
+            title: '单价',
+            dataIndex: 'unitPrice',
+            width: 120,
+            render: (value: number, record: QuotationRecord) => {
+                // 优先显示unitPrice，如果没有则尝试计算
+                if (value) {
+                    return `${getCurrencySymbol(record.currency || 'EUR')}${value.toLocaleString()}`;
+                }
+                // 尝试从总价和数量计算单价
+                const totalPrice = record.finalPrice || record.quote_unit_price;
+                const quantity = record.quantity || 1;
+                if (totalPrice && quantity > 0) {
+                    const calculatedUnitPrice = totalPrice / quantity;
+                    return `${getCurrencySymbol(record.currency || 'EUR')}${calculatedUnitPrice.toLocaleString()}`;
+                }
+                return '-';
+            }
         },
         {
             title: '数量',
@@ -408,14 +547,23 @@ const QuotationHistory: React.FC = () => {
             title: '备注',
             dataIndex: 'remark',
             width: 150,
-            ellipsis: {
-                showTitle: false
-            },
-            render: (text: string) => (
-                <span title={text}>
-                    {text || '-'}
-                </span>
-            )
+            render: (text: string, record: QuotationRecord) => {
+                const remarkText = text || record.notes || '';
+                if (!remarkText) {
+                    return <span style={{ color: 'var(--semi-color-text-2)' }}>无备注</span>;
+                }
+                return (
+                    <Button
+                        theme="borderless"
+                        type="primary"
+                        size="small"
+                        onClick={() => handleShowRemark(record)}
+                        style={{ padding: '4px 8px' }}
+                    >
+                        查看备注
+                    </Button>
+                );
+            }
         },
         {
             title: '原件下载',
@@ -600,7 +748,7 @@ const QuotationHistory: React.FC = () => {
 
             <Table
                 columns={columns}
-                dataSource={quotations}
+                dataSource={data}
                 pagination={{
                     currentPage: pagination.currentPage,
                     pageSize: pagination.pageSize,
@@ -616,6 +764,43 @@ const QuotationHistory: React.FC = () => {
                 onClose={handleCloseDetail}
                 record={currentRecord}
             />
+            
+            {/* 备注弹窗 */}
+            <Modal
+                title={`备注信息 - ${currentProductName}`}
+                visible={remarkModalVisible}
+                onCancel={handleCloseRemark}
+                footer={
+                    <Button type="primary" onClick={handleCloseRemark}>
+                        关闭
+                    </Button>
+                }
+                width={600}
+                style={{ top: '20vh' }}
+            >
+                <div style={{ 
+                    maxHeight: '400px', 
+                    overflow: 'auto',
+                    padding: '16px',
+                    background: 'var(--semi-color-fill-0)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--semi-color-border)'
+                }}>
+                    {currentRemark ? (
+                        <Text style={{ 
+                            whiteSpace: 'pre-wrap', 
+                            lineHeight: '1.6',
+                            fontSize: '14px'
+                        }}>
+                            {currentRemark}
+                        </Text>
+                    ) : (
+                        <Text type="secondary" style={{ fontStyle: 'italic' }}>
+                            暂无备注信息
+                        </Text>
+                    )}
+                </div>
+            </Modal>
         </div>
     );
 };

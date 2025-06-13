@@ -6,18 +6,24 @@ export interface QuotationRecord {
     id?: number;
     name?: string;                    // 产品名 (向后兼容)
     productName: string;              // 产品名称
+    quotationCategory?: string;       // 报价单类别
+    quotationTitle?: string;          // 报价单标题
     supplier: string;                 // 供应商
     list_price?: number | null;       // List Price
     quote_unit_price: number;         // 报价单价
     quantity: number;                 // 数量
     discount_rate?: number | null;    // 折扣率
     quote_total_price: number;        // 报价总价
-    quote_validity: string | Date;    // 报价有效期
+    totalPrice?: number;              // 报价总价
+    discountedTotalPrice?: number;    // 折扣后总价
+    quote_validity: string | Date | null;    // 报价有效期
     delivery_date?: string | Date;    // 交付日期
     currency: string;                 // 币种
     notes?: string | null;            // 备注
     configDetail?: string;            // 配置详情
     productSpec?: string;             // 产品规格
+    detailedComponents?: string;      // 详细配件清单
+    projectDescription?: string;      // 项目描述
     category?: string;                // 产品类别
     region?: string;                  // 区域
     status?: 'active' | 'expired' | 'pending' | 'cancelled';

@@ -26,7 +26,7 @@ export interface QuotationRecord {
     discount_rate?: number | null;    // 折扣率
     discount?: number;                // 向后兼容
     quote_total_price: number;        // 报价总价
-    quote_validity: string | Date;    // 报价有效期
+    quote_validity: string | Date | null;    // 报价有效期
     quotationDate?: string;           // 向后兼容
     delivery_date?: string | Date;    // 交付日期
     currency: string;                 // 币种
@@ -38,6 +38,17 @@ export interface QuotationRecord {
     region?: string;                  // 区域
     status?: 'active' | 'expired' | 'pending' | 'cancelled';
     isValid?: boolean;                // 向后兼容
+    
+    // 新增字段以修复TypeScript错误
+    totalPrice?: number;              // 总价
+    discountedTotalPrice?: number;    // 折扣后总价
+    unitPrice?: number;               // 单价
+    detailedComponents?: string;      // 详细配件清单
+    quotationTitle?: string;          // 报价单标题
+    quotationCategory?: string;       // 报价单类别
+    projectDescription?: string;      // 项目描述
+    unit_price?: number;              // 单价（向后兼容）
+    
     endUser?: {                       // 最终用户信息
         name?: string;
         address?: string;
@@ -146,24 +157,36 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
         const result = await response.json();
 
         // 数据格式转换，保持向后兼容
-        const rawData = result.data || result; // 兼容不同的响应格式
-        const convertedData = (Array.isArray(rawData) ? rawData : []).map((item: any) => ({
+        const rawData = result.data || result;
+        const convertedData = Array.isArray(rawData) ? rawData.map(item => ({
             ...item,
             id: item._id || item.id,
-            vendor: item.supplier,           // 向后兼容
-            originalPrice: item.list_price,  // 向后兼容
-            finalPrice: item.quote_unit_price, // 向后兼容
-            discount: item.discount_rate ? item.discount_rate / 100 : null, // 转换为小数
+            // 基本信息转换
+            productName: item.quotationTitle || item.productName || item.name,
+            quotationTitle: item.quotationTitle,
+            quotationCategory: item.quotationCategory,
+            vendor: item.supplier,
+            // 价格信息转换 - 优先使用新字段
+            totalPrice: item.totalPrice || item.quote_total_price,
+            discountedTotalPrice: item.discountedTotalPrice,
+            unitPrice: item.unitPrice || item.unit_price,
+            originalPrice: item.list_price || item.totalPrice,
+            finalPrice: item.discountedTotalPrice || item.totalPrice || item.quote_unit_price,
+            discount: item.discount_rate ? item.discount_rate / 100 : null,
+            // 详细信息转换
+            detailedComponents: item.detailedComponents,
+            projectDescription: item.projectDescription,
+            productSpec: item.productSpec || item.configDetail || item.detailedComponents,
+            // 时间转换
             quotationDate: item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : 
                           item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : '',
             isValid: item.status === 'active',
-            remark: item.notes,
-            productSpec: item.configDetail || item.productSpec
-        }));
+            remark: item.notes
+        })) : [];
 
         return {
             data: convertedData,
-            total: result.total || rawData.length || 0
+            total: result.total || convertedData.length
         };
     } catch (error) {
         console.error('获取历史报价列表失败:', error);

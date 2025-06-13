@@ -12,13 +12,23 @@ const quotationSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    // 新增：报价单类别和标题
+    quotationCategory: {
+        type: String,
+        enum: ['服务器解决方案', '云服务方案', '网络设备方案', '存储解决方案', '安全设备方案', '软件系统方案', '其他'],
+        default: '其他'
+    },
+    quotationTitle: {
+        type: String,
+        trim: true
+    },
     supplier: {
         type: String,
         required: true,
         trim: true
     },
     
-    // 价格信息
+    // 价格信息 - 简化为总价模式
     list_price: {
         type: Number,
         min: 0
@@ -31,7 +41,8 @@ const quotationSchema = new mongoose.Schema({
     quantity: {
         type: Number,
         required: true,
-        min: 1
+        min: 1,
+        default: 1
     },
     discount_rate: {
         type: Number,
@@ -41,6 +52,16 @@ const quotationSchema = new mongoose.Schema({
     quote_total_price: {
         type: Number,
         required: true,
+        min: 0
+    },
+    // 新增：总价相关字段
+    totalPrice: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    discountedTotalPrice: {
+        type: Number,
         min: 0
     },
     currency: {
@@ -69,6 +90,15 @@ const quotationSchema = new mongoose.Schema({
         trim: true
     },
     productSpec: {
+        type: String,
+        trim: true
+    },
+    // 新增：详细配件和项目描述
+    detailedComponents: {
+        type: String,
+        trim: true
+    },
+    projectDescription: {
         type: String,
         trim: true
     },

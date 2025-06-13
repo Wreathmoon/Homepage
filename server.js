@@ -195,13 +195,23 @@ const QuotationSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    // 新增：报价单类别和标题
+    quotationCategory: {
+        type: String,
+        enum: ['服务器解决方案', '云服务方案', '网络设备方案', '存储解决方案', '安全设备方案', '软件系统方案', '其他'],
+        default: '其他'
+    },
+    quotationTitle: {
+        type: String,
+        trim: true
+    },
     supplier: {
         type: String,
         required: true,
         trim: true
     },
     
-    // 价格信息
+    // 价格信息 - 简化为总价模式
     list_price: {
         type: Number,
         min: 0
@@ -211,10 +221,15 @@ const QuotationSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
+    unit_price: {
+        type: Number,
+        min: 0
+    },
     quantity: {
         type: Number,
         required: true,
-        min: 1
+        min: 1,
+        default: 1
     },
     discount_rate: {
         type: Number,
@@ -224,6 +239,16 @@ const QuotationSchema = new mongoose.Schema({
     quote_total_price: {
         type: Number,
         required: true,
+        min: 0
+    },
+    // 新增：总价相关字段
+    totalPrice: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    discountedTotalPrice: {
+        type: Number,
         min: 0
     },
     currency: {
@@ -252,6 +277,15 @@ const QuotationSchema = new mongoose.Schema({
         trim: true
     },
     productSpec: {
+        type: String,
+        trim: true
+    },
+    // 新增：详细配件和项目描述
+    detailedComponents: {
+        type: String,
+        trim: true
+    },
+    projectDescription: {
         type: String,
         trim: true
     },
@@ -553,44 +587,242 @@ app.post('/api/quotations/analyze', async (req, res) => {
 
         console.log('🤖 开始AI分析...');
         
-        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，提取真实的产品报价信息。
+        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，重点识别报价单的整体信息。
 
 重要提示：
-1. 忽略表头、标题、公司信息、联系方式等非产品信息
-2. 只提取实际的产品/设备/服务的报价记录
-3. 如果某一行看起来像表头、说明文字或格式化文本，请跳过
-4. 供应商信息优先从文件头部、公司信息、签章处获取，而不是产品行中的品牌名
+1. 优先识别报价单的类别（这个报价单是关于什么的）
+2. 识别报价单的总价格（通常在底部有合计、总计、Total等字样）
+3. 不需要逐项分析每个配件，将所有配件信息放在详细配件栏中
+4. 忽略表头、标题、公司信息、联系方式等非核心信息
 
-请以JSON数组格式返回，每个产品对象包含以下字段：
+产品名称识别指南（重要）：
+请仔细识别产品的主要名称，常见位置和表示方法：
+- 文档标题或主标题中的产品名称
+- 表格中的产品名称、Product Name、Item、Description列
+- 配置清单中的主要产品型号
+- 解决方案名称或项目名称
+- 如果是多个产品的组合，使用主要产品名称或解决方案名称
+- 避免使用公司名称、联系人姓名作为产品名称
+- 如果无法确定具体产品名称，使用描述性名称如"服务器解决方案"、"网络设备方案"等
 
-产品基本信息：
-- productName: 产品的具体名称（如"戴尔PowerEdge R750服务器"、"思科Catalyst 9300交换机"等，避免提取"FACTORY INTEGRATED"、"ITEM"、"产品"等通用词汇）
-- supplier: 供应商/经销商名称（从文档抬头、公司信息或签名处获取，不是产品品牌）
+供应商识别指南（重要）：
+正确区分供应商和设备制造商：
+- 供应商(Supplier/Vendor)：实际提供报价的公司、经销商、代理商
+- 设备商/制造商(Manufacturer)：产品品牌方（如Dell、HP、Cisco、IBM等）
+
+识别规则：
+- 优先识别报价单抬头、联系信息、签名处的公司名称作为供应商
+- Dell、HP、Cisco、IBM、Lenovo、Microsoft、VMware、Oracle、Intel、AMD等是设备制造商，不是供应商
+- 如果只能识别到设备制造商，供应商字段留空或标注"未识别"
+
+价格术语识别指南（重要）：
+不同供应商使用不同的价格术语，请仔细识别以下常见术语：
+
+折扣前价格（原价）的常见术语：
+- List Price / LP / 列表价格 / Total List Price
+- MSRP (Manufacturer's Suggested Retail Price)
+- Retail Price / 零售价
+- Standard Price / 标准价格
+- Original Price / 原价
+- Catalog Price / 目录价格
+- Full Price / 全价
+- RRP (Recommended Retail Price)
+
+折扣后价格（实际价格）的常见术语：
+- Customer Price / Consumer Price / 客户价格 / Total Customer Price
+- Net Price / 净价
+- Final Price / 最终价格
+- Discounted Price / 折扣价格
+- Special Price / 特价
+- Quote Price / 报价
+- Deal Price / 成交价
+- Your Price / 您的价格
+- Selling Price / 销售价格
+- After Discount Price / 折后价格
+
+⚠️ 特别重要的价格识别规则：
+1. 如果文档中同时出现"List Price"和"Customer Price"，则：
+   - List Price = 折扣前总价 (totalPrice)
+   - Customer Price = 折扣后总价 (discountedTotalPrice)
+
+2. 如果文档中出现"Total List Price"和"Total Customer Price"，则：
+   - Total List Price = 折扣前总价 (totalPrice)
+   - Total Customer Price = 折扣后总价 (discountedTotalPrice)
+
+3. 如果文档中显示折扣率（如"LP Discount %"、"Discount %"），请直接提取该数值
+
+4. 常见的价格结构模式：
+   - List Price → Discount % → Customer Price
+   - Standard Price → Special Discount → Final Price
+   - MSRP → Your Discount → Your Price
+
+5. 运费和税费处理：
+   - 如果有"incl. freight charges"或"including shipping"，这通常是最终的到手价
+   - 基础Customer Price + 运费 = 最终到手价
+
+单价相关术语：
+- Unit Price / 单价
+- Each / 每个
+- Per Unit / 每单位
+- Item Price / 项目价格
+- Individual Price / 单个价格
+
+总价相关术语：
+- Total / 总计
+- Grand Total / 总合计
+- Subtotal / 小计
+- Amount / 金额
+- Sum / 总和
+- Total Amount / 总金额
+- Final Amount / 最终金额
+
+⚠️ 重要：绝对禁止进行任何价格计算！
+- 不要用总价除以数量计算单价
+- 不要用单价乘以数量计算总价
+- 不要计算折扣率
+- 只识别文档中明确标注的价格数值
+- 如果某个价格字段在文档中没有明确标注，请留空
+
+币种识别指南（重要）：
+供应商使用各种方式表示币种，请仔细识别以下常见表示方法：
+
+币种符号：
+- $ = USD (美元)
+- € = EUR (欧元)
+- £ = GBP (英镑)
+- ¥ = CNY (人民币) 或 JPY (日元，需根据供应商地区判断)
+- ₹ = INR (印度卢比)
+- ₩ = KRW (韩元)
+- C$ = CAD (加拿大元)
+- A$ = AUD (澳大利亚元)
+- S$ = SGD (新加坡元)
+- HK$ = HKD (港币)
+
+币种代码和表达方式：
+- USD / US$ / US Dollar / 美元
+- EUR / Euro / 欧元
+- GBP / British Pound / 英镑
+- CNY / RMB / Chinese Yuan / 人民币
+- JPY / Japanese Yen / 日元
+- INR / Indian Rupee / 印度卢比
+- KRW / Korean Won / 韩元
+- CAD / Canadian Dollar / 加拿大元
+- AUD / Australian Dollar / 澳大利亚元
+- SGD / Singapore Dollar / 新加坡元
+- HKD / Hong Kong Dollar / 港币
+- CHF / Swiss Franc / 瑞士法郎
+- SEK / Swedish Krona / 瑞典克朗
+- NOK / Norwegian Krone / 挪威克朗
+- DKK / Danish Krone / 丹麦克朗
+
+特殊表达方式：
+- "IN USD" / "IN GBP" / "IN EUR" = 以某种货币计价
+- "All prices in USD" = 所有价格以美元计价
+- "Currency: EUR" = 货币：欧元
+- "Quoted in GBP" = 以英镑报价
+- "Price shown in $" = 价格以美元显示
+- 如果只有符号没有明确说明，根据供应商地区推断（如美国供应商的$通常是USD）
+
+数量识别指南（重要）：
+仔细识别产品数量，常见表示方法：
+- Qty / Quantity / 数量 / 件数 / 台数 / 个数 / 套数
+- Units / Pieces / Sets / 单位 / 件 / 台 / 个 / 套
+- 数字后跟单位：如 "5 units", "10 pieces", "3台", "2套"
+- 表格中的数量列
+- 如果找不到明确的数量信息，默认为1
+
+日期识别指南（重要）：
+请在文档中仔细搜索真实的日期信息，不要使用当前日期：
+
+报价日期的常见表示：
+- Quote Date / Quotation Date / 报价日期
+- Date / 日期
+- Issue Date / 发布日期
+- Created Date / 创建日期
+- 文档顶部的日期信息
+- 表格中的日期列
+
+报价有效期的常见表示：
+- Valid Until / Valid Through / 有效期至
+- Expiry Date / Expiration Date / 到期日期
+- Quote Validity / 报价有效期
+- Valid for X days / 有效X天
+- "This quote is valid until..." / "本报价有效期至..."
+
+日期格式识别：
+- YYYY-MM-DD (如: 2024-03-15)
+- MM/DD/YYYY (如: 03/15/2024)
+- DD/MM/YYYY (如: 15/03/2024)
+- DD-MM-YYYY (如: 15-03-2024)
+- Month DD, YYYY (如: March 15, 2024)
+- DD Month YYYY (如: 15 March 2024)
+- 中文格式：2024年3月15日
+
+重要：如果在文档中找不到明确的日期信息，请将相应的日期字段留空（null），不要使用当前日期或假设的日期。
+
+请以JSON数组格式返回，通常一个报价单只返回一个对象，包含以下字段：
+
+基本信息：
+- quotationCategory: 报价单类别（服务器解决方案、云服务方案、网络设备方案、存储解决方案、安全设备方案、软件系统方案、其他）
+- quotationTitle: 主要产品名称或解决方案名称（这是最重要的字段，请仔细识别）
+- supplier: 供应商/经销商名称（从文档抬头、公司信息或签名处获取，不能是产品品牌）
 - region: 地区（美国、中国、韩国、日本、芬兰、瑞典、荷兰、德国、法国、印度、以色列、加拿大、澳大利亚、台湾、英国、瑞士、新加坡、其他）
-- product_category: 产品类别（服务器、存储设备、网络设备、安全设备、软件系统、云服务、其他）
 
-价格信息：
-- list_price: 列表价格/原价（如果有）
-- quote_unit_price: 实际报价单价（必填，数字）
-- quantity: 数量（必填，大于0的整数）
-- discount_rate: 折扣率（0-100之间的数字，如10表示10%折扣）
-- quote_total_price: 报价总价（单价×数量）
-- currency: 货币（CNY/USD/EUR等）
+价格和数量信息（请根据上述术语指南准确识别，禁止计算）：
+- totalPrice: 折扣前总价（从List Price、MSRP、Retail Price等术语识别，如果文档中没有明确标注请留空）
+- discountedTotalPrice: 折扣后总价（从Customer Price、Net Price、Final Price等术语识别）
+- unitPrice: 单价（直接从文档中的Unit Price、单价等字段读取，禁止计算）
+- quantity: 数量（仔细识别产品数量，常见表示：Qty、Quantity、数量、件数、台数、个数等，默认为1）
+- currency: 货币代码（请根据上述币种识别指南准确识别，如USD、EUR、GBP、CNY等，优先使用标准3字母代码）
+- discount_rate: 整体折扣率（只有当文档中明确标注折扣率时才填写，禁止计算）
 
-时间和备注：
-- quote_validity: 报价有效期（YYYY-MM-DD格式）
-- delivery_date: 交付日期（如果有）
+详细信息：
+- detailedComponents: 详细配件清单（将所有产品/配件信息整合在这里，包括型号、规格、数量等）
+- quote_validity: 报价有效期（YYYY-MM-DD格式，请在文档中搜索真实日期，如果找不到请留空null）
+- delivery_date: 交付日期（如果有，YYYY-MM-DD格式）
 - notes: 备注信息
-- configDetail: 产品配置详情
-- productSpec: 产品规格描述
 
 数据质量要求：
-- productName不能是"FACTORY"、"INTEGRATED"、"ITEM"、"产品"、"设备"等通用词
-- supplier不能是产品品牌（如"HPE"、"DELL"、"Cisco"），应该是经销商/供应商公司名
-- 如果无法识别有效的产品名称，请跳过该条记录
-- 如果价格为0或无法识别，请跳过该条记录
+- quotationCategory必须从枚举值中选择，如果无法确定则选择"其他"
+- quotationTitle是最重要的字段，必须仔细识别产品名称
+- totalPrice、discountedTotalPrice、unitPrice必须是数字，直接从文档读取，禁止计算
+- quantity必须是正整数，仔细识别数量信息，如果找不到明确数量则默认为1
+- 绝对禁止任何价格计算，包括单价计算、总价计算、折扣率计算
+- supplier不能是产品品牌（如Dell、HP、Cisco等），应该是经销商/供应商公司名
+- detailedComponents应该包含所有产品配件的详细信息，格式清晰易读
+- 只有当文档中明确标注折扣率时才填写discount_rate字段
+- quote_validity字段：请在文档中仔细搜索真实的报价有效期日期，如果找不到请设为null，不要使用当前日期
 
-请直接返回JSON数组，不要包含其他解释文字。
+示例说明：
+如果表格显示：
+- 产品：Dell VSAN-RN R760，数量：3，单价：$15,895，小计：$47,685
+- 运费：$5,100，税费：$9,060，总计：$61,845
+- 报价方：ABC Technology Company
+
+则应提取：
+- quotationTitle: "Dell VSAN-RN R760"（产品名称）
+- supplier: "ABC Technology Company"（供应商，不是Dell）
+- unitPrice: 15895（直接读取单价，不计算）
+- discountedTotalPrice: 61845（最终总金额）
+- quantity: 3
+- detailedComponents: "Dell VSAN-RN R760 × 3台，运费：$5,100，税费：$9,060"
+
+示例2 - List Price和Customer Price结构：
+如果表格显示：
+- Total List Price: £40,656.71
+- Total LP Discount %: 32.11%
+- Total Customer Price: £27,602.89
+- Freight charge: £7.50
+- Total Customer price incl. freight charges: £27,610.39
+
+则应提取：
+- totalPrice: 40656.71（Total List Price，折扣前总价）
+- discountedTotalPrice: 27610.39（包含运费的最终价格）
+- discount_rate: 32.11（直接读取折扣率）
+- currency: "GBP"（英镑）
+- notes: "基础Customer Price: £27,602.89, 运费: £7.50"
+
+请严格按照以上要求分析，绝对禁止进行任何价格计算。请直接返回JSON数组，不要包含其他解释文字。
 
 文件内容：
 ${content}`;
@@ -617,8 +849,9 @@ ${content}`;
         // 确保返回的是数组
         let products = Array.isArray(parsedData) ? parsedData : [parsedData];
         
-        // 验证和标准化数据
-        const validatedProducts = products.map(product => {
+        // 处理AI分析结果
+        const processedProducts = products.map(
+        (product => {
             // 价格字段清理函数
             const cleanPrice = (value) => {
                 if (value === null || value === undefined) return null;
@@ -641,11 +874,46 @@ ${content}`;
                 return typeof value === 'number' ? Math.max(1, Math.floor(value)) : 1;
             };
             
-            const listPrice = cleanPrice(product.list_price);
-            const unitPrice = cleanPrice(product.quote_unit_price) || 0;
-            const quantity = cleanQuantity(product.quantity);
-            const discountRate = cleanPrice(product.discount_rate);
-            const totalPrice = cleanPrice(product.quote_total_price) || (unitPrice * quantity);
+            // 新的智能价格处理逻辑
+            const originalTotalPrice = cleanPrice(product.totalPrice) || 0; // 折扣前总价
+            const discountedTotalPrice = cleanPrice(product.discountedTotalPrice); // 折扣后总价
+            const unitPrice = cleanPrice(product.unitPrice); // 单价
+            const quantity = cleanQuantity(product.quantity); // 数量
+            let discountRate = cleanPrice(product.discount_rate); // AI识别的折扣率
+            
+            // 智能价格处理：
+            // 1. 如果有折扣前和折扣后价格，自动计算折扣率
+            // 2. 如果只有一个价格，根据AI的判断决定是折扣前还是折扣后
+            // 3. 智能计算单价：如果有总价和数量，自动计算单价
+            let finalTotalPrice = originalTotalPrice; // 最终的折扣前价格
+            let finalDiscountedPrice = discountedTotalPrice; // 最终的折扣后价格
+            let finalUnitPrice = unitPrice; // 最终的单价
+            
+            // 如果有总价和数量，但没有单价，自动计算单价
+            if (!finalUnitPrice && finalTotalPrice > 0 && quantity > 0) {
+                finalUnitPrice = Math.round((finalTotalPrice / quantity) * 100) / 100; // 保留两位小数
+            }
+            
+            // 如果有单价和数量，但没有总价，自动计算总价
+            if (!finalTotalPrice && finalUnitPrice > 0 && quantity > 0) {
+                finalTotalPrice = finalUnitPrice * quantity;
+            }
+            
+            // 如果有折扣前和折扣后价格，且折扣后价格小于折扣前价格，计算折扣率
+            if (finalTotalPrice > 0 && finalDiscountedPrice && finalDiscountedPrice < finalTotalPrice) {
+                if (!discountRate) {
+                    // 自动计算折扣率：(原价 - 折扣价) / 原价 * 100
+                    discountRate = Math.round(((finalTotalPrice - finalDiscountedPrice) / finalTotalPrice) * 100);
+                }
+            } 
+            // 如果只有折扣后价格，将其作为最终价格
+            else if (!finalTotalPrice && finalDiscountedPrice) {
+                finalTotalPrice = finalDiscountedPrice; // 将折扣后价格作为总价显示
+            }
+            
+            // 为了向后兼容，保留原有字段
+            const listPrice = finalTotalPrice; // 使用折扣前价格作为列表价
+            const quoteUnitPrice = finalDiscountedPrice ? Math.round((finalDiscountedPrice / quantity) * 100) / 100 : finalUnitPrice; // 优先使用折扣后单价
             
             // 获取文件信息
             let fileSize = 0;
@@ -661,42 +929,101 @@ ${content}`;
             // 根据文件扩展名确定MIME类型
             const ext = fileName.toLowerCase().split('.').pop();
             const mimeTypes = {
-                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'xls': 'application/vnd.ms-excel',
                 'pdf': 'application/pdf',
-                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'doc': 'application/msword',
-                'csv': 'text/csv',
-                'txt': 'text/plain'
+                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'xls': 'application/vnd.ms-excel',
+                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'txt': 'text/plain',
+                'csv': 'text/csv'
             };
-            mimeType = mimeTypes[ext] || 'application/octet-stream';
+            mimeType = mimeTypes[ext] || mimeType;
             
-            console.log(`🔧 正在为产品 "${product.productName}" 构建originalFile:`, {
-                fileName,
-                filePath,
-                fileSize,
-                mimeType,
-                fileHash
-            });
+            // 处理详细配件清单 - 确保转换为字符串
+            const formatDetailedComponents = (components) => {
+                if (!components) return '';
+                if (typeof components === 'string') return components;
+                if (typeof components === 'object') {
+                    if (Array.isArray(components)) {
+                        return components.map(item => {
+                            if (typeof item === 'string') return item;
+                            if (typeof item === 'object') {
+                                return Object.entries(item).map(([key, value]) => `${key}: ${value}`).join(', ');
+                            }
+                            return String(item);
+                        }).join('\n');
+                    } else {
+                        return Object.entries(components).map(([key, value]) => `${key}: ${value}`).join('\n');
+                    }
+                }
+                return String(components);
+            };
             
-            const validated = {
-                name: product.productName || '未知产品',
-                productName: product.productName || '未知产品',
+            // 确保category字段有值并映射到正确的枚举值
+            if (!product.quotationCategory) {
+                product.quotationCategory = '其他';
+            } else {
+                // 映射类别名称到MongoDB枚举值
+                const categoryMapping = {
+                    '服务器解决方案': '服务器',
+                    '存储解决方案': '存储设备', 
+                    '网络设备方案': '网络设备',
+                    '安全设备方案': '安全设备',
+                    '软件系统方案': '软件系统',
+                    '云服务方案': '云服务'
+                };
+                
+                product.quotationCategory = categoryMapping[product.quotationCategory] || product.quotationCategory;
+                
+                // 确保最终值在有效枚举范围内
+                const validCategories = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他'];
+                if (!validCategories.includes(product.quotationCategory)) {
+                    product.quotationCategory = '其他';
+                }
+            }
+            
+            return {
+                // 基本信息
+                name: product.quotationTitle || product.productName || '报价单',
+                productName: product.quotationTitle || product.productName || '报价单',
+                quotationCategory: product.quotationCategory || '其他',
+                quotationTitle: product.quotationTitle || '',
                 supplier: product.supplier || '未知供应商',
                 region: product.region || '其他',
-                product_category: product.product_category || '其他',
+                
+                // 价格信息 - 新结构
+                totalPrice: finalTotalPrice,
+                discountedTotalPrice: finalDiscountedPrice,
+                unitPrice: finalUnitPrice,
+                
+                // 价格信息 - 向后兼容
                 list_price: listPrice,
-                quote_unit_price: unitPrice,
+                quote_unit_price: quoteUnitPrice,
+                unit_price: finalUnitPrice,
                 quantity: quantity,
                 discount_rate: discountRate,
-                quote_total_price: totalPrice,
+                quote_total_price: finalDiscountedPrice || finalTotalPrice,
                 currency: product.currency || 'EUR',
-                quote_validity: product.quote_validity ? new Date(product.quote_validity) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                delivery_date: product.delivery_date ? new Date(product.delivery_date) : null,
+                
+                // 详细信息
+                detailedComponents: formatDetailedComponents(product.detailedComponents),
                 notes: product.notes || '',
                 configDetail: product.configDetail || '',
-                productSpec: product.productSpec || '',
-                category: product.product_category || '其他',
+                productSpec: product.projectDescription || '',
+                
+                // 时间信息
+                quote_validity: product.quote_validity ? new Date(product.quote_validity) : null,
+                delivery_date: product.delivery_date ? new Date(product.delivery_date) : null,
+                
+                // 分类信息
+                category: product.quotationCategory === '服务器解决方案' ? '服务器' :
+                         product.quotationCategory === '存储解决方案' ? '存储设备' :
+                         product.quotationCategory === '网络设备方案' ? '网络设备' :
+                         product.quotationCategory === '安全设备方案' ? '安全设备' :
+                         product.quotationCategory === '软件系统方案' ? '软件系统' :
+                         product.quotationCategory === '云服务方案' ? '云服务' : '其他',
+                
+                // 状态和文件信息
                 status: 'active',
                 originalFile: {
                     filename: fileName,
@@ -704,19 +1031,16 @@ ${content}`;
                     path: filePath,
                     fileSize: fileSize,
                     mimetype: mimeType,
-                    fileHash: fileHash,
                     uploadedAt: new Date()
                 }
             };
-            
-            return validated;
-        });
+        }));
 
-        console.log(`✅ 数据验证完成，产品数量: ${validatedProducts.length}`);
+        console.log(`✅ 数据验证完成，产品数量: ${processedProducts.length}`);
         
         // 🔍 检测重复
         console.log('🔍 开始检测重复...');
-        const duplicates = await checkDuplicates(filePath, fileName, validatedProducts);
+        const duplicates = await checkDuplicates(filePath, fileName, processedProducts);
         
         // 如果检测到重复，返回重复信息供用户选择
         if (duplicates.existingFile || duplicates.productDuplicates.length > 0) {
@@ -725,7 +1049,7 @@ ${content}`;
                 success: true,
                 isDuplicate: true,
                 duplicateInfo: duplicates,
-                validatedProducts: validatedProducts,
+                validatedProducts: processedProducts,
                 fileInfo: {
                     fileName: fileName,
                     filePath: filePath,
@@ -740,8 +1064,8 @@ ${content}`;
         res.json({
             success: true,
             isDuplicate: false,
-            products: validatedProducts,
-            message: `成功分析 ${validatedProducts.length} 个产品`
+            products: processedProducts,
+            message: `成功分析 ${processedProducts.length} 个产品`
         });
         
     } catch (error) {
@@ -1140,6 +1464,55 @@ app.post('/api/quotations/confirm-save', async (req, res) => {
             cleaned.quote_total_price = cleaned.quote_unit_price * cleaned.quantity;
         }
         
+        // 确保totalPrice字段有值（新增的必需字段）
+        if (cleaned.totalPrice === null || cleaned.totalPrice === undefined) {
+            cleaned.totalPrice = cleaned.quote_total_price || cleaned.quote_unit_price * cleaned.quantity;
+        }
+        
+        // 确保quote_validity字段有值
+        if (!cleaned.quote_validity) {
+            // 如果没有报价有效期，设置为30天后
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + 30);
+            cleaned.quote_validity = futureDate;
+        } else if (typeof cleaned.quote_validity === 'string') {
+            // 如果是字符串，转换为Date对象
+            cleaned.quote_validity = new Date(cleaned.quote_validity);
+        }
+        
+        // 确保currency字段有值
+        if (!cleaned.currency) {
+            cleaned.currency = 'CNY';
+        }
+        
+        // 确保category字段有值并映射到正确的枚举值
+        if (!cleaned.category) {
+            cleaned.category = '其他';
+        } else {
+            // 映射类别名称到MongoDB枚举值
+            const categoryMapping = {
+                '服务器解决方案': '服务器',
+                '存储解决方案': '存储设备', 
+                '网络设备方案': '网络设备',
+                '安全设备方案': '安全设备',
+                '软件系统方案': '软件系统',
+                '云服务方案': '云服务'
+            };
+            
+            cleaned.category = categoryMapping[cleaned.category] || cleaned.category;
+            
+            // 确保最终值在有效枚举范围内
+            const validCategories = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他'];
+            if (!validCategories.includes(cleaned.category)) {
+                cleaned.category = '其他';
+            }
+        }
+        
+        // 确保region字段有值
+        if (!cleaned.region) {
+            cleaned.region = '其他';
+        }
+        
         return cleaned;
     };
 
@@ -1154,12 +1527,35 @@ app.post('/api/quotations/confirm-save', async (req, res) => {
                 
                 console.log(`🧹 清理后的产品数据:`, {
                     productName: cleanedProductData.productName,
+                    supplier: cleanedProductData.supplier,
                     list_price: cleanedProductData.list_price,
                     quote_unit_price: cleanedProductData.quote_unit_price,
                     quote_total_price: cleanedProductData.quote_total_price,
+                    totalPrice: cleanedProductData.totalPrice,
                     quantity: cleanedProductData.quantity,
+                    currency: cleanedProductData.currency,
+                    quote_validity: cleanedProductData.quote_validity,
+                    category: cleanedProductData.category,
+                    region: cleanedProductData.region,
                     hasOriginalFile: !!cleanedProductData.originalFile
                 });
+                
+                // 验证必需字段
+                const requiredFields = ['productName', 'supplier', 'quote_unit_price', 'quote_total_price', 'totalPrice', 'quote_validity'];
+                const missingFields = requiredFields.filter(field => 
+                    cleanedProductData[field] === null || 
+                    cleanedProductData[field] === undefined || 
+                    cleanedProductData[field] === ''
+                );
+                
+                if (missingFields.length > 0) {
+                    console.error(`❌ 缺少必需字段: ${missingFields.join(', ')}`);
+                    errors.push({
+                        productName: productData.productName,
+                        error: `缺少必需字段: ${missingFields.join(', ')}`
+                    });
+                    continue;
+                }
                 
                 // 如果选择跳过重复，检查是否已存在相似产品
                 if (skipDuplicates) {

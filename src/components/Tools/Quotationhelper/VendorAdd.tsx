@@ -124,7 +124,7 @@ const VendorAdd: React.FC = () => {
             console.log('🔄 处理后的数据:', submitData);
             
             // 调用API服务器的供应商添加接口
-            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3002';
             const response = await fetch(`${apiServerUrl}/api/vendors`, {
                 method: 'POST',
                 headers: {

@@ -4,6 +4,8 @@
 /node_modules
 /.pnp
 .pnp.js
+server/node_modules/
+server/package-lock.json
 
 # testing
 /coverage
@@ -30,10 +32,6 @@ yarn-error.log*
 # Upload directory
 /uploads
 uploads/
-
-# Server directory (redundant backend)
-/server
-server/
 
 # Debug files
 debug-*.js
@@ -77,3 +75,16 @@ CLEANUP_SUMMARY.md
 *.swp
 *.swo
 *~
+
+# OS specific files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Lock files
+package-lock.json
+yarn.lock

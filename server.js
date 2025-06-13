@@ -286,7 +286,8 @@ const QuotationSchema = new mongoose.Schema({
     },
     region: {
         type: String,
-        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
+        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'],
+        default: '其他'
     },
     
     // 状态信息
@@ -339,7 +340,8 @@ const VendorSchema = new mongoose.Schema({
     }],
     region: {
         type: String,
-        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
+        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'],
+        default: '其他'
     },
     contact: {
         type: String,
@@ -382,8 +384,9 @@ const VendorSchema = new mongoose.Schema({
     },
     country: {
         type: String,
-        required: true,
-        trim: true
+        required: false,
+        trim: true,
+        default: '其他'
     },
     website: {
         type: String,
@@ -1333,7 +1336,27 @@ app.get('/api/vendors/:id', async (req, res) => {
 // API: 创建新供应商
 app.post('/api/vendors', async (req, res) => {
     try {
-        const vendor = new Vendor(req.body);
+        // 数据清理
+        const vendorData = { ...req.body };
+        
+        // 确保region字段有有效值
+        if (!vendorData.region || vendorData.region === '') {
+            vendorData.region = '其他';
+        }
+        
+        // 确保country字段有有效值
+        if (!vendorData.country || vendorData.country === '') {
+            vendorData.country = vendorData.region; // 使用region作为country
+        }
+        
+        // 确保必需字段有默认值
+        if (!vendorData.type) {
+            vendorData.type = 'HARDWARE';
+        }
+        
+        console.log('🔧 清理后的供应商数据:', vendorData);
+        
+        const vendor = new Vendor(vendorData);
         const savedVendor = await vendor.save();
         
         res.status(201).json({

@@ -1,13 +1,14 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import { Toast } from '@douyinfe/semi-ui';
 
+// API基础URL配置
+const API_BASE_URL = process.env.REACT_APP_API_URL 
+    ? process.env.REACT_APP_API_URL + '/api' 
+    : 'http://localhost:3002/api'  // 修改为3002端口
+
 // 创建 axios 实例
 const request = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || (
-        process.env.NODE_ENV === 'production' 
-            ? '/api'  // 生产环境使用相对路径
-            : 'http://localhost:3001/api'  // 开发环境使用localhost
-    ),
+    baseURL: API_BASE_URL,
     timeout: 30000, // 增加到30秒
     headers: {
         'Content-Type': 'application/json',

@@ -13,25 +13,16 @@ const xlsx = require('xlsx');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 
-// 初始化元景大模型配置 - 使用70B强化版模型
+// 初始化元景大模型配置
 const YUANJING_CONFIG = {
     apiKey: process.env.YUANJING_API_KEY || 'sk-59454f95d79b4d5d9ad8d5d9d6237bc1',
-    model: process.env.YUANJING_MODEL || 'yuanjing-70b-chat', // 使用更强大的70B模型
-    baseUrl: process.env.YUANJING_API_ENDPOINT || 'https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1' // 正确的API端点
+    model: process.env.YUANJING_MODEL || 'yuanjing-70b-chat',
+    baseUrl: process.env.YUANJING_API_ENDPOINT || 'https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1'
 };
 
-// 备用AI服务配置 (可以配置为Azure OpenAI、百度文心等)
-const BACKUP_AI_CONFIG = {
-    provider: process.env.BACKUP_AI_PROVIDER || 'azure', // azure, baidu, zhipu等
-    apiKey: process.env.BACKUP_AI_API_KEY || '',
-    endpoint: process.env.BACKUP_AI_ENDPOINT || '',
-    model: process.env.BACKUP_AI_MODEL || 'gpt-3.5-turbo'
-};
-
-// 元景AI调用函数 - 优化70B模型支持
+// 元景AI调用函数
 async function callYuanJingAI(prompt) {
     console.log('🤖 正在调用元景70B大模型...');
-    console.log(`📝 Prompt长度: ${prompt.length} 字符`);
     
     try {
         const startTime = Date.now();
@@ -57,7 +48,7 @@ async function callYuanJingAI(prompt) {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                timeout: 180000 // 3分钟超时，70B模型需要更多时间
+                timeout: 180000 // 3分钟超时
             }
         );
 
@@ -65,13 +56,11 @@ async function callYuanJingAI(prompt) {
         const duration = endTime - startTime;
         
         console.log(`✅ 元景70B模型调用成功！耗时: ${duration}ms`);
-        console.log(`📊 Token使用: 输入${response.data.usage.prompt_tokens}, 输出${response.data.usage.completion_tokens}, 总计${response.data.usage.total_tokens}`);
         
         // 安全地提取响应内容
         if (response.data && response.data.choices && response.data.choices.length > 0) {
             const content = response.data.choices[0].message.content;
             if (content && content.trim()) {
-                console.log(`📤 AI响应长度: ${content.length} 字符`);
                 return content;
             } else {
                 throw new Error('AI返回内容为空');
@@ -81,94 +70,26 @@ async function callYuanJingAI(prompt) {
         }
         
     } catch (error) {
-        const errorInfo = {
+        console.error('❌ 元景70B模型调用失败:', {
             status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data,
             message: error.message,
             code: error.code
-        };
-        
-        console.error('❌ 元景70B模型调用失败:', errorInfo);
+        });
         
         // 详细的错误分类和处理
         if (error.code === 'ECONNABORTED') {
-            throw new Error('AI调用超时，70B模型处理时间较长，请稍后重试');
+            throw new Error('AI调用超时，请稍后重试');
         } else if (error.response?.status === 422) {
-            throw new Error(`AI调用参数错误: ${error.response.data?.msg || 'Unavailable'} (代码: ${error.response.data?.code || '14'})`);
+            throw new Error(`AI调用参数错误: ${error.response.data?.msg || 'Unavailable'}`);
         } else if (error.response?.status === 401) {
             throw new Error('AI API密钥无效或已过期');
         } else if (error.response?.status === 429) {
             throw new Error('AI调用频率超限，请稍后重试');
         } else if (error.response?.status >= 500) {
-            throw new Error(`AI服务器内部错误 (${error.response.status})，请稍后重试`);
+            throw new Error(`AI服务器内部错误，请稍后重试`);
         } else {
             throw new Error(`AI调用失败: ${error.message}`);
         }
-    }
-}
-
-// 智能AI调用函数 - 自动切换到可用的AI服务
-async function callAIService(prompt) {
-    console.log('🧠 开始智能AI分析...');
-    
-    // 首先尝试元景大模型
-    try {
-        console.log('🎯 尝试使用元景大模型...');
-        return await callYuanJingAI(prompt);
-    } catch (error) {
-        console.warn('⚠️ 元景大模型不可用，尝试备用服务:', error.message);
-        
-        // 如果元景失败，尝试备用AI服务
-        if (BACKUP_AI_CONFIG.apiKey && BACKUP_AI_CONFIG.provider === 'azure') {
-            try {
-                console.log('🔄 切换到Azure OpenAI...');
-                return await callAzureOpenAI(prompt);
-            } catch (backupError) {
-                console.error('❌ 备用AI服务也失败:', backupError.message);
-            }
-        }
-        
-        // 如果所有AI服务都失败，返回默认错误
-        throw new Error('所有AI服务都不可用，请检查配置或稍后重试');
-    }
-}
-
-// Azure OpenAI备用服务
-async function callAzureOpenAI(prompt) {
-    if (!BACKUP_AI_CONFIG.apiKey || !BACKUP_AI_CONFIG.endpoint) {
-        throw new Error('Azure OpenAI配置不完整');
-    }
-    
-    console.log('🌟 正在调用Azure OpenAI...');
-    
-    try {
-        const response = await axios.post(
-            `${BACKUP_AI_CONFIG.endpoint}/openai/deployments/${BACKUP_AI_CONFIG.model}/chat/completions?api-version=2024-02-15-preview`,
-            {
-                messages: [
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ],
-                temperature: 0.3,
-                max_tokens: 4000
-            },
-            {
-                headers: {
-                    'api-key': BACKUP_AI_CONFIG.apiKey,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 60000
-            }
-        );
-
-        console.log('✅ Azure OpenAI调用成功');
-        return response.data.choices[0].message.content;
-    } catch (error) {
-        console.error('❌ Azure OpenAI调用失败:', error.message);
-        throw error;
     }
 }
 
@@ -399,6 +320,108 @@ const QuotationSchema = new mongoose.Schema({
 
 const Quotation = mongoose.model('Quotation', QuotationSchema);
 
+// Vendor模型定义
+const VendorSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    code: {
+        type: String,
+        unique: true,
+        required: true,
+        trim: true
+    },
+    category: [{
+        type: String,
+        enum: ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他']
+    }],
+    region: {
+        type: String,
+        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
+    },
+    contact: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    phone: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    email: {
+        type: String,
+        required: true,
+        trim: true,
+        lowercase: true
+    },
+    address: {
+        type: String,
+        trim: true
+    },
+    status: {
+        type: String,
+        enum: ['active', 'inactive'],
+        default: 'active'
+    },
+    level: {
+        type: String,
+        enum: ['A', 'B', 'C'],
+        default: 'B'
+    },
+    remarks: {
+        type: String,
+        trim: true
+    },
+    type: {
+        type: String,
+        enum: ['HARDWARE', 'SOFTWARE', 'SERVICE'],
+        required: true
+    },
+    country: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    website: {
+        type: String,
+        trim: true
+    },
+    brands: [{
+        type: String,
+        trim: true
+    }],
+    isGeneralAgent: {
+        type: Boolean,
+        default: false
+    },
+    isAgent: {
+        type: Boolean,
+        default: false
+    },
+    account: {
+        type: String,
+        trim: true
+    },
+    password: {
+        type: String,
+        trim: true
+    }
+}, {
+    timestamps: true
+});
+
+// 创建索引
+VendorSchema.index({ name: 1 });
+VendorSchema.index({ country: 1 });
+VendorSchema.index({ type: 1 });
+VendorSchema.index({ category: 1 });
+VendorSchema.index({ brands: 1 });
+
+const Vendor = mongoose.model('Vendor', VendorSchema);
+
 // 创建uploads目录
 const createUploadsDir = async () => {
     try {
@@ -472,13 +495,7 @@ app.post('/api/quotations/upload', upload.single('file'), async (req, res) => {
 
 // API 2: 分析已上传的文件
 app.post('/api/quotations/analyze', async (req, res) => {
-    console.log('🔍 收到分析请求');
-    
     const { fileName, filePath } = req.body;
-    
-    console.log('📋 请求参数:');
-    console.log(`   fileName: ${fileName}`);
-    console.log(`   filePath: ${filePath}`);
     
     if (!fileName || !filePath) {
         return res.status(400).json({ error: '缺少文件信息' });
@@ -489,7 +506,6 @@ app.post('/api/quotations/analyze', async (req, res) => {
         
         // 计算文件hash
         const fileHash = await calculateFileHash(filePath);
-        console.log(`🔍 文件Hash: ${fileHash}`);
         
         // 检查是否有相同hash的文件已分析过
         const existingFileRecord = await Quotation.findOne({
@@ -497,7 +513,6 @@ app.post('/api/quotations/analyze', async (req, res) => {
         });
         
         if (existingFileRecord) {
-            console.log('⚠️ 检测到相同文件已存在');
             return res.json({
                 success: true,
                 isDuplicate: true,
@@ -522,19 +537,15 @@ app.post('/api/quotations/analyze', async (req, res) => {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             content = xlsx.utils.sheet_to_csv(worksheet);
-            console.log('📊 Excel文件已读取');
         } else if (fileName.toLowerCase().includes('.pdf')) {
             const dataBuffer = await fs.readFile(fullPath);
             const data = await pdf(dataBuffer);
             content = data.text;
-            console.log('📄 PDF文件已读取');
         } else if (fileName.toLowerCase().includes('.docx') || fileName.toLowerCase().includes('.doc')) {
             const result = await mammoth.extractRawText({ path: fullPath });
             content = result.value;
-            console.log('📝 Word文档已读取');
         } else {
             content = await fs.readFile(fullPath, 'utf8');
-            console.log('📄 文本文件已读取');
         }
 
         console.log('🤖 开始AI分析...');
@@ -581,7 +592,7 @@ app.post('/api/quotations/analyze', async (req, res) => {
 文件内容：
 ${content}`;
 
-        const result = await callAIService(prompt);
+        const result = await callYuanJingAI(prompt);
         let text = result;
         
         console.log('🤖 AI原始回复:', text);
@@ -1196,8 +1207,305 @@ app.post('/api/quotations/confirm-save', async (req, res) => {
     }
 });
 
-// API路由
-app.use('/api', require('./server/routes'));
+// API: 获取供应商列表
+app.get('/api/vendors', async (req, res) => {
+    try {
+        const {
+            page = 1,
+            pageSize = 10,
+            name,
+            category,
+            region,
+            status,
+            type,
+            keyword,
+            isGeneralAgent,
+            isAgent
+        } = req.query;
+
+        // 构建查询条件
+        const filter = {};
+        
+        if (name) {
+            filter.name = { $regex: name, $options: 'i' };
+        }
+        
+        if (category) {
+            filter.category = category;
+        }
+        
+        if (region) {
+            filter.region = region;
+        }
+        
+        if (status) {
+            filter.status = status;
+        }
+        
+        if (type) {
+            filter.type = type;
+        }
+        
+        if (isGeneralAgent !== undefined) {
+            filter.isGeneralAgent = isGeneralAgent === 'true';
+        }
+        
+        if (isAgent !== undefined) {
+            filter.isAgent = isAgent === 'true';
+        }
+        
+        if (keyword) {
+            filter.$or = [
+                { name: { $regex: keyword, $options: 'i' } },
+                { contact: { $regex: keyword, $options: 'i' } },
+                { email: { $regex: keyword, $options: 'i' } },
+                { brands: { $in: [new RegExp(keyword, 'i')] } }
+            ];
+        }
+
+        // 计算分页
+        const skip = (parseInt(page) - 1) * parseInt(pageSize);
+        
+        // 执行查询
+        const [data, total] = await Promise.all([
+            Vendor.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(pageSize))
+                .lean(),
+            Vendor.countDocuments(filter)
+        ]);
+
+        res.json({
+            success: true,
+            data: data,
+            total: total,
+            page: parseInt(page),
+            pageSize: parseInt(pageSize),
+            totalPages: Math.ceil(total / parseInt(pageSize))
+        });
+
+    } catch (error) {
+        console.error('❌ 查询供应商列表失败:', error);
+        res.status(500).json({ 
+            success: false,
+            error: '查询失败',
+            details: error.message 
+        });
+    }
+});
+
+// API: 获取单个供应商详情
+app.get('/api/vendors/:id', async (req, res) => {
+    const vendorId = req.params.id;
+    
+    try {
+        const vendor = await Vendor.findById(vendorId).lean();
+        
+        if (!vendor) {
+            return res.status(404).json({ 
+                success: false,
+                error: '找不到供应商记录' 
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: vendor
+        });
+        
+    } catch (error) {
+        console.error('❌ 查询供应商详情失败:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ 
+                success: false,
+                error: '无效的记录ID格式' 
+            });
+        }
+        res.status(500).json({ 
+            success: false,
+            error: '查询失败',
+            details: error.message 
+        });
+    }
+});
+
+// API: 创建新供应商
+app.post('/api/vendors', async (req, res) => {
+    try {
+        const vendor = new Vendor(req.body);
+        const savedVendor = await vendor.save();
+        
+        res.status(201).json({
+            success: true,
+            data: savedVendor,
+            message: '供应商创建成功'
+        });
+        
+    } catch (error) {
+        console.error('❌ 创建供应商失败:', error);
+        
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                error: '供应商代码已存在',
+                details: error.message
+            });
+        }
+        
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                error: '数据验证失败',
+                details: Object.values(error.errors).map(err => err.message)
+            });
+        }
+        
+        res.status(500).json({ 
+            success: false,
+            error: '创建失败',
+            details: error.message 
+        });
+    }
+});
+
+// API: 更新供应商信息
+app.put('/api/vendors/:id', async (req, res) => {
+    const vendorId = req.params.id;
+    
+    try {
+        const updatedVendor = await Vendor.findByIdAndUpdate(
+            vendorId,
+            req.body,
+            { new: true, runValidators: true }
+        );
+        
+        if (!updatedVendor) {
+            return res.status(404).json({ 
+                success: false,
+                error: '找不到供应商记录' 
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: updatedVendor,
+            message: '供应商更新成功'
+        });
+        
+    } catch (error) {
+        console.error('❌ 更新供应商失败:', error);
+        
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                error: '供应商代码已存在',
+                details: error.message
+            });
+        }
+        
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                error: '数据验证失败',
+                details: Object.values(error.errors).map(err => err.message)
+            });
+        }
+        
+        if (error.name === 'CastError') {
+            return res.status(400).json({ 
+                success: false,
+                error: '无效的记录ID格式' 
+            });
+        }
+        
+        res.status(500).json({ 
+            success: false,
+            error: '更新失败',
+            details: error.message 
+        });
+    }
+});
+
+// API: 删除供应商
+app.delete('/api/vendors/:id', async (req, res) => {
+    const vendorId = req.params.id;
+    
+    try {
+        const deletedVendor = await Vendor.findByIdAndDelete(vendorId);
+        
+        if (!deletedVendor) {
+            return res.status(404).json({ 
+                success: false,
+                error: '找不到供应商记录' 
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: '供应商删除成功'
+        });
+        
+    } catch (error) {
+        console.error('❌ 删除供应商失败:', error);
+        if (error.name === 'CastError') {
+            return res.status(400).json({ 
+                success: false,
+                error: '无效的记录ID格式' 
+            });
+        }
+        res.status(500).json({ 
+            success: false,
+            error: '删除失败',
+            details: error.message 
+        });
+    }
+});
+
+// API: 批量导入供应商
+app.post('/api/vendors/batch-import', async (req, res) => {
+    try {
+        const { vendors } = req.body;
+        
+        if (!Array.isArray(vendors) || vendors.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: '供应商数据格式错误或为空'
+            });
+        }
+        
+        const results = [];
+        const errors = [];
+        
+        for (const vendorData of vendors) {
+            try {
+                const vendor = new Vendor(vendorData);
+                const savedVendor = await vendor.save();
+                results.push(savedVendor);
+            } catch (error) {
+                errors.push({
+                    vendor: vendorData,
+                    error: error.message
+                });
+            }
+        }
+        
+        res.json({
+            success: true,
+            data: results,
+            errors: errors,
+            message: `成功导入 ${results.length} 个供应商，失败 ${errors.length} 个`
+        });
+        
+    } catch (error) {
+        console.error('❌ 批量导入供应商失败:', error);
+        res.status(500).json({ 
+            success: false,
+            error: '批量导入失败',
+            details: error.message 
+        });
+    }
+});
 
 // 前端路由处理
 app.get('*', (req, res) => {
@@ -1215,10 +1523,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
-    console.log(`🚀 AI报价分析服务器启动成功！`);
+    console.log(`🚀 智能报价助手系统启动成功！`);
     console.log(`📡 端口: ${PORT}`);
     console.log(`🔗 访问地址: http://localhost:${PORT}`);
-    console.log(`📤 文件上传端点: http://localhost:${PORT}/api/quotations/upload`);
-    console.log(`🤖 AI分析端点: http://localhost:${PORT}/api/quotations/analyze`);
-    console.log(`📥 文件下载端点: http://localhost:${PORT}/api/quotations/download/:id`);
+    console.log(`🤖 AI模型: ${YUANJING_CONFIG.model}`);
+    console.log(`💾 数据库: ${MONGODB_URI}`);
+    console.log(`📄 系统版本: v1.0.0`);
 });

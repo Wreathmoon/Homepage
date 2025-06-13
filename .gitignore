@@ -4,8 +4,6 @@
 /node_modules
 /.pnp
 .pnp.js
-server/node_modules/
-server/node_modules
 
 # testing
 /coverage
@@ -28,20 +26,23 @@ yarn-error.log*
 *.db
 *.sqlite
 *.sqlite3
-products.db
 
 # Upload directory
 /uploads
 uploads/
-server/uploads/
+
+# Server directory (redundant backend)
+/server
+server/
 
 # Debug files
-debug-test.js
-test-server.js
+debug-*.js
+test-*.js
+*debug*.js
+*test*.js
 
 # Environment variables
 .env
-server/.env
 
 # Logs
 logs
@@ -59,5 +60,20 @@ pids
 # Optional REPL history
 .node_repl_history
 
-# Package locks for server
-server/package-lock.json
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Documentation files (auto-generated)
+AI_CONFIG_GUIDE.md
+CLEANUP_SUMMARY.md
+启动指南.md
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

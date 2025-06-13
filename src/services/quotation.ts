@@ -169,7 +169,7 @@ export async function uploadQuotationFile(file: File): Promise<{ success: boolea
         formData.append('quotationFile', file);
 
         // 修复URL路径问题 - 使用完整的URL而不是通过request实例
-        const response = await fetch('http://localhost:3001/api/upload/quotation', {
+        const response = await fetch('http://localhost:3002/api/upload/quotation', {
             method: 'POST',
             body: formData
         });
@@ -196,7 +196,7 @@ export async function uploadQuotationFile(file: File): Promise<{ success: boolea
 // 下载报价原始文件
 export async function downloadQuotationFile(id: string): Promise<void> {
     try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/quotations/download/${id}`);
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3002/api'}/quotations/download/${id}`);
         
         if (!response.ok) {
             throw new Error('下载失败');

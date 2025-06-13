@@ -1,12 +1,11 @@
 {
   "name": "quotation-helper",
-  "version": "0.1.6",
+  "version": "1.0.0",
   "private": true,
   "homepage": "/",
   "dependencies": {
     "@douyinfe/semi-icons": "^2.78.0",
     "@douyinfe/semi-ui": "^2.78.0",
-    "@google/generative-ai": "^0.21.0",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",

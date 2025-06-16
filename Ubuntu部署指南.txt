@@ -1,0 +1,474 @@
+===============================================================================
+                    智能报价助手系统 - Ubuntu云端部署指南
+===============================================================================
+
+版本: v1.0.0
+更新时间: 2024-12-13
+适用系统: Ubuntu 18.04+ / Debian 9+
+项目类型: React + Node.js + MongoDB + AI集成
+
+===============================================================================
+                                目录
+===============================================================================
+
+1. 环境要求
+2. 系统准备
+3. 安装Node.js和npm
+4. 安装MongoDB
+5. 项目部署
+6. 环境变量配置
+7. 启动服务
+8. 反向代理配置(Nginx)
+9. 防火墙配置
+10. SSL证书配置
+11. 服务守护进程
+12. 监控和日志
+13. 故障排除
+14. 维护建议
+
+===============================================================================
+                              1. 环境要求
+===============================================================================
+
+最低配置:
+- CPU: 2核心
+- 内存: 4GB RAM
+- 存储: 20GB SSD
+- 网络: 100Mbps
+
+推荐配置:
+- CPU: 4核心
+- 内存: 8GB RAM
+- 存储: 50GB SSD
+- 网络: 1Gbps
+
+软件要求:
+- Ubuntu 18.04+ / Debian 9+
+- Node.js 16.x+
+- MongoDB 4.4+
+- Nginx 1.18+
+- PM2进程管理器
+
+===============================================================================
+                              2. 系统准备
+===============================================================================
+
+# 更新系统包
+sudo apt update && sudo apt upgrade -y
+
+# 安装基础工具
+sudo apt install -y curl wget git vim htop unzip
+
+# 安装编译工具
+sudo apt install -y build-essential
+
+# 创建应用用户(推荐)
+sudo adduser --system --group --home /opt/quotation quotation
+sudo mkdir -p /opt/quotation
+sudo chown quotation:quotation /opt/quotation
+
+===============================================================================
+                            3. 安装Node.js和npm
+===============================================================================
+
+# 方法1: 使用NodeSource仓库(推荐)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# 方法2: 使用NVM(可选)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source ~/.bashrc
+nvm install 18
+nvm use 18
+
+# 验证安装
+node --version
+npm --version
+
+# 安装PM2进程管理器
+sudo npm install -g pm2
+
+===============================================================================
+                             4. 安装MongoDB
+===============================================================================
+
+# 添加MongoDB官方GPG密钥
+wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+
+# 添加MongoDB仓库
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+
+# 更新包列表并安装MongoDB
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+
+# 启动并启用MongoDB服务
+sudo systemctl start mongod
+sudo systemctl enable mongod
+
+# 验证MongoDB安装
+sudo systemctl status mongod
+mongo --version
+
+# 创建数据库用户(推荐)
+mongo
+> use admin
+> db.createUser({
+    user: "admin",
+    pwd: "your_secure_password",
+    roles: ["userAdminAnyDatabase", "dbAdminAnyDatabase", "readWriteAnyDatabase"]
+})
+> use quotation_db
+> db.createUser({
+    user: "quotation_user",
+    pwd: "your_app_password",
+    roles: ["readWrite"]
+})
+> exit
+
+===============================================================================
+                              5. 项目部署
+===============================================================================
+
+# 切换到应用用户
+sudo su - quotation
+
+# 克隆项目(或上传项目文件)
+cd /opt/quotation
+git clone https://github.com/your-repo/quotation-helper.git
+# 或者使用scp上传项目文件
+# scp -r ./quotation-helper user@server:/opt/quotation/
+
+cd quotation-helper
+
+# 安装依赖
+npm install
+
+# 构建前端项目
+npm run build
+
+# 创建必要目录
+mkdir -p logs
+mkdir -p uploads
+chmod 755 uploads
+
+===============================================================================
+                            6. 环境变量配置
+===============================================================================
+
+# 创建环境变量文件
+vim .env
+
+# 添加以下配置内容:
+NODE_ENV=production
+PORT=3002
+
+# MongoDB配置
+MONGODB_URI=mongodb://quotation_user:your_app_password@localhost:27017/quotation_db
+
+# 元景AI配置
+YUANJING_API_KEY=sk-your-api-key-here
+YUANJING_MODEL=yuanjing-70b-chat
+YUANJING_API_ENDPOINT=https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1
+
+# 文件上传配置
+UPLOAD_DIR=/opt/quotation/quotation-helper/uploads
+MAX_FILE_SIZE=50MB
+
+# 日志配置
+LOG_LEVEL=info
+LOG_FILE=/opt/quotation/quotation-helper/logs/app.log
+
+# 安全配置
+SESSION_SECRET=your-very-secure-session-secret
+JWT_SECRET=your-jwt-secret-key
+
+# 设置环境变量文件权限
+chmod 600 .env
+
+===============================================================================
+                              7. 启动服务
+===============================================================================
+
+# 使用PM2启动应用
+pm2 start server.js --name "quotation-helper"
+
+# 查看应用状态
+pm2 status
+pm2 logs quotation-helper
+
+# 设置PM2开机自启
+pm2 startup
+pm2 save
+
+# 监控应用
+pm2 monit
+
+===============================================================================
+                           8. 反向代理配置(Nginx)
+===============================================================================
+
+# 安装Nginx
+sudo apt install -y nginx
+
+# 创建站点配置文件
+sudo vim /etc/nginx/sites-available/quotation-helper
+
+# 添加以下配置:
+server {
+    listen 80;
+    server_name your-domain.com www.your-domain.com;
+    
+    # 重定向到HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com www.your-domain.com;
+    
+    # SSL配置
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    
+    # 安全头部
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    
+    # 静态文件服务
+    location / {
+        try_files $uri $uri/ @proxy;
+    }
+    
+    # API代理
+    location @proxy {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 文件上传配置
+        client_max_body_size 50M;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+    
+    # 静态资源缓存
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+
+# 启用站点配置
+sudo ln -s /etc/nginx/sites-available/quotation-helper /etc/nginx/sites-enabled/
+
+# 测试Nginx配置
+sudo nginx -t
+
+# 重启Nginx
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+
+===============================================================================
+                             9. 防火墙配置
+===============================================================================
+
+# 安装UFW防火墙
+sudo apt install -y ufw
+
+# 配置防火墙规则
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# 允许SSH
+sudo ufw allow ssh
+
+# 允许HTTP和HTTPS
+sudo ufw allow 'Nginx Full'
+
+# 启用防火墙
+sudo ufw enable
+
+# 查看防火墙状态
+sudo ufw status
+
+===============================================================================
+                            10. SSL证书配置
+===============================================================================
+
+# 安装Certbot
+sudo apt install -y certbot python3-certbot-nginx
+
+# 获取SSL证书
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+
+# 测试自动续期
+sudo certbot renew --dry-run
+
+# 设置自动续期cron任务
+sudo crontab -e
+# 添加以下行:
+0 12 * * * /usr/bin/certbot renew --quiet
+
+===============================================================================
+                            11. 服务守护进程
+===============================================================================
+
+# 创建systemd服务文件(备用方案)
+sudo vim /etc/systemd/system/quotation-helper.service
+
+[Unit]
+Description=Quotation Helper Application
+After=network.target mongod.service
+Wants=mongod.service
+
+[Service]
+Type=simple
+User=quotation
+Group=quotation
+WorkingDirectory=/opt/quotation/quotation-helper
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=quotation-helper
+
+[Install]
+WantedBy=multi-user.target
+
+# 重新加载systemd配置
+sudo systemctl daemon-reload
+
+# 如果不使用PM2，可以使用systemd
+# sudo systemctl start quotation-helper
+# sudo systemctl enable quotation-helper
+
+===============================================================================
+                             12. 监控和日志
+===============================================================================
+
+# 查看应用日志
+pm2 logs quotation-helper
+
+# 查看Nginx日志
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+
+# 查看MongoDB日志
+sudo tail -f /var/log/mongodb/mongod.log
+
+# 查看系统资源使用
+htop
+df -h
+free -h
+
+# 设置日志轮转
+sudo vim /etc/logrotate.d/quotation-helper
+
+/opt/quotation/quotation-helper/logs/*.log {
+    daily
+    missingok
+    rotate 52
+    compress
+    delaycompress
+    notifempty
+    create 644 quotation quotation
+}
+
+===============================================================================
+                             13. 故障排除
+===============================================================================
+
+常见问题解决:
+
+1. 端口冲突
+   sudo netstat -tlnp | grep :3002
+   sudo lsof -i :3002
+
+2. MongoDB连接失败
+   sudo systemctl status mongod
+   mongo --eval "db.adminCommand('ismaster')"
+
+3. 内存不足
+   free -h
+   sudo swapon --show
+   
+4. 磁盘空间不足
+   df -h
+   sudo du -sh /opt/quotation/quotation-helper/logs/*
+
+5. Node.js进程崩溃
+   pm2 restart quotation-helper
+   pm2 logs quotation-helper --lines 100
+
+6. Nginx配置错误
+   sudo nginx -t
+   sudo systemctl status nginx
+
+===============================================================================
+                             14. 维护建议
+===============================================================================
+
+定期维护任务:
+
+1. 系统更新
+   sudo apt update && sudo apt upgrade
+
+2. 清理日志文件
+   sudo logrotate -f /etc/logrotate.d/quotation-helper
+
+3. 备份数据库
+   mongodump --host localhost --port 27017 --db quotation_db --out /backup/
+
+4. 监控系统资源
+   htop
+   df -h
+   free -h
+
+5. 检查SSL证书有效期
+   sudo certbot certificates
+
+6. 更新项目代码
+   cd /opt/quotation/quotation-helper
+   git pull origin main
+   npm install
+   npm run build
+   pm2 restart quotation-helper
+
+安全建议:
+- 定期更新系统和软件包
+- 使用强密码和密钥认证
+- 限制SSH访问
+- 定期备份数据
+- 监控异常访问
+
+性能优化:
+- 启用gzip压缩
+- 配置CDN加速
+- 优化数据库索引
+- 监控内存使用
+- 使用缓存机制
+
+===============================================================================
+                              部署完成
+===============================================================================
+
+部署完成后，您可以通过以下方式访问应用:
+- HTTP: http://your-domain.com
+- HTTPS: https://your-domain.com
+
+管理命令:
+- 查看状态: pm2 status
+- 重启应用: pm2 restart quotation-helper
+- 查看日志: pm2 logs quotation-helper
+- 停止应用: pm2 stop quotation-helper
+
+如有问题，请查看相关日志文件或联系技术支持。
+
+=============================================================================== 

@@ -39,7 +39,7 @@ const Header = () => {
                             onClick={() => navigate('/home')}
                         >
                             <img 
-                                src="/24764324_183446961832_2.jpg" 
+                                src="/logo矢量.png" 
                                 alt="联通Logo" 
                                 style={{ 
                                     height: '36px', 

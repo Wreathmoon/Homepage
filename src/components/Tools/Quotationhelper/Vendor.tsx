@@ -15,7 +15,7 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey } from '@douyinfe/semi-icons';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
@@ -44,16 +44,17 @@ const Vendor: React.FC = () => {
     const [currentSupplier, setCurrentSupplier] = useState<VendorType | null>(null);
     const [products, setProducts] = useState<string[]>([]);
     const [productsLoading, setProductsLoading] = useState(false);
-    const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
+    const [passwordVisible, setPasswordVisible] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [currentVendorName, setCurrentVendorName] = useState('');
     const [remarksVisible, setRemarksVisible] = useState(false);
     const [currentRemarks, setCurrentRemarks] = useState('');
 
-    // 切换密码可见性
-    const togglePasswordVisibility = (vendorId: string) => {
-        setPasswordVisibility(prev => ({
-            ...prev,
-            [vendorId]: !prev[vendorId]
-        }));
+    // 显示密码窗口
+    const showPasswordModal = (vendor: VendorType) => {
+        setCurrentPassword(vendor.password || '');
+        setCurrentVendorName(vendor.name);
+        setPasswordVisible(true);
     };
 
     // 获取供应商列表
@@ -232,9 +233,6 @@ const Vendor: React.FC = () => {
         {
             title: '账号信息',
             render: (record: VendorType) => {
-                const vendorId = String(record._id || record.id || record.name);
-                const isPasswordVisible = passwordVisibility[vendorId];
-                
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span>{record.account || '无账号'}</span>
@@ -243,19 +241,10 @@ const Vendor: React.FC = () => {
                                 theme="borderless"
                                 type="tertiary"
                                 size="small"
-                                icon={isPasswordVisible ? <IconEyeOpened /> : <IconEyeClosed />}
-                                onClick={() => togglePasswordVisibility(vendorId)}
+                                icon={<IconKey />}
+                                onClick={() => showPasswordModal(record)}
                                 style={{ padding: '2px 4px' }}
                             />
-                        )}
-                        {record.password && isPasswordVisible && (
-                            <span style={{ 
-                                fontSize: '12px', 
-                                color: 'var(--semi-color-text-2)',
-                                marginLeft: '4px'
-                            }}>
-                                {record.password}
-                            </span>
                         )}
                     </div>
                 );
@@ -454,28 +443,56 @@ const Vendor: React.FC = () => {
                 </Spin>
             </Modal>
 
-            {/* 备注查看模态框 */}
+            {/* 密码查看模态框 */}
+            <Modal
+                visible={passwordVisible}
+                title={`查看密码 - ${currentVendorName}`}
+                onCancel={() => setPasswordVisible(false)}
+                footer={null}
+                width={400}
+            >
+                <div style={{ padding: '16px' }}>
+                    <div style={{ marginBottom: '12px' }}>
+                        <Typography.Text strong>账号密码：</Typography.Text>
+                    </div>
+                    <div style={{ 
+                        padding: '12px', 
+                        backgroundColor: 'var(--semi-color-fill-0)',
+                        borderRadius: '6px',
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        wordBreak: 'break-all'
+                    }}>
+                        {currentPassword || '暂无密码'}
+                    </div>
+                    <div style={{ marginTop: '16px', textAlign: 'right' }}>
+                        <Button 
+                            type="primary" 
+                            onClick={() => setPasswordVisible(false)}
+                        >
+                            关闭
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* 备注模态框 */}
             <Modal
                 visible={remarksVisible}
-                title="供应商备注信息"
+                title="备注信息"
                 onCancel={() => setRemarksVisible(false)}
                 footer={null}
                 width={500}
             >
                 <div style={{ padding: '16px' }}>
-                    <div
-                        style={{
-                            background: 'var(--semi-color-fill-0)',
-                            padding: '16px',
-                            borderRadius: '6px',
-                            border: '1px solid var(--semi-color-border)',
-                            minHeight: '100px',
-                            lineHeight: '1.6',
-                            color: 'var(--semi-color-text-0)',
-                            whiteSpace: 'pre-wrap'
-                        }}
-                    >
-                        {currentRemarks}
+                    <div style={{ 
+                        padding: '12px', 
+                        backgroundColor: 'var(--semi-color-fill-0)',
+                        borderRadius: '6px',
+                        minHeight: '80px',
+                        whiteSpace: 'pre-wrap'
+                    }}>
+                        {currentRemarks || '暂无备注'}
                     </div>
                 </div>
             </Modal>

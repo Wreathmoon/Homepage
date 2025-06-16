@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -860,18 +860,55 @@ ${content}`;
         
         console.log('🤖 AI原始回复:', text);
         
-        // 清理响应文本
-        text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        // 强化版清理响应文本
+        text = text
+            // 首先移除markdown代码块标记
+            .replace(/```json\s*/g, '').replace(/```\s*/g, '')
+            // 移除JavaScript风格的注释
+            .replace(/\/\/.*$/gm, '')          // 移除单行注释 //...
+            .replace(/\/\*[\s\S]*?\*\//g, '')  // 移除多行注释 /*...*/
+            // 将单引号替换为双引号（避免影响字符串内的单引号）
+            .replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3')  // 修复属性名的单引号
+            .replace(/:\s*'([^']*)'(\s*[,}])/g, ': "$1"$2')     // 修复属性值的单引号
+            // 修复中文标点符号
+            .replace(/，/g, ',')     // 中文逗号 → 英文逗号
+            .replace(/：/g, ':')     // 中文冒号 → 英文冒号
+            .replace(/；/g, ';')     // 中文分号 → 英文分号
+            // 修复多余的逗号（在}或]前的逗号）
+            .replace(/,(\s*[\]}])/g, '$1')
+            // 清理多余的空白字符和空行
+            .replace(/\s+/g, ' ')
+            .trim();
         
+        console.log('🔧 清理后的JSON:', text);
+
         let parsedData;
         try {
             parsedData = JSON.parse(text);
         } catch (parseError) {
             console.error('❌ JSON解析失败:', parseError);
-            return res.status(500).json({ 
-                error: 'AI返回的JSON格式不正确',
-                rawResponse: text
-            });
+            console.error('❌ 清理后的文本:', text);
+            
+            // 尝试更激进的修复方法
+            try {
+                // 使用Function构造函数和eval的替代方法
+                const fixedText = text
+                    .replace(/'/g, '"')  // 全部单引号改双引号
+                    .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // 确保属性名有双引号
+                
+                console.log('🔧 二次修复后的JSON:', fixedText);
+                parsedData = JSON.parse(fixedText);
+                console.log('✅ 二次修复成功！');
+            } catch (secondParseError) {
+                console.error('❌ 二次JSON解析也失败:', secondParseError);
+                const fixedText = text.replace(/'/g, '"').replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
+                return res.status(500).json({ 
+                    error: 'AI返回的JSON格式不正确，请重试',
+                    rawResponse: text,
+                    fixedResponse: fixedText,
+                    parseError: parseError.message
+                });
+            }
         }
 
         // 确保返回的是数组

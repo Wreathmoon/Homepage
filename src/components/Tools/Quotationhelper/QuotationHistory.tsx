@@ -349,7 +349,25 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
                             maxHeight: '40vh',
                             overflow: 'auto'
                         }}>
-                            {record.configDetail || record.productSpec || record.detailedComponents || '暂无详细配置信息'}
+                            {(() => {
+                                const content = record.configDetail || record.productSpec || record.detailedComponents || '暂无详细配置信息';
+                                if (content === '暂无详细配置信息') {
+                                    return content;
+                                }
+                                // 🔥 关键修复：处理转义的换行符，确保正确显示
+                                return content
+                                    .replace(/\\n/g, '\n')  // 将\n转换为实际换行
+                                    .replace(/\\r/g, '\r')  // 处理\r
+                                    .replace(/\\t/g, '\t')  // 处理\t
+                                    .replace(/- /g, '\n- ') // 确保每个-项目都在新行
+                                    .replace(/,\s*/g, ',\n')
+                                    .replace(/;\s*/g, ';\n')
+                                    .replace(/\|\s*/g, '|\n')
+                                    .replace(/，\s*/g, '，\n')
+                                    .replace(/；\s*/g, '；\n')
+                                    .replace(/\n\s*\n/g, '\n')
+                                    .trim();
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -792,7 +810,21 @@ const QuotationHistory: React.FC = () => {
                             lineHeight: '1.6',
                             fontSize: '14px'
                         }}>
-                            {currentRemark}
+                            {(() => {
+                                // 🔥 关键修复：处理转义的换行符，确保正确显示
+                                return currentRemark
+                                    .replace(/\\n/g, '\n')  // 将\n转换为实际换行
+                                    .replace(/\\r/g, '\r')  // 处理\r
+                                    .replace(/\\t/g, '\t')  // 处理\t
+                                    .replace(/- /g, '\n- ') // 确保每个-项目都在新行
+                                    .replace(/,\s*/g, ',\n')
+                                    .replace(/;\s*/g, ';\n')
+                                    .replace(/\|\s*/g, '|\n')
+                                    .replace(/，\s*/g, '，\n')
+                                    .replace(/；\s*/g, '；\n')
+                                    .replace(/\n\s*\n/g, '\n')
+                                    .trim();
+                            })()}
                         </Text>
                     ) : (
                         <Text type="secondary" style={{ fontStyle: 'italic' }}>

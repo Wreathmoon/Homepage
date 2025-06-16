@@ -176,9 +176,16 @@ const QuotationImport: React.FC = () => {
 
         setAnalyzing(true);
         let isDuplicateDetected = false;
+        let timeoutId: NodeJS.Timeout | undefined; // 声明timeoutId变量
         
         try {
             console.log('🔍 开始AI分析文件...');
+            
+            // 创建AbortController用于超时控制
+            const controller = new AbortController();
+            timeoutId = setTimeout(() => {
+                controller.abort();
+            }, 360000); // 6分钟超时（比后端多1分钟）
             
             // 调用AI服务器的分析API
             const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
@@ -187,6 +194,7 @@ const QuotationImport: React.FC = () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
+                signal: controller.signal, // 添加超时控制
                 body: JSON.stringify({
                     filePath: uploadedFile.filePath,
                     fileName: uploadedFile.fileName,
@@ -279,6 +287,9 @@ const QuotationImport: React.FC = () => {
 
             const result = await response.json();
             console.log('✅ AI分析成功:', result);
+            
+            // 清除超时定时器
+            if (timeoutId) clearTimeout(timeoutId);
             
             // 检查是否有重复
             if (result.isDuplicate) {
@@ -424,8 +435,13 @@ const QuotationImport: React.FC = () => {
         } catch (error) {
             console.error('❌ AI分析失败:', error);
             
-            // 检查是否是网络连接错误
-            if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+            // 清除超时定时器
+            if (timeoutId) clearTimeout(timeoutId);
+            
+            // 检查是否是超时错误
+            if (error instanceof Error && error.name === 'AbortError') {
+                Toast.error('AI分析超时（6分钟），请尝试分析较小的文件或稍后重试');
+            } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
                 Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口3002)');
             } else if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
                 Toast.error('连接被拒绝，请检查AI服务器状态');
@@ -817,6 +833,11 @@ const QuotationImport: React.FC = () => {
                             {analyzing && (
                                 <div style={{ marginTop: '20px' }}>
                                     <Text>正在使用AI大模型分析报价单内容，请稍候...</Text>
+                                    <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--semi-color-text-2)' }}>
+                                        <div>📊 提取表格数据...</div>
+                                        <div>🖼️ 检测并识别图片内容 (OCR)...</div>
+                                        <div>🤖 AI智能分析中...</div>
+                                    </div>
                                     <Progress percent={-1} style={{ marginTop: '12px' }} />
                                 </div>
                             )}
@@ -969,7 +990,12 @@ const QuotationImport: React.FC = () => {
                                                     }}>
                                                         {(() => {
                                                             const content = currentData.productSpec;
+                                                            // 首先处理转义的\n字符，然后处理其他分隔符
                                                             return content
+                                                                .replace(/\\n/g, '\n')  // 🔥 关键修复：将\n转换为实际换行
+                                                                .replace(/\\r/g, '\r')  // 处理\r
+                                                                .replace(/\\t/g, '\t')  // 处理\t
+                                                                .replace(/- /g, '\n- ') // 确保每个-项目都在新行
                                                                 .replace(/,\s*/g, ',\n')
                                                                 .replace(/;\s*/g, ';\n')
                                                                 .replace(/\|\s*/g, '|\n')
@@ -998,7 +1024,12 @@ const QuotationImport: React.FC = () => {
                                                     }}>
                                                         {(() => {
                                                             const content = currentData.remark;
+                                                            // 首先处理转义的\n字符，然后处理其他分隔符
                                                             return content
+                                                                .replace(/\\n/g, '\n')  // 🔥 关键修复：将\n转换为实际换行
+                                                                .replace(/\\r/g, '\r')  // 处理\r
+                                                                .replace(/\\t/g, '\t')  // 处理\t
+                                                                .replace(/- /g, '\n- ') // 确保每个-项目都在新行
                                                                 .replace(/,\s*/g, ',\n')
                                                                 .replace(/;\s*/g, ';\n')
                                                                 .replace(/\|\s*/g, '|\n')

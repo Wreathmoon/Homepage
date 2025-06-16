@@ -12,6 +12,10 @@ const axios = require('axios');
 const xlsx = require('xlsx');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
+// 添加OCR相关依赖
+const Tesseract = require('tesseract.js');
+const sharp = require('sharp');
+const JSZip = require('jszip');
 
 // 初始化元景大模型配置
 const YUANJING_CONFIG = {
@@ -19,6 +23,313 @@ const YUANJING_CONFIG = {
     model: process.env.YUANJING_MODEL || 'yuanjing-70b-chat',
     baseUrl: process.env.YUANJING_API_ENDPOINT || 'https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1'
 };
+
+// OCR处理类
+class ExcelOCRProcessor {
+    constructor() {
+        this.tempDir = './temp_ocr/';
+        this.supportedImageTypes = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff'];
+    }
+
+    // 确保临时目录存在
+    async ensureTempDir() {
+        try {
+            await fs.mkdir(this.tempDir, { recursive: true });
+            console.log('✅ 临时目录创建成功:', this.tempDir);
+        } catch (error) {
+            console.warn('⚠️ 创建临时目录失败:', error);
+        }
+    }
+
+    // 从Excel文件中提取图片
+    async extractImagesFromExcel(filePath) {
+        try {
+            console.log('🖼️ 开始从Excel中提取图片...');
+            console.log('📁 文件路径:', filePath);
+            await this.ensureTempDir();
+            
+            const data = await fs.readFile(filePath);
+            console.log('📊 文件读取成功，大小:', data.length, '字节');
+            
+            const zip = new JSZip();
+            const zipContent = await zip.loadAsync(data);
+            console.log('📦 ZIP内容加载成功');
+            
+            const images = [];
+            
+            // 检查多个可能的媒体文件夹
+            const mediaPaths = ['xl/media', 'xl/embeddings', 'xl/drawings', 'word/media'];
+            let totalImagesFound = 0;
+            
+            for (const mediaPath of mediaPaths) {
+                const mediaFolder = zipContent.folder(mediaPath);
+                if (mediaFolder) {
+                    console.log(`📂 发现媒体文件夹: ${mediaPath}`);
+                    const imageFiles = [];
+                    mediaFolder.forEach((relativePath, file) => {
+                        if (!file.dir && this.isImageFile(relativePath)) {
+                            imageFiles.push({ path: relativePath, file });
+                            console.log(`🖼️ 发现图片: ${relativePath}`);
+                        }
+                    });
+                    
+                    totalImagesFound += imageFiles.length;
+                    console.log(`📸 在 ${mediaPath} 中发现 ${imageFiles.length} 个图片文件`);
+
+                    for (let i = 0; i < imageFiles.length; i++) {
+                        const { path: imagePath, file } = imageFiles[i];
+                        try {
+                            const imageData = await file.async('nodebuffer');
+                            const tempImagePath = `${this.tempDir}excel_image_${mediaPath.replace('/', '_')}_${i + 1}.png`;
+                            
+                            await fs.writeFile(tempImagePath, imageData);
+                            console.log(`💾 图片保存成功: ${tempImagePath}, 大小: ${imageData.length} 字节`);
+                            
+                            images.push({
+                                path: tempImagePath,
+                                type: 'configuration',
+                                originalName: imagePath,
+                                size: imageData.length
+                            });
+                        } catch (error) {
+                            console.error(`❌ 处理图片失败 ${imagePath}:`, error);
+                        }
+                    }
+                }
+            }
+            
+            console.log(`📊 图片提取完成，总共提取 ${images.length} 个图片`);
+            return images;
+            
+        } catch (error) {
+            console.error('❌ Excel图片提取失败:', error);
+            console.error('错误详情:', error.message);
+            console.error('错误堆栈:', error.stack);
+            return [];
+        }
+    }
+
+    // 检查是否为图片文件
+    isImageFile(filename) {
+        const ext = path.extname(filename.toLowerCase());
+        const isImage = this.supportedImageTypes.includes(ext);
+        console.log(`🔍 检查文件 ${filename}: ${isImage ? '是图片' : '不是图片'} (扩展名: ${ext})`);
+        return isImage;
+    }
+
+    // 图片预处理（提高OCR准确率）
+    async preprocessImage(imagePath) {
+        try {
+            console.log(`🔧 开始预处理图片: ${imagePath}`);
+            const outputPath = imagePath.replace(/\.(png|jpg|jpeg)$/i, '_processed.png');
+            
+            await sharp(imagePath)
+                .resize(null, 1200, { withoutEnlargement: true }) // 适当放大
+                .sharpen() // 锐化
+                .normalize() // 标准化
+                .png({ quality: 100 })
+                .toFile(outputPath);
+                
+            console.log(`✅ 图片预处理完成: ${outputPath}`);
+            return outputPath;
+        } catch (error) {
+            console.warn('⚠️ 图片预处理失败，使用原图:', error);
+            return imagePath;
+        }
+    }
+
+    // 执行OCR识别
+    async performOCR(imagePath) {
+        try {
+            console.log(`🔍 开始OCR识别图片: ${path.basename(imagePath)}`);
+            
+            // 检查文件是否存在
+            try {
+                await fs.access(imagePath);
+                console.log('✅ 图片文件存在');
+            } catch (error) {
+                console.error('❌ 图片文件不存在:', imagePath);
+                return {
+                    text: '',
+                    confidence: 0,
+                    success: false,
+                    error: '图片文件不存在'
+                };
+            }
+            
+            // 图片预处理
+            const processedImagePath = await this.preprocessImage(imagePath);
+            
+            console.log('🤖 开始Tesseract OCR识别...');
+            console.log('📝 使用语言: chi_sim+eng (中文简体+英文)');
+            
+            // 执行OCR识别（支持中英文）
+            const { data: { text, confidence } } = await Tesseract.recognize(
+                processedImagePath,
+                'chi_sim+eng',
+                {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            console.log(`📊 OCR进度: ${Math.round(m.progress * 100)}%`);
+                        } else if (m.status === 'loading tesseract core') {
+                            console.log('🔄 正在加载Tesseract核心...');
+                        } else if (m.status === 'initializing tesseract') {
+                            console.log('🔄 正在初始化Tesseract...');
+                        } else if (m.status === 'loading language traineddata') {
+                            console.log('🔄 正在加载语言数据...');
+                        }
+                    }
+                }
+            );
+            
+            // 清理临时处理文件
+            if (processedImagePath !== imagePath) {
+                try {
+                    await fs.unlink(processedImagePath);
+                    console.log('🗑️ 临时处理文件已清理');
+                } catch (e) {
+                    // 忽略清理错误
+                }
+            }
+            
+            console.log(`✅ OCR识别完成`);
+            console.log(`📝 识别文本长度: ${text.length} 字符`);
+            console.log(`🎯 置信度: ${Math.round(confidence)}%`);
+            console.log(`📄 识别内容预览: ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`);
+            
+            return {
+                text: text.trim(),
+                confidence: confidence,
+                success: true
+            };
+            
+        } catch (error) {
+            console.error(`❌ OCR识别失败 ${imagePath}:`, error);
+            console.error('错误详情:', error.message);
+            console.error('错误堆栈:', error.stack);
+            return {
+                text: '',
+                confidence: 0,
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // 处理Excel文件（表格数据 + OCR图片）
+    async processExcelWithOCR(filePath) {
+        try {
+            console.log('📊 开始处理Excel文件（包含OCR）...');
+            console.log('📁 文件路径:', filePath);
+            
+            // 1. 提取表格数据（现有功能）
+            console.log('📋 步骤1: 提取表格数据...');
+            const workbook = xlsx.readFile(filePath);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const tableContent = xlsx.utils.sheet_to_csv(worksheet);
+            console.log('✅ 表格数据提取完成，内容长度:', tableContent.length, '字符');
+            
+            // 2. 提取并OCR识别图片
+            console.log('📋 步骤2: 提取并OCR识别图片...');
+            const images = await this.extractImagesFromExcel(filePath);
+            const ocrResults = [];
+            
+            if (images.length > 0) {
+                console.log(`🔍 开始OCR识别 ${images.length} 个图片...`);
+                
+                for (let i = 0; i < images.length; i++) {
+                    const image = images[i];
+                    console.log(`📸 处理第 ${i + 1}/${images.length} 个图片: ${image.originalName}`);
+                    
+                    const ocrResult = await this.performOCR(image.path);
+                    if (ocrResult.success && ocrResult.text) {
+                        ocrResults.push({
+                            type: image.type,
+                            text: ocrResult.text,
+                            confidence: ocrResult.confidence,
+                            originalName: image.originalName,
+                            size: image.size
+                        });
+                        console.log(`✅ 第 ${i + 1} 个图片OCR成功，文本长度: ${ocrResult.text.length}`);
+                    } else {
+                        console.log(`❌ 第 ${i + 1} 个图片OCR失败: ${ocrResult.error}`);
+                    }
+                }
+                
+                // 清理临时图片文件
+                await this.cleanupTempFiles(images);
+            } else {
+                console.log('ℹ️ 未发现图片文件');
+            }
+            
+            // 3. 合并表格数据和OCR结果
+            console.log('📋 步骤3: 合并表格数据和OCR结果...');
+            let combinedContent = tableContent;
+            
+            if (ocrResults.length > 0) {
+                combinedContent += '\n\n=== 图片中的详细配置信息 (OCR识别) ===\n';
+                ocrResults.forEach((result, index) => {
+                    combinedContent += `\n--- 图片 ${index + 1} (置信度: ${Math.round(result.confidence)}%) ---\n`;
+                    combinedContent += `原始文件: ${result.originalName}\n`;
+                    combinedContent += `识别内容:\n${result.text}\n`;
+                });
+                
+                console.log(`✅ OCR识别完成，共识别 ${ocrResults.length} 个图片`);
+                console.log(`📊 合并后内容总长度: ${combinedContent.length} 字符`);
+            } else {
+                console.log('ℹ️ 未发现图片或OCR识别失败，仅使用表格数据');
+            }
+            
+            return {
+                content: combinedContent,
+                hasOCR: ocrResults.length > 0,
+                ocrCount: ocrResults.length,
+                tableContent: tableContent,
+                ocrResults: ocrResults
+            };
+            
+        } catch (error) {
+            console.error('❌ Excel OCR处理失败:', error);
+            console.error('错误详情:', error.message);
+            console.error('错误堆栈:', error.stack);
+            
+            // 降级到仅表格处理
+            try {
+                console.log('🔄 降级到仅表格处理...');
+                const workbook = xlsx.readFile(filePath);
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                return {
+                    content: xlsx.utils.sheet_to_csv(worksheet),
+                    hasOCR: false,
+                    ocrCount: 0,
+                    error: error.message
+                };
+            } catch (fallbackError) {
+                console.error('❌ 降级处理也失败:', fallbackError);
+                throw error;
+            }
+        }
+    }
+
+    // 清理临时文件
+    async cleanupTempFiles(images) {
+        console.log('🗑️ 开始清理临时文件...');
+        for (const image of images) {
+            try {
+                await fs.unlink(image.path);
+                console.log(`✅ 已删除临时文件: ${image.path}`);
+            } catch (error) {
+                console.warn(`⚠️ 删除临时文件失败: ${image.path}`, error.message);
+            }
+        }
+        console.log('✅ 临时文件清理完成');
+    }
+}
+
+// 创建OCR处理器实例
+const ocrProcessor = new ExcelOCRProcessor();
 
 // 元景AI调用函数
 async function callYuanJingAI(prompt) {
@@ -38,7 +349,7 @@ async function callYuanJingAI(prompt) {
                     }
                 ],
                 temperature: 0.3,
-                max_tokens: 4000,
+                max_tokens: 6000, // 增加最大token数以处理更多内容
                 top_p: 0.9,
                 stream: false
             },
@@ -48,7 +359,7 @@ async function callYuanJingAI(prompt) {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                timeout: 180000 // 3分钟超时
+                timeout: 300000 // 增加到5分钟超时
             }
         );
 
@@ -595,13 +906,22 @@ app.post('/api/quotations/analyze', async (req, res) => {
         
         // 读取文件内容
         let content;
+        let processingInfo = { hasOCR: false, ocrCount: 0 };
         const fullPath = path.resolve(filePath);
         
         if (fileName.toLowerCase().includes('.xlsx') || fileName.toLowerCase().includes('.xls')) {
-            const workbook = xlsx.readFile(fullPath);
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            content = xlsx.utils.sheet_to_csv(worksheet);
+            // 使用OCR增强的Excel处理
+            const excelResult = await ocrProcessor.processExcelWithOCR(fullPath);
+            content = excelResult.content;
+            processingInfo = {
+                hasOCR: excelResult.hasOCR,
+                ocrCount: excelResult.ocrCount,
+                tableContent: excelResult.tableContent,
+                ocrResults: excelResult.ocrResults,
+                error: excelResult.error
+            };
+            
+            console.log(`📊 Excel处理完成: 表格数据✅ OCR图片${excelResult.ocrCount}个 ${excelResult.hasOCR ? '✅' : '❌'}`);
         } else if (fileName.toLowerCase().includes('.pdf')) {
             const dataBuffer = await fs.readFile(fullPath);
             const data = await pdf(dataBuffer);
@@ -615,242 +935,134 @@ app.post('/api/quotations/analyze', async (req, res) => {
 
         console.log('🤖 开始AI分析...');
         
-        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，重点识别报价单的整体信息。
+        // 根据是否有OCR结果调整AI提示词
+        let ocrPromptAddition = '';
+        if (processingInfo.hasOCR) {
+            ocrPromptAddition = `
 
-重要提示：
-1. 优先识别报价单的类别（这个报价单是关于什么的）
-2. 识别报价单的总价格（通常在底部有合计、总计、Total等字样）
-3. 不需要逐项分析每个配件，将所有配件信息放在详细配件栏中
-4. 忽略表头、标题、公司信息、联系方式等非核心信息
+⚠️ 特别说明：此文件包含图片内容，已通过OCR技术识别
+- 表格数据：自动提取的结构化数据（如果有Excel表格）
+- 图片内容：通过OCR识别的详细信息（共${processingInfo.ocrCount}个图片）
+- 请综合分析所有可用数据源，包括表格数据和OCR识别的图片内容
+- 如果是纯图片报价单，主要依赖OCR识别结果
+- 如果OCR内容与表格数据有冲突，优先使用更完整、更详细的数据源
 
-产品名称识别指南（重要）：
-请仔细识别产品的主要名称，常见位置和表示方法：
-- 文档标题或主标题中的产品名称
-- 表格中的产品名称、Product Name、Item、Description列
-- 配置清单中的主要产品型号
-- 解决方案名称或项目名称
-- 如果是多个产品的组合，使用主要产品名称或解决方案名称
-- 避免使用公司名称、联系人姓名作为产品名称
-- 如果无法确定具体产品名称，使用描述性名称如"服务器解决方案"、"网络设备方案"等
+OCR识别质量说明：
+${processingInfo.ocrResults ? processingInfo.ocrResults.map((r, i) => 
+    `- 图片${i+1}: 置信度${Math.round(r.confidence)}% ${r.confidence > 80 ? '(高质量)' : r.confidence > 60 ? '(中等质量)' : '(低质量，请谨慎使用)'}`
+).join('\n') : ''}
 
-供应商识别指南（重要）：
-正确区分供应商和设备制造商：
-- 供应商(Supplier/Vendor)：实际提供报价的公司、经销商、代理商
-- 设备商/制造商(Manufacturer)：产品品牌方（如Dell、HP、Cisco、IBM等）
+🔥 重要：OCR识别的所有信息都必须被充分利用！
+- 不要忽略任何OCR识别的重要信息
+- 将所有产品规格、配置详情、技术参数整理到detailedComponents中
+- 保持原有的专业术语和技术描述
+- 按照逻辑分类整理信息（硬件、软件、服务、网络等）
+- 如果是纯图片报价单，OCR内容就是主要数据源`;
+        }
+        
+        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，重点识别报价单的整体信息。${ocrPromptAddition}
 
-识别规则：
-- 优先识别报价单抬头、联系信息、签名处的公司名称作为供应商
-- Dell、HP、Cisco、IBM、Lenovo、Microsoft、VMware、Oracle、Intel、AMD等是设备制造商，不是供应商
-- 如果只能识别到设备制造商，供应商字段留空或标注"未识别"
+🔥 重要提示：
+1. 必须返回标准的JSON数组格式，不要包含任何markdown标记或其他文字
+2. 所有字符串值必须用双引号包围
+3. 数字值不要加引号，百分号等符号也不要包含在数字值中
+4. detailedComponents字段必须是字符串类型，不能是对象或数组
+5. 所有属性名必须用双引号包围
+6. 字符串内容中的特殊字符需要转义
 
-价格术语识别指南（重要）：
-不同供应商使用不同的价格术语，请仔细识别以下常见术语：
+⚠️ JSON格式要求：
+- 属性名必须用双引号："propertyName"
+- 字符串值必须用双引号："string value"
+- 数字值不要引号：123.45
+- 布尔值不要引号：true/false
+- null值不要引号：null
+- 数组格式：[item1, item2]
+- 对象格式：{"key": "value"}
 
-折扣前价格（原价）的常见术语：
-- List Price / LP / 列表价格 / Total List Price
-- MSRP (Manufacturer's Suggested Retail Price)
-- Retail Price / 零售价
-- Standard Price / 标准价格
-- Original Price / 原价
-- Catalog Price / 目录价格
-- Full Price / 全价
-- RRP (Recommended Retail Price)
+通用报价单分析规则：
 
-折扣后价格（实际价格）的常见术语：
-- Customer Price / Consumer Price / 客户价格 / Total Customer Price
-- Net Price / 净价
-- Final Price / 最终价格
-- Discounted Price / 折扣价格
-- Special Price / 特价
-- Quote Price / 报价
-- Deal Price / 成交价
-- Your Price / 您的价格
-- Selling Price / 销售价格
-- After Discount Price / 折后价格
+📋 产品名称识别：
+- 优先识别：文档标题、主标题、产品型号、服务名称
+- 表格中的：Product Name、Item、Description、Service、Model等
+- 配置清单中的主要产品型号或解决方案名称
+- 如果是多产品组合，使用主要产品名称或整体方案名称
 
-⚠️ 特别重要的价格识别规则：
-1. 如果文档中同时出现"List Price"和"Customer Price"，则：
-   - List Price = 折扣前总价 (totalPrice)
-   - Customer Price = 折扣后总价 (discountedTotalPrice)
+🏢 供应商识别（重要）：
+- 供应商：实际提供报价的公司、经销商、代理商、服务商
+- 制造商：产品品牌方（Dell、HP、Cisco、IBM、Microsoft、VMware、华为、联想等）
+- 优先识别报价单抬头、公司信息、联系方式、签名处的公司名称作为供应商
+- 如果只能识别到制造商品牌，供应商字段使用"未识别"
 
-2. 如果文档中出现"Total List Price"和"Total Customer Price"，则：
-   - Total List Price = 折扣前总价 (totalPrice)
-   - Total Customer Price = 折扣后总价 (discountedTotalPrice)
+💰 价格术语识别：
+原价相关：List Price、MSRP、标准价格、官方价格、零售价、原价
+实际价格：Customer Price、Net Price、Final Price、折扣价格、成交价、实际价
+单价相关：Unit Price、单价、每个、单位价格
+总价相关：Total、总计、合计、Grand Total、总金额
 
-3. 如果文档中显示折扣率（如"LP Discount %"、"Discount %"），请直接提取该数值
+⚠️ 重要：绝对禁止进行任何价格计算！只识别文档中明确标注的价格数值
 
-4. 常见的价格结构模式：
-   - List Price → Discount % → Customer Price
-   - Standard Price → Special Discount → Final Price
-   - MSRP → Your Discount → Your Price
+💱 币种识别：
+- 符号：$、€、£、¥、₹、₩等
+- 代码：USD、EUR、GBP、CNY、JPY、INR、KRW等
+- 文字：美元、欧元、英镑、人民币、日元等
 
-5. 运费和税费处理：
-   - 如果有"incl. freight charges"或"including shipping"，这通常是最终的到手价
-   - 基础Customer Price + 运费 = 最终到手价
+📦 数量识别：
+- Qty、Quantity、数量、件数、台数、个数、套数、份数
+- Units、Pieces、Sets、Items、Licenses、Subscriptions
+- 单位：台、个、套、件、份、年、月、用户数、许可数
+- 默认为1（如果找不到明确数量）
 
-单价相关术语：
-- Unit Price / 单价
-- Each / 每个
-- Per Unit / 每单位
-- Item Price / 项目价格
-- Individual Price / 单个价格
+🔥🔥🔥 详细信息处理（超级重要）：
+将所有识别的详细信息整理成易读的文本格式，放入detailedComponents字段：
 
-总价相关术语：
-- Total / 总计
-- Grand Total / 总合计
-- Subtotal / 小计
-- Amount / 金额
-- Sum / 总和
-- Total Amount / 总金额
-- Final Amount / 最终金额
+格式要求：
+- 使用纯文本格式，不要使用JSON对象或数组
+- 每个配件/服务项目占一行
+- 使用简单的"- "开头列出每个项目
+- 保留原有的专业术语、型号、SKU、规格参数
+- 不要过度分类，直接列出所有相关配件和服务
 
-⚠️ 重要：绝对禁止进行任何价格计算！
-- 不要用总价除以数量计算单价
-- 不要用单价乘以数量计算总价
-- 不要计算折扣率
-- 只识别文档中明确标注的价格数值
-- 如果某个价格字段在文档中没有明确标注，请留空
+示例格式：
+- HPE DL380 Gen11 8SFF NC CTO Server (型号: P52534-B21) × 1台
+- Intel Xeon-Gold 5418Y CPU (型号: P49612-B21) × 2个
+- HPE 32GB DDR4-4800 Memory Kit (型号: P43328-B21) × 4个
+- HPE Smart Array E208e-p Controller (型号: JG977A) × 1个
+- HPE 480GB SATA SSD (型号: P09722-B21) × 2个
+- HPE 1.8TB SAS HDD (型号: P09723-B21) × 4个
+- BCM 57412 10GbE Network Adapter × 2个
+- HPE Cloud Management Service × 1年
+- 技术支持服务 × 3年
+- 运费: $500
+- 税费: $2,100
 
-币种识别指南（重要）：
-供应商使用各种方式表示币种，请仔细识别以下常见表示方法：
+重要原则：
+1. 每行一个配件/服务项目
+2. 包含型号/SKU信息（如果有）
+3. 包含数量信息
+4. 保持原有的专业术语
+5. 不要添加【】分类标题
+6. 直接列出，简洁明了
 
-币种符号：
-- $ = USD (美元)
-- € = EUR (欧元)
-- £ = GBP (英镑)
-- ¥ = CNY (人民币) 或 JPY (日元，需根据供应商地区判断)
-- ₹ = INR (印度卢比)
-- ₩ = KRW (韩元)
-- C$ = CAD (加拿大元)
-- A$ = AUD (澳大利亚元)
-- S$ = SGD (新加坡元)
-- HK$ = HKD (港币)
+请严格按照以下JSON格式返回，不要包含任何其他文字：
 
-币种代码和表达方式：
-- USD / US$ / US Dollar / 美元
-- EUR / Euro / 欧元
-- GBP / British Pound / 英镑
-- CNY / RMB / Chinese Yuan / 人民币
-- JPY / Japanese Yen / 日元
-- INR / Indian Rupee / 印度卢比
-- KRW / Korean Won / 韩元
-- CAD / Canadian Dollar / 加拿大元
-- AUD / Australian Dollar / 澳大利亚元
-- SGD / Singapore Dollar / 新加坡元
-- HKD / Hong Kong Dollar / 港币
-- CHF / Swiss Franc / 瑞士法郎
-- SEK / Swedish Krona / 瑞典克朗
-- NOK / Norwegian Krone / 挪威克朗
-- DKK / Danish Krone / 丹麦克朗
-
-特殊表达方式：
-- "IN USD" / "IN GBP" / "IN EUR" = 以某种货币计价
-- "All prices in USD" = 所有价格以美元计价
-- "Currency: EUR" = 货币：欧元
-- "Quoted in GBP" = 以英镑报价
-- "Price shown in $" = 价格以美元显示
-- 如果只有符号没有明确说明，根据供应商地区推断（如美国供应商的$通常是USD）
-
-数量识别指南（重要）：
-仔细识别产品数量，常见表示方法：
-- Qty / Quantity / 数量 / 件数 / 台数 / 个数 / 套数
-- Units / Pieces / Sets / 单位 / 件 / 台 / 个 / 套
-- 数字后跟单位：如 "5 units", "10 pieces", "3台", "2套"
-- 表格中的数量列
-- 如果找不到明确的数量信息，默认为1
-
-日期识别指南（重要）：
-请在文档中仔细搜索真实的日期信息，不要使用当前日期：
-
-报价日期的常见表示：
-- Quote Date / Quotation Date / 报价日期
-- Date / 日期
-- Issue Date / 发布日期
-- Created Date / 创建日期
-- 文档顶部的日期信息
-- 表格中的日期列
-
-报价有效期的常见表示：
-- Valid Until / Valid Through / 有效期至
-- Expiry Date / Expiration Date / 到期日期
-- Quote Validity / 报价有效期
-- Valid for X days / 有效X天
-- "This quote is valid until..." / "本报价有效期至..."
-
-日期格式识别：
-- YYYY-MM-DD (如: 2024-03-15)
-- MM/DD/YYYY (如: 03/15/2024)
-- DD/MM/YYYY (如: 15/03/2024)
-- DD-MM-YYYY (如: 15-03-2024)
-- Month DD, YYYY (如: March 15, 2024)
-- DD Month YYYY (如: 15 March 2024)
-- 中文格式：2024年3月15日
-
-重要：如果在文档中找不到明确的日期信息，请将相应的日期字段留空（null），不要使用当前日期或假设的日期。
-
-请以JSON数组格式返回，通常一个报价单只返回一个对象，包含以下字段：
-
-基本信息：
-- quotationCategory: 报价单类别（服务器解决方案、云服务方案、网络设备方案、存储解决方案、安全设备方案、软件系统方案、其他）
-- quotationTitle: 主要产品名称或解决方案名称（这是最重要的字段，请仔细识别）
-- supplier: 供应商/经销商名称（从文档抬头、公司信息或签名处获取，不能是产品品牌）
-- region: 地区（美国、中国、韩国、日本、芬兰、瑞典、荷兰、德国、法国、印度、以色列、加拿大、澳大利亚、台湾、英国、瑞士、新加坡、其他）
-
-价格和数量信息（请根据上述术语指南准确识别，禁止计算）：
-- totalPrice: 折扣前总价（从List Price、MSRP、Retail Price等术语识别，如果文档中没有明确标注请留空）
-- discountedTotalPrice: 折扣后总价（从Customer Price、Net Price、Final Price等术语识别）
-- unitPrice: 单价（直接从文档中的Unit Price、单价等字段读取，禁止计算）
-- quantity: 数量（仔细识别产品数量，常见表示：Qty、Quantity、数量、件数、台数、个数等，默认为1）
-- currency: 货币代码（请根据上述币种识别指南准确识别，如USD、EUR、GBP、CNY等，优先使用标准3字母代码）
-- discount_rate: 整体折扣率（只有当文档中明确标注折扣率时才填写，禁止计算）
-
-详细信息：
-- detailedComponents: 详细配件清单（将所有产品/配件信息整合在这里，包括型号、规格、数量等）
-- quote_validity: 报价有效期（YYYY-MM-DD格式，请在文档中搜索真实日期，如果找不到请留空null）
-- delivery_date: 交付日期（如果有，YYYY-MM-DD格式）
-- notes: 备注信息
-
-数据质量要求：
-- quotationCategory必须从枚举值中选择，如果无法确定则选择"其他"
-- quotationTitle是最重要的字段，必须仔细识别产品名称
-- totalPrice、discountedTotalPrice、unitPrice必须是数字，直接从文档读取，禁止计算
-- quantity必须是正整数，仔细识别数量信息，如果找不到明确数量则默认为1
-- 绝对禁止任何价格计算，包括单价计算、总价计算、折扣率计算
-- supplier不能是产品品牌（如Dell、HP、Cisco等），应该是经销商/供应商公司名
-- detailedComponents应该包含所有产品配件的详细信息，格式清晰易读
-- 只有当文档中明确标注折扣率时才填写discount_rate字段
-- quote_validity字段：请在文档中仔细搜索真实的报价有效期日期，如果找不到请设为null，不要使用当前日期
-
-示例说明：
-如果表格显示：
-- 产品：Dell VSAN-RN R760，数量：3，单价：$15,895，小计：$47,685
-- 运费：$5,100，税费：$9,060，总计：$61,845
-- 报价方：ABC Technology Company
-
-则应提取：
-- quotationTitle: "Dell VSAN-RN R760"（产品名称）
-- supplier: "ABC Technology Company"（供应商，不是Dell）
-- unitPrice: 15895（直接读取单价，不计算）
-- discountedTotalPrice: 61845（最终总金额）
-- quantity: 3
-- detailedComponents: "Dell VSAN-RN R760 × 3台，运费：$5,100，税费：$9,060"
-
-示例2 - List Price和Customer Price结构：
-如果表格显示：
-- Total List Price: £40,656.71
-- Total LP Discount %: 32.11%
-- Total Customer Price: £27,602.89
-- Freight charge: £7.50
-- Total Customer price incl. freight charges: £27,610.39
-
-则应提取：
-- totalPrice: 40656.71（Total List Price，折扣前总价）
-- discountedTotalPrice: 27610.39（包含运费的最终价格）
-- discount_rate: 32.11（直接读取折扣率）
-- currency: "GBP"（英镑）
-- notes: "基础Customer Price: £27,602.89, 运费: £7.50"
-
-请严格按照以上要求分析，绝对禁止进行任何价格计算。请直接返回JSON数组，不要包含其他解释文字。
+[
+  {
+    "quotationCategory": "报价单类别（服务器解决方案、云服务方案、网络设备方案、存储解决方案、安全设备方案、软件系统方案、其他）",
+    "quotationTitle": "主要产品名称或解决方案名称",
+    "supplier": "供应商名称（不能是产品品牌）",
+    "region": "地区（美国、中国、韩国、日本、德国、法国、英国、其他等）",
+    "totalPrice": 折扣前总价数字（没有则为null）,
+    "discountedTotalPrice": 折扣后总价数字（没有则为null）,
+    "unitPrice": 单价数字（没有则为null）,
+    "quantity": 数量数字（默认为1）,
+    "currency": "货币代码（如USD、EUR、CNY等）",
+    "discount_rate": 折扣率数字（如25表示25%，没有则为null）,
+    "detailedComponents": "详细配置和服务清单的文本描述",
+    "quote_validity": "报价有效期（YYYY-MM-DD格式，没有则为null）",
+    "delivery_date": "交付日期（YYYY-MM-DD格式，没有则为null）",
+    "notes": "备注信息"
+  }
+]
 
 文件内容：
 ${content}`;
@@ -867,15 +1079,47 @@ ${content}`;
             // 移除JavaScript风格的注释
             .replace(/\/\/.*$/gm, '')          // 移除单行注释 //...
             .replace(/\/\*[\s\S]*?\*\//g, '')  // 移除多行注释 /*...*/
-            // 将单引号替换为双引号（避免影响字符串内的单引号）
+            // 修复常见的JSON格式错误
+            .replace(/,(\s*[\]}])/g, '$1')     // 移除多余的逗号
             .replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3')  // 修复属性名的单引号
             .replace(/:\s*'([^']*)'(\s*[,}])/g, ': "$1"$2')     // 修复属性值的单引号
+            // 修复百分号等特殊字符
+            .replace(/:\s*([0-9.]+)%/g, ': $1')  // 移除百分号
+            .replace(/:\s*([0-9.]+),([0-9]+)/g, ': $1$2')  // 修复数字中的逗号
             // 修复中文标点符号
             .replace(/，/g, ',')     // 中文逗号 → 英文逗号
             .replace(/：/g, ':')     // 中文冒号 → 英文冒号
             .replace(/；/g, ';')     // 中文分号 → 英文分号
-            // 修复多余的逗号（在}或]前的逗号）
-            .replace(/,(\s*[\]}])/g, '$1')
+            // 修复引号问题
+            .replace(/"/g, '"').replace(/"/g, '"')  // 统一引号
+            .replace(/'/g, "'").replace(/'/g, "'")  // 统一单引号
+            // 🔥 关键修复：处理detailedComponents字段缺少引号的问题
+            .replace(/detailedComponents:\s*([^,}]+)(?=[,}])/g, (match, content) => {
+                // 如果内容没有被引号包围，则添加引号并转义内部引号
+                if (!content.trim().startsWith('"')) {
+                    const cleanContent = content
+                        .replace(/"/g, '\\"')  // 转义内部双引号
+                        .trim();
+                    return `"detailedComponents": "${cleanContent}"`;
+                }
+                return match;
+            })
+            // 修复detailedComponents字段中的对象格式
+            .replace(/"detailedComponents":\s*{[^}]*}/g, (match) => {
+                // 将对象转换为字符串
+                const content = match.replace(/"detailedComponents":\s*/, '');
+                const cleanContent = content
+                    .replace(/[{}]/g, '')
+                    .replace(/"/g, '')
+                    .replace(/,/g, '\n- ')
+                    .replace(/:/g, ': ');
+                return `"detailedComponents": "${cleanContent}"`;
+            })
+            // 修复不完整的字符串
+            .replace(/"""+"$/g, '"')  // 修复多个引号结尾
+            .replace(/,"[^"]*$/g, '')  // 移除不完整的最后一个属性
+            // 修复属性名缺少引号的问题
+            .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
             // 清理多余的空白字符和空行
             .replace(/\s+/g, ' ')
             .trim();
@@ -891,23 +1135,69 @@ ${content}`;
             
             // 尝试更激进的修复方法
             try {
-                // 使用Function构造函数和eval的替代方法
-                const fixedText = text
-                    .replace(/'/g, '"')  // 全部单引号改双引号
-                    .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // 确保属性名有双引号
+                // 使用更强的修复逻辑
+                let fixedText = text
+                    // 修复属性名缺少引号
+                    .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+                    // 修复字符串值缺少引号（特别处理detailedComponents）
+                    .replace(/"detailedComponents":\s*([^",}]+)(?=[,}])/g, (match, content) => {
+                        const cleanContent = content
+                            .replace(/"/g, '\\"')  // 转义内部双引号
+                            .trim();
+                        return `"detailedComponents": "${cleanContent}"`;
+                    })
+                    // 修复其他字符串值缺少引号
+                    .replace(/:\s*([^",\[\]{}0-9null][^,}]*?)(?=[,}])/g, (match, content) => {
+                        if (!content.trim().startsWith('"') && !content.trim().endsWith('"')) {
+                            const cleanContent = content.trim().replace(/"/g, '\\"');
+                            return `: "${cleanContent}"`;
+                        }
+                        return match;
+                    })
+                    // 修复null值
+                    .replace(/:\s*null\s*([,}])/g, ': null$1')
+                    // 修复数字值
+                    .replace(/:\s*([0-9]+\.?[0-9]*)\s*([,}])/g, ': $1$2')
+                    // 最终清理
+                    .replace(/,(\s*[}\]])/g, '$1')  // 移除多余逗号
+                    .trim();
                 
                 console.log('🔧 二次修复后的JSON:', fixedText);
                 parsedData = JSON.parse(fixedText);
                 console.log('✅ 二次修复成功！');
             } catch (secondParseError) {
                 console.error('❌ 二次JSON解析也失败:', secondParseError);
-                const fixedText = text.replace(/'/g, '"').replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
-                return res.status(500).json({ 
-                    error: 'AI返回的JSON格式不正确，请重试',
-                    rawResponse: text,
-                    fixedResponse: fixedText,
-                    parseError: parseError.message
-                });
+                
+                // 第三次尝试：使用正则表达式提取关键信息
+                try {
+                    console.log('🔧 尝试第三次修复...');
+                    const extractedData = {
+                        quotationCategory: (text.match(/"quotationCategory":\s*"([^"]*)"/) || [])[1] || '其他',
+                        quotationTitle: (text.match(/"quotationTitle":\s*"([^"]*)"/) || [])[1] || '未识别产品',
+                        supplier: (text.match(/"supplier":\s*"([^"]*)"/) || [])[1] || '未知供应商',
+                        region: (text.match(/"region":\s*"([^"]*)"/) || [])[1] || null,
+                        totalPrice: parseFloat((text.match(/"totalPrice":\s*([0-9.]+)/) || [])[1]) || null,
+                        discountedTotalPrice: parseFloat((text.match(/"discountedTotalPrice":\s*([0-9.]+)/) || [])[1]) || null,
+                        unitPrice: parseFloat((text.match(/"unitPrice":\s*([0-9.]+)/) || [])[1]) || null,
+                        quantity: parseInt((text.match(/"quantity":\s*([0-9]+)/) || [])[1]) || 1,
+                        currency: (text.match(/"currency":\s*"([^"]*)"/) || [])[1] || 'USD',
+                        discount_rate: parseFloat((text.match(/"discount_rate":\s*([0-9.]+)/) || [])[1]) || null,
+                        detailedComponents: (text.match(/"detailedComponents":\s*"([^"]*)"/) || [])[1] || '',
+                        quote_validity: (text.match(/"quote_validity":\s*"([^"]*)"/) || [])[1] || null,
+                        delivery_date: (text.match(/"delivery_date":\s*"([^"]*)"/) || [])[1] || null,
+                        notes: (text.match(/"notes":\s*"([^"]*)"/) || [])[1] || ''
+                    };
+                    
+                    parsedData = [extractedData];
+                    console.log('✅ 第三次修复成功，使用正则提取！');
+                } catch (thirdError) {
+                    console.error('❌ 第三次修复也失败:', thirdError);
+                    return res.status(500).json({ 
+                        error: 'AI返回的JSON格式不正确，请重试',
+                        rawResponse: text,
+                        parseError: parseError.message
+                    });
+                }
             }
         }
 
@@ -1013,12 +1303,31 @@ ${content}`;
                         return components.map(item => {
                             if (typeof item === 'string') return item;
                             if (typeof item === 'object') {
-                                return Object.entries(item).map(([key, value]) => `${key}: ${value}`).join(', ');
+                                return Object.entries(item).map(([key, value]) => {
+                                    if (typeof value === 'object') {
+                                        return `${key}: ${JSON.stringify(value)}`;
+                                    }
+                                    return `${key}: ${value}`;
+                                }).join(', ');
                             }
                             return String(item);
                         }).join('\n');
                     } else {
-                        return Object.entries(components).map(([key, value]) => `${key}: ${value}`).join('\n');
+                        return Object.entries(components).map(([key, value]) => {
+                            if (typeof value === 'object') {
+                                if (Array.isArray(value)) {
+                                    return `${key}:\n${value.map(v => {
+                                        if (typeof v === 'object') {
+                                            return `- ${Object.entries(v).map(([k, val]) => `${k}: ${val}`).join(', ')}`;
+                                        }
+                                        return `- ${v}`;
+                                    }).join('\n')}`;
+                                } else {
+                                    return `${key}:\n${Object.entries(value).map(([k, v]) => `- ${k}: ${v}`).join('\n')}`;
+                                }
+                            }
+                            return `${key}: ${value}`;
+                        }).join('\n\n');
                     }
                 }
                 return String(components);

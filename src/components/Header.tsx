@@ -23,7 +23,15 @@ const Header = () => {
             padding: '0 24px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            height: '60px',
+            borderBottom: '1px solid var(--semi-color-border)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
         }}>
             <div 
                 style={{ 

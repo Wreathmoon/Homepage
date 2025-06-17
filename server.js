@@ -952,21 +952,226 @@ ${processingInfo.ocrResults ? processingInfo.ocrResults.map((r, i) =>
     `- 图片${i+1}: 置信度${Math.round(r.confidence)}% ${r.confidence > 80 ? '(高质量)' : r.confidence > 60 ? '(中等质量)' : '(低质量，请谨慎使用)'}`
 ).join('\n') : ''}
 
-🔥 重要：OCR识别的所有信息都必须被充分利用！
-- 不要忽略任何OCR识别的重要信息
-- 将所有产品规格、配置详情、技术参数整理到detailedComponents中
-- 保持原有的专业术语和技术描述
-- 按照逻辑分类整理信息（硬件、软件、服务、网络等）
-- 如果是纯图片报价单，OCR内容就是主要数据源`;
+🔥 重要：专注于基础信息和价格信息的识别！`;
         }
         
-        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，重点识别报价单的整体信息。${ocrPromptAddition}
+        // 创建直接提取详细配置信息的函数
+        const extractDetailedComponents = (content, processingInfo) => {
+            console.log('📋 开始提取详细配置信息...');
+            let detailedComponents = '';
+            
+            try {
+                // 专门处理CSV/Excel数据的函数
+                const processCSVData = (csvContent) => {
+                    console.log('📊 处理CSV格式数据...');
+                    const lines = csvContent.split('\n');
+                    const configLines = [];
+                    let currentProduct = null;
+                    
+                    for (const line of lines) {
+                        const cleanLine = line.trim();
+                        
+                        // 跳过空行和只包含逗号的行
+                        if (!cleanLine || cleanLine.match(/^,+$/)) {
+                            continue;
+                        }
+                        
+                        // 分割CSV行
+                        const fields = cleanLine.split(',').map(field => field.trim().replace(/^"|"$/g, ''));
+                        
+                        // 过滤掉全部为空或只包含数字/价格的行
+                        const nonEmptyFields = fields.filter(field => 
+                            field && 
+                            field.length > 1 && 
+                            !field.match(/^\d+[\.,]?\d*$/) && // 纯数字
+                            !field.match(/^[\$€¥£]\d/) && // 价格
+                            !field.match(/^[0-9\.,\s]+$/) && // 数字组合
+                            field !== '0' &&
+                            field !== '0.00'
+                        );
+                        
+                        if (nonEmptyFields.length === 0) {
+                            continue;
+                        }
+                        
+                        // 查找产品型号和描述 (通常在第1和第3个非空字段)
+                        for (let i = 0; i < fields.length; i++) {
+                            const field = fields[i];
+                            if (!field || field.length < 3) continue;
+                            
+                            // 检测产品型号模式 (如 P52534-B21, INT Xeon-G 等)
+                            if (field.match(/^[A-Z0-9][\w\-]+[A-Z0-9]$/i) && field.length > 5) {
+                                // 获取对应的产品描述 (通常在下一个或下两个字段)
+                                let description = '';
+                                for (let j = i + 1; j < Math.min(i + 4, fields.length); j++) {
+                                    if (fields[j] && fields[j].length > 10 && 
+                                        !fields[j].match(/^\d+[\.,]?\d*$/) &&
+                                        !fields[j].match(/^[\$€¥£]/)) {
+                                        description = fields[j];
+                                        break;
+                                    }
+                                }
+                                
+                                if (description) {
+                                    const productLine = `- ${field}: ${description}`;
+                                    if (!configLines.includes(productLine)) {
+                                        configLines.push(productLine);
+                                    }
+                                }
+                            }
+                            // 检测产品描述模式 (包含关键词的长文本)
+                            else if (field.length > 10 && 
+                                    (field.includes('HPE') || field.includes('Intel') || field.includes('CPU') ||
+                                     field.includes('Memory') || field.includes('Storage') || field.includes('SSD') ||
+                                     field.includes('HDD') || field.includes('Controller') || field.includes('Adapter') ||
+                                     field.includes('Kit') || field.includes('Server') || field.includes('Gen11') ||
+                                     field.includes('Network') || field.includes('Power') || field.includes('Management'))) {
+                                
+                                // 查找对应的型号 (可能在前面的字段)
+                                let partNumber = '';
+                                for (let j = Math.max(0, i - 3); j < i; j++) {
+                                    if (fields[j] && fields[j].match(/^[A-Z0-9][\w\-]+[A-Z0-9]$/i)) {
+                                        partNumber = fields[j];
+                                        break;
+                                    }
+                                }
+                                
+                                const productLine = partNumber ? 
+                                    `- ${partNumber}: ${field}` : 
+                                    `- ${field}`;
+                                
+                                if (!configLines.includes(productLine)) {
+                                    configLines.push(productLine);
+                                }
+                            }
+                        }
+                    }
+                    
+                    console.log(`✅ 从CSV中提取了 ${configLines.length} 行产品配置`);
+                    return configLines.join('\n');
+                };
+                
+                // 1. 优先处理Excel表格数据
+                if (processingInfo.tableContent) {
+                    console.log('📊 处理Excel表格数据...');
+                    const csvResult = processCSVData(processingInfo.tableContent);
+                    if (csvResult) {
+                        detailedComponents += csvResult;
+                    }
+                }
+                
+                // 2. 从OCR结果中提取配置信息
+                if (processingInfo.ocrResults && processingInfo.ocrResults.length > 0) {
+                    console.log('🔍 从OCR结果中提取配置信息...');
+                    
+                    if (detailedComponents) {
+                        detailedComponents += '\n\n=== 图片中的详细配置信息 ===\n';
+                    }
+                    
+                    processingInfo.ocrResults.forEach((result, index) => {
+                        if (result.text && result.text.trim()) {
+                            detailedComponents += `\n--- 配置图片 ${index + 1} ---\n`;
+                            
+                            // 清理OCR文本，保留有用的配置信息
+                            const ocrLines = result.text.split('\n');
+                            const cleanedOcrLines = [];
+                            
+                            for (const line of ocrLines) {
+                                const cleanLine = line.trim();
+                                if (cleanLine && 
+                                    cleanLine.length > 3 &&
+                                    !cleanLine.match(/^[\d\s\.,\$€¥£]+$/) && // 过滤纯数字/符号行
+                                    (cleanLine.includes('CPU') || cleanLine.includes('Memory') || 
+                                     cleanLine.includes('Storage') || cleanLine.includes('Network') ||
+                                     cleanLine.includes('Power') || cleanLine.includes('Controller') ||
+                                     cleanLine.includes('HPE') || cleanLine.includes('Intel') ||
+                                     cleanLine.includes('Server') || cleanLine.includes('Gen11') ||
+                                     cleanLine.length > 10)) { // 或者较长的描述性文本
+                                    cleanedOcrLines.push(`- ${cleanLine}`);
+                                }
+                            }
+                            
+                            if (cleanedOcrLines.length > 0) {
+                                detailedComponents += cleanedOcrLines.join('\n') + '\n';
+                            }
+                        }
+                    });
+                    
+                    console.log(`✅ 从 ${processingInfo.ocrResults.length} 个OCR结果中提取了配置信息`);
+                }
+                
+                // 3. 如果没有表格数据，尝试处理原始内容
+                if (!detailedComponents && content) {
+                    console.log('📝 处理原始内容...');
+                    
+                    // 检测是否为CSV格式
+                    if (content.includes(',') && content.split('\n').length > 10) {
+                        const csvResult = processCSVData(content);
+                        if (csvResult) {
+                            detailedComponents = csvResult;
+                        }
+                    } else {
+                        // 处理其他格式的内容
+                        const contentLines = content.split('\n');
+                        const configLines = [];
+                        
+                        for (const line of contentLines) {
+                            const cleanLine = line.trim();
+                            if (cleanLine && 
+                                cleanLine.length > 5 &&
+                                !cleanLine.toLowerCase().includes('price') &&
+                                !cleanLine.toLowerCase().includes('total') &&
+                                !cleanLine.toLowerCase().includes('amount') &&
+                                !cleanLine.match(/^\d+[\.,]\d+/) &&
+                                (cleanLine.includes('HPE') || cleanLine.includes('Intel') ||
+                                 cleanLine.includes('CPU') || cleanLine.includes('Memory') ||
+                                 cleanLine.includes('Storage') || cleanLine.includes('Network') ||
+                                 cleanLine.includes('Server') || cleanLine.length > 20)) {
+                                configLines.push(`- ${cleanLine}`);
+                            }
+                        }
+                        
+                        if (configLines.length > 0) {
+                            detailedComponents = configLines.slice(0, 30).join('\n'); // 限制行数
+                            console.log(`✅ 从原始内容中提取了 ${Math.min(configLines.length, 30)} 行配置信息`);
+                        }
+                    }
+                }
+                
+                // 4. 后处理：清理和格式化
+                if (detailedComponents) {
+                    // 移除重复行
+                    const lines = detailedComponents.split('\n');
+                    const uniqueLines = [...new Set(lines)];
+                    detailedComponents = uniqueLines.join('\n');
+                    
+                    // 限制总长度
+                    if (detailedComponents.length > 5000) {
+                        detailedComponents = detailedComponents.substring(0, 5000) + '\n\n[配置信息过长，已截断...]';
+                        console.log('⚠️ 配置信息过长，已截断至5000字符');
+                    }
+                    
+                    console.log(`✅ 详细配置信息提取完成，总长度: ${detailedComponents.length} 字符`);
+                } else {
+                    detailedComponents = '未能提取到详细配置信息';
+                    console.log('⚠️ 未能提取到详细配置信息');
+                }
+                
+            } catch (error) {
+                console.error('❌ 提取详细配置信息失败:', error);
+                detailedComponents = '配置信息提取失败: ' + error.message;
+            }
+            
+            return detailedComponents;
+        };
+        
+        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，专注于提取基础信息和价格信息。${ocrPromptAddition}
 
 🔥 重要提示：
 1. 必须返回标准的JSON数组格式，不要包含任何markdown标记或其他文字
 2. 所有字符串值必须用双引号包围
 3. 数字值不要加引号，百分号等符号也不要包含在数字值中
-4. detailedComponents字段必须是字符串类型，不能是对象或数组
+4. 只分析基础信息和价格信息，不要分析详细配置
 5. 所有属性名必须用双引号包围
 6. 字符串内容中的特殊字符需要转义
 
@@ -986,6 +1191,27 @@ ${processingInfo.ocrResults ? processingInfo.ocrResults.map((r, i) =>
 - 表格中的：Product Name、Item、Description、Service、Model等
 - 配置清单中的主要产品型号或解决方案名称
 - 如果是多产品组合，使用主要产品名称或整体方案名称
+-注意不要把配件当作主要产品名称，产品名称应该为关于服务器、存储、网络、安全、软件、云服务等设备名称，而不是下属配件名称!
+
+🔍 主要产品识别规则：
+- 服务器类：如 "HPE DL380 Gen11 Server"、"Dell PowerEdge R750"、"IBM Power10"
+- 存储类：如 "HPE MSA 2060"、"NetApp FAS2750"、"Dell EMC PowerStore"
+- 网络类：如 "Cisco Catalyst 9300"、"Aruba 6300"、"Juniper EX4650"
+- 安全类：如 "Fortinet FortiGate 600E"、"Cisco ASA 5516"
+- 软件类：如 "VMware vSphere"、"Microsoft Windows Server"
+- 云服务：如 "AWS EC2"、"Azure Virtual Machine"
+
+⚠️ 避免识别为配件的内容：
+- CPU (如 Intel Xeon、AMD EPYC)
+- 内存条 (如 DDR4、DDR5 Memory Kit)
+- 硬盘 (如 SSD、HDD、Storage Drive)
+- 网卡 (如 Network Adapter、NIC Card)
+- 电源 (如 Power Supply、PSU)
+- 风扇 (如 Fan Kit、Cooling)
+- 线缆 (如 Cable、Cord)
+- 控制器 (如 Controller Card、RAID Card)
+
+如果报价单包含多个产品，应该识别主要的服务器/存储/网络设备名称，而不是其中的配件。
 
 🏢 供应商识别（重要）：
 - 供应商：实际提供报价的公司、经销商、代理商、服务商
@@ -1012,38 +1238,7 @@ ${processingInfo.ocrResults ? processingInfo.ocrResults.map((r, i) =>
 - 单位：台、个、套、件、份、年、月、用户数、许可数
 - 默认为1（如果找不到明确数量）
 
-🔥🔥🔥 详细信息处理（超级重要）：
-将所有识别的详细信息整理成易读的文本格式，放入detailedComponents字段：
-
-格式要求：
-- 使用纯文本格式，不要使用JSON对象或数组
-- 每个配件/服务项目占一行
-- 使用简单的"- "开头列出每个项目
-- 保留原有的专业术语、型号、SKU、规格参数
-- 不要过度分类，直接列出所有相关配件和服务
-
-示例格式：
-- HPE DL380 Gen11 8SFF NC CTO Server (型号: P52534-B21) × 1台
-- Intel Xeon-Gold 5418Y CPU (型号: P49612-B21) × 2个
-- HPE 32GB DDR4-4800 Memory Kit (型号: P43328-B21) × 4个
-- HPE Smart Array E208e-p Controller (型号: JG977A) × 1个
-- HPE 480GB SATA SSD (型号: P09722-B21) × 2个
-- HPE 1.8TB SAS HDD (型号: P09723-B21) × 4个
-- BCM 57412 10GbE Network Adapter × 2个
-- HPE Cloud Management Service × 1年
-- 技术支持服务 × 3年
-- 运费: $500
-- 税费: $2,100
-
-重要原则：
-1. 每行一个配件/服务项目
-2. 包含型号/SKU信息（如果有）
-3. 包含数量信息
-4. 保持原有的专业术语
-5. 不要添加【】分类标题
-6. 直接列出，简洁明了
-
-请严格按照以下JSON格式返回，不要包含任何其他文字：
+请严格按照以下JSON格式返回基础信息和价格信息，不要包含任何其他文字：
 
 [
   {
@@ -1057,7 +1252,6 @@ ${processingInfo.ocrResults ? processingInfo.ocrResults.map((r, i) =>
     "quantity": 数量数字（默认为1）,
     "currency": "货币代码（如USD、EUR、CNY等）",
     "discount_rate": 折扣率数字（如25表示25%，没有则为null）,
-    "detailedComponents": "详细配置和服务清单的文本描述",
     "quote_validity": "报价有效期（YYYY-MM-DD格式，没有则为null）",
     "delivery_date": "交付日期（YYYY-MM-DD格式，没有则为null）",
     "notes": "备注信息"
@@ -1093,31 +1287,6 @@ ${content}`;
             // 修复引号问题
             .replace(/"/g, '"').replace(/"/g, '"')  // 统一引号
             .replace(/'/g, "'").replace(/'/g, "'")  // 统一单引号
-            // 🔥 关键修复：处理detailedComponents字段缺少引号的问题
-            .replace(/detailedComponents:\s*([^,}]+)(?=[,}])/g, (match, content) => {
-                // 如果内容没有被引号包围，则添加引号并转义内部引号
-                if (!content.trim().startsWith('"')) {
-                    const cleanContent = content
-                        .replace(/"/g, '\\"')  // 转义内部双引号
-                        .trim();
-                    return `"detailedComponents": "${cleanContent}"`;
-                }
-                return match;
-            })
-            // 修复detailedComponents字段中的对象格式
-            .replace(/"detailedComponents":\s*{[^}]*}/g, (match) => {
-                // 将对象转换为字符串
-                const content = match.replace(/"detailedComponents":\s*/, '');
-                const cleanContent = content
-                    .replace(/[{}]/g, '')
-                    .replace(/"/g, '')
-                    .replace(/,/g, '\n- ')
-                    .replace(/:/g, ': ');
-                return `"detailedComponents": "${cleanContent}"`;
-            })
-            // 修复不完整的字符串
-            .replace(/"""+"$/g, '"')  // 修复多个引号结尾
-            .replace(/,"[^"]*$/g, '')  // 移除不完整的最后一个属性
             // 修复属性名缺少引号的问题
             .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
             // 清理多余的空白字符和空行
@@ -1139,13 +1308,6 @@ ${content}`;
                 let fixedText = text
                     // 修复属性名缺少引号
                     .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
-                    // 修复字符串值缺少引号（特别处理detailedComponents）
-                    .replace(/"detailedComponents":\s*([^",}]+)(?=[,}])/g, (match, content) => {
-                        const cleanContent = content
-                            .replace(/"/g, '\\"')  // 转义内部双引号
-                            .trim();
-                        return `"detailedComponents": "${cleanContent}"`;
-                    })
                     // 修复其他字符串值缺少引号
                     .replace(/:\s*([^",\[\]{}0-9null][^,}]*?)(?=[,}])/g, (match, content) => {
                         if (!content.trim().startsWith('"') && !content.trim().endsWith('"')) {
@@ -1182,7 +1344,6 @@ ${content}`;
                         quantity: parseInt((text.match(/"quantity":\s*([0-9]+)/) || [])[1]) || 1,
                         currency: (text.match(/"currency":\s*"([^"]*)"/) || [])[1] || 'USD',
                         discount_rate: parseFloat((text.match(/"discount_rate":\s*([0-9.]+)/) || [])[1]) || null,
-                        detailedComponents: (text.match(/"detailedComponents":\s*"([^"]*)"/) || [])[1] || '',
                         quote_validity: (text.match(/"quote_validity":\s*"([^"]*)"/) || [])[1] || null,
                         delivery_date: (text.match(/"delivery_date":\s*"([^"]*)"/) || [])[1] || null,
                         notes: (text.match(/"notes":\s*"([^"]*)"/) || [])[1] || ''
@@ -1203,6 +1364,10 @@ ${content}`;
 
         // 确保返回的是数组
         let products = Array.isArray(parsedData) ? parsedData : [parsedData];
+        
+        // 🔥 直接提取详细配置信息（不依赖AI）
+        console.log('🔧 直接提取详细配置信息...');
+        const extractedDetailedComponents = extractDetailedComponents(content, processingInfo);
         
         // 处理AI分析结果
         const processedProducts = products.map(
@@ -1294,45 +1459,6 @@ ${content}`;
             };
             mimeType = mimeTypes[ext] || mimeType;
             
-            // 处理详细配件清单 - 确保转换为字符串
-            const formatDetailedComponents = (components) => {
-                if (!components) return '';
-                if (typeof components === 'string') return components;
-                if (typeof components === 'object') {
-                    if (Array.isArray(components)) {
-                        return components.map(item => {
-                            if (typeof item === 'string') return item;
-                            if (typeof item === 'object') {
-                                return Object.entries(item).map(([key, value]) => {
-                                    if (typeof value === 'object') {
-                                        return `${key}: ${JSON.stringify(value)}`;
-                                    }
-                                    return `${key}: ${value}`;
-                                }).join(', ');
-                            }
-                            return String(item);
-                        }).join('\n');
-                    } else {
-                        return Object.entries(components).map(([key, value]) => {
-                            if (typeof value === 'object') {
-                                if (Array.isArray(value)) {
-                                    return `${key}:\n${value.map(v => {
-                                        if (typeof v === 'object') {
-                                            return `- ${Object.entries(v).map(([k, val]) => `${k}: ${val}`).join(', ')}`;
-                                        }
-                                        return `- ${v}`;
-                                    }).join('\n')}`;
-                                } else {
-                                    return `${key}:\n${Object.entries(value).map(([k, v]) => `- ${k}: ${v}`).join('\n')}`;
-                                }
-                            }
-                            return `${key}: ${value}`;
-                        }).join('\n\n');
-                    }
-                }
-                return String(components);
-            };
-            
             // 确保category字段有值并映射到正确的枚举值
             if (!product.quotationCategory) {
                 product.quotationCategory = '其他';
@@ -1379,8 +1505,8 @@ ${content}`;
                 quote_total_price: finalDiscountedPrice || finalTotalPrice,
                 currency: product.currency || 'EUR',
                 
-                // 详细信息
-                detailedComponents: formatDetailedComponents(product.detailedComponents),
+                // 详细信息 - 🔥 使用直接提取的配置信息，不依赖AI
+                detailedComponents: extractedDetailedComponents,
                 notes: product.notes || '',
                 configDetail: product.configDetail || '',
                 productSpec: product.projectDescription || '',
@@ -1858,6 +1984,79 @@ app.post('/api/quotations/confirm-save', async (req, res) => {
         // 确保currency字段有值
         if (!cleaned.currency) {
             cleaned.currency = 'CNY';
+        }
+        
+        // 货币符号到标准代码的映射
+        const currencyMapping = {
+            '$': 'USD',
+            '€': 'EUR', 
+            '£': 'GBP',
+            '¥': 'CNY',
+            '₹': 'INR',
+            '₩': 'KRW',
+            'A$': 'AUD',
+            'C$': 'CAD',
+            'S$': 'SGD',
+            'CHF': 'CHF',
+            '₽': 'RUB',
+            'kr': 'SEK',
+            'NOK': 'NOK',
+            'DKK': 'DKK',
+            '₪': 'ILS',
+            '﷼': 'SAR',
+            'AED': 'AED',
+            'USD': 'USD',
+            'EUR': 'EUR',
+            'GBP': 'GBP',
+            'CNY': 'CNY',
+            'JPY': 'JPY',
+            'HKD': 'HKD',
+            'AUD': 'AUD',
+            'CAD': 'CAD',
+            'SGD': 'SGD',
+            'INR': 'INR',
+            'KRW': 'KRW',
+            'THB': 'THB',
+            'MYR': 'MYR',
+            'TWD': 'TWD',
+            'VND': 'VND',
+            'IDR': 'IDR',
+            'BRL': 'BRL',
+            'ZAR': 'ZAR',
+            'MXN': 'MXN',
+            'NZD': 'NZD',
+            'SEK': 'SEK',
+            'PLN': 'PLN',
+            'HUF': 'HUF',
+            'CZK': 'CZK',
+            'TRY': 'TRY',
+            'RUB': 'RUB',
+            '美元': 'USD',
+            '欧元': 'EUR',
+            '英镑': 'GBP', 
+            '人民币': 'CNY',
+            '日元': 'JPY'
+        };
+        
+        // 转换货币符号到标准代码
+        if (cleaned.currency && typeof cleaned.currency === 'string') {
+            const originalCurrency = cleaned.currency.trim();
+            const mappedCurrency = currencyMapping[originalCurrency];
+            if (mappedCurrency) {
+                cleaned.currency = mappedCurrency;
+                console.log(`🔄 货币转换: ${originalCurrency} → ${mappedCurrency}`);
+            } else {
+                // 如果无法映射，默认使用USD
+                console.warn(`⚠️ 未知货币符号: ${originalCurrency}，默认使用USD`);
+                cleaned.currency = 'USD';
+            }
+        }
+        
+        // 确保最终的货币代码在有效枚举范围内
+        const validCurrencies = ['CNY', 'USD', 'EUR', 'GBP', 'JPY', 'HKD', 'AUD', 'CAD', 'SGD', 'CHF', 'RUB', 'INR', 'KRW', 'THB', 'MYR', 'TWD', 'VND', 'IDR', 'BRL', 'ZAR', 'MXN', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'HUF', 'CZK', 'TRY', 'SAR', 'AED', 'ILS'];
+        if (!validCurrencies.includes(cleaned.currency)) {
+            console.warn(`⚠️ 无效货币代码: ${cleaned.currency}，默认使用USD`);
+            cleaned.currency = 'USD';
         }
         
         // 确保category字段有值并映射到正确的枚举值

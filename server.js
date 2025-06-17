@@ -1072,28 +1072,73 @@ ${processingInfo.ocrResults ? processingInfo.ocrResults.map((r, i) =>
                         if (result.text && result.text.trim()) {
                             detailedComponents += `\n--- 配置图片 ${index + 1} ---\n`;
                             
-                            // 清理OCR文本，保留有用的配置信息
-                            const ocrLines = result.text.split('\n');
-                            const cleanedOcrLines = [];
-                            
-                            for (const line of ocrLines) {
-                                const cleanLine = line.trim();
-                                if (cleanLine && 
-                                    cleanLine.length > 3 &&
-                                    !cleanLine.match(/^[\d\s\.,\$€¥£]+$/) && // 过滤纯数字/符号行
-                                    (cleanLine.includes('CPU') || cleanLine.includes('Memory') || 
-                                     cleanLine.includes('Storage') || cleanLine.includes('Network') ||
-                                     cleanLine.includes('Power') || cleanLine.includes('Controller') ||
-                                     cleanLine.includes('HPE') || cleanLine.includes('Intel') ||
-                                     cleanLine.includes('Server') || cleanLine.includes('Gen11') ||
-                                     cleanLine.length > 10)) { // 或者较长的描述性文本
-                                    cleanedOcrLines.push(`- ${cleanLine}`);
+                            // 清理和格式化OCR文本
+                            const formatOCRText = (text) => {
+                                // 按行分割
+                                const lines = text.split('\n');
+                                const formattedLines = [];
+                                let currentSection = '';
+                                
+                                // 定义组件分类
+                                const componentCategories = {
+                                    '处理器': ['CPU', '处理器', 'Processor', 'Intel', 'Xeon', '至强'],
+                                    '内存': ['Memory', '内存', 'DIMM', 'DDR', 'RAM'],
+                                    '存储': ['Storage', '存储', 'SSD', 'HDD', '硬盘', 'SATA', 'NVMe', 'RAID'],
+                                    '网络': ['Network', '网络', 'Ethernet', 'GbE', 'NIC', 'Adapter', 'OCP'],
+                                    '电源': ['Power', '电源', 'PSU', 'Watt', '电源线'],
+                                    '机箱': ['Chassis', '机箱', 'Rack', '导轨', 'Rail', 'Riser'],
+                                    '管理': ['Management', '管理', 'iDRAC', 'BIOS', 'BMC'],
+                                    '服务': ['Service', '服务', 'Support', '支持', '延保']
+                                };
+                                
+                                for (const line of lines) {
+                                    let cleanLine = line.trim();
+                                    
+                                    // 跳过空行和无用行
+                                    if (!cleanLine || cleanLine.length < 3) continue;
+                                    if (cleanLine.match(/^[\d\s\.,\$€¥£\-]+$/)) continue;
+                                    
+                                    // 清理OCR识别错误（多余空格）
+                                    cleanLine = cleanLine.replace(/\s+/g, ' ');
+                                    
+                                    // 查找型号模式
+                                    const partMatch = cleanLine.match(/([A-Z0-9][\w\-]{4,})\s+(\d+)?\s*(.*)/);
+                                    if (partMatch) {
+                                        const [, partNumber, quantity, description] = partMatch;
+                                        if (description && description.length > 3) {
+                                            const qty = quantity ? ` × ${quantity}` : '';
+                                            cleanLine = `${partNumber}: ${description}${qty}`;
+                                        }
+                                    }
+                                    
+                                    // 分类识别
+                                    let category = '';
+                                    for (const [catName, keywords] of Object.entries(componentCategories)) {
+                                        if (keywords.some(keyword => 
+                                            cleanLine.toLowerCase().includes(keyword.toLowerCase()))) {
+                                            category = catName;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    // 如果找到新的分类，添加分类标题
+                                    if (category && category !== currentSection) {
+                                        if (formattedLines.length > 0) {
+                                            formattedLines.push(''); // 空行分隔
+                                        }
+                                        formattedLines.push(`【${category}配置】`);
+                                        currentSection = category;
+                                    }
+                                    
+                                    // 添加配置项
+                                    formattedLines.push(`  • ${cleanLine}`);
                                 }
-                            }
+                                
+                                return formattedLines.join('\n');
+                            };
                             
-                            if (cleanedOcrLines.length > 0) {
-                                detailedComponents += cleanedOcrLines.join('\n') + '\n';
-                            }
+                            const formattedText = formatOCRText(result.text);
+                            detailedComponents += formattedText + '\n';
                         }
                     });
                     

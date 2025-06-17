@@ -710,7 +710,62 @@ const QuotationImport: React.FC = () => {
     };
 
     // 处理重复确认
-    const handleDuplicateAction = async (action: 'skip' | 'overwrite' | 'save-both') => {
+    const handleDuplicateAction = async (action: 'skip' | 'overwrite' | 'save-both' | 'continue') => {
+        // 如果是继续操作，直接跳转到确认页面
+        if (action === 'continue') {
+            console.log('🔄 用户选择继续，跳转到确认页面');
+            console.log('📋 原始pendingProducts数据:', pendingProducts);
+            
+            // 将pendingProducts转换为analyzedData格式
+            const processedData = pendingProducts.map((product: any, index: number) => {
+                console.log(`🔄 转换第${index + 1}个产品:`, product);
+                
+                // 转换为前端期望的格式
+                const converted = {
+                    id: `product_${index}`,
+                    productName: product.productName || product.name || '未识别产品',
+                    vendor: product.supplier || '未知供应商',
+                    category: product.quotationCategory || product.category || '其他',
+                    region: product.region || undefined,
+                    productSpec: product.detailedComponents || product.configDetail || product.productSpec || '',
+                    originalPrice: product.totalPrice || product.list_price || undefined,
+                    unitPrice: product.unitPrice || product.unit_price || undefined,
+                    finalPrice: product.discountedTotalPrice || product.quote_total_price || product.totalPrice || 0,
+                    quantity: product.quantity || 1,
+                    discount: product.discount_rate ? product.discount_rate / 100 : undefined,
+                    quotationDate: product.quote_validity ? new Date(product.quote_validity).toISOString().split('T')[0] : '',
+                    currency: product.currency || 'USD',
+                    remark: product.notes || '',
+                    status: 'pending' as const,
+                    originalFile: product.originalFile || null
+                };
+                
+                console.log(`✅ 转换后的第${index + 1}个产品:`, converted);
+                return converted;
+            });
+            
+            console.log('📋 转换后的processedData:', processedData);
+            
+            setAnalyzedData(processedData);
+            setCurrentIndex(0);
+            setCurrentStep(2);
+            setDuplicateDialogVisible(false);
+            setDuplicateInfo(null);
+            setPendingProducts([]);
+            
+            // 自动填充第一条数据到表单
+            setTimeout(() => {
+                if (processedData.length > 0 && formRef.current) {
+                    console.log('🔄 填充第一条数据到表单:', processedData[0]);
+                    setCurrentCurrency(processedData[0].currency || 'USD');
+                    formRef.current.setValues(processedData[0]);
+                }
+            }, 100);
+            
+            Toast.success(`继续处理 ${processedData.length} 个产品，请确认信息后保存`);
+            return;
+        }
+        
         try {
             let products = pendingProducts;
             let skipDuplicates = false;
@@ -1425,10 +1480,10 @@ const QuotationImport: React.FC = () => {
                             跳过重复项
                         </Button>
                         <Button 
-                            type="warning" 
-                            onClick={() => handleDuplicateAction('overwrite')}
+                            type="primary" 
+                            onClick={() => handleDuplicateAction('continue')}
                         >
-                            全部保存
+                            继续
                         </Button>
                         <Button 
                             onClick={() => {
@@ -1442,6 +1497,10 @@ const QuotationImport: React.FC = () => {
                             取消
                         </Button>
                     </Space>
+                    <div style={{ marginTop: '12px', textAlign: 'left', color: 'var(--semi-color-text-2)', fontSize: '12px' }}>
+                        <div>• <strong>继续</strong>：进入确认页面，可以逐个检查和编辑产品信息后再保存</div>
+                        <div>• <strong>跳过重复项</strong>：只保存不重复的产品</div>
+                    </div>
                 </div>
             </Modal>
         );

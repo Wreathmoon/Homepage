@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI输入调试页面 - 智能报价助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .upload-section {
+            background: #f8f9ff;
+            border: 2px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-section.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .upload-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .debug-results {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .debug-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+        }
+
+        .debug-header {
+            background: #343a40;
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .debug-header:hover {
+            background: #495057;
+        }
+
+        .debug-header .toggle-icon {
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
+        }
+
+        .debug-header.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .debug-content {
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            background: white;
+        }
+
+        .debug-content.collapsed {
+            display: none;
+        }
+
+        .debug-content pre {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .debug-content .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            color: #212529;
+            word-break: break-word;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-left: 10px;
+            transition: background 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: #218838;
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .back-btn:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .upload-section {
+                padding: 30px 20px;
+            }
+            
+            .debug-content {
+                padding: 15px;
+            }
+            
+            .back-btn {
+                position: static;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-btn">
+        ← 返回主页
+    </a>
+
+    <div class="container">
+        <div class="header">
+            <h1>🔍 AI输入调试页面</h1>
+            <p>查看系统向AI发送的具体内容和处理过程</p>
+        </div>
+
+        <div class="main-content">
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">
+                    拖拽文件到此处或点击选择文件<br>
+                    <small>支持 Excel (.xlsx/.xls)、PDF、Word (.docx/.doc)、文本文件</small>
+                </div>
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.pdf,.docx,.doc,.txt,.csv">
+                <button class="upload-btn" id="uploadBtn">选择文件</button>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在生成AI输入调试信息...</p>
+            </div>
+
+            <div class="debug-results" id="debugResults">
+                <div class="stats-bar" id="statsBar"></div>
+                
+                <div class="debug-section">
+                    <div class="debug-header" onclick="toggleSection('fileInfo')">
+                        <span>📁 文件信息</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="debug-content" id="fileInfo"></div>
+                </div>
+
+                <div class="debug-section">
+                    <div class="debug-header" onclick="toggleSection('processingInfo')">
+                        <span>⚙️ 处理信息</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="debug-content" id="processingInfo"></div>
+                </div>
+
+                <div class="debug-section">
+                    <div class="debug-header" onclick="toggleSection('contentPreview')">
+                        <span>👀 内容预览</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="debug-content" id="contentPreview"></div>
+                </div>
+
+                <div class="debug-section">
+                    <div class="debug-header" onclick="toggleSection('extractedComponents')">
+                        <span>🔧 提取的配置信息</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="debug-content" id="extractedComponents"></div>
+                </div>
+
+                <div class="debug-section">
+                    <div class="debug-header" onclick="toggleSection('aiPrompt')">
+                        <span>🤖 完整AI提示词</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="debug-content" id="aiPrompt"></div>
+                </div>
+
+                <div class="debug-section">
+                    <div class="debug-header" onclick="toggleSection('fullContent')">
+                        <span>📄 完整文件内容</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="debug-content collapsed" id="fullContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let uploadedFile = null;
+        let debugData = null;
+
+        // 初始化事件监听器
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const uploadSection = document.getElementById('uploadSection');
+
+            // 文件选择按钮点击
+            uploadBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // 文件选择变化
+            fileInput.addEventListener('change', handleFileSelect);
+
+            // 拖拽上传
+            uploadSection.addEventListener('dragover', handleDragOver);
+            uploadSection.addEventListener('dragleave', handleDragLeave);
+            uploadSection.addEventListener('drop', handleDrop);
+        });
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.currentTarget.classList.add('dragover');
+        }
+
+        function handleDragLeave(event) {
+            event.currentTarget.classList.remove('dragover');
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            event.currentTarget.classList.remove('dragover');
+            
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                uploadFile(files[0]);
+            }
+        }
+
+        async function uploadFile(file) {
+            console.log('开始上传文件:', file.name);
+            
+            try {
+                // 显示加载状态
+                showLoading();
+                hideResults();
+                clearMessages();
+
+                // 第一步：上传文件
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const uploadResponse = await fetch('/api/quotations/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const uploadResult = await uploadResponse.json();
+                
+                if (!uploadResponse.ok) {
+                    throw new Error(uploadResult.error || '文件上传失败');
+                }
+
+                console.log('文件上传成功:', uploadResult);
+                uploadedFile = uploadResult.fileInfo;
+
+                // 第二步：生成调试信息
+                const debugResponse = await fetch('/api/debug/ai-input', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        fileName: uploadedFile.fileName,
+                        filePath: uploadedFile.filePath
+                    })
+                });
+
+                const debugResult = await debugResponse.json();
+                
+                if (!debugResponse.ok) {
+                    throw new Error(debugResult.error || '生成调试信息失败');
+                }
+
+                console.log('调试信息生成成功:', debugResult);
+                debugData = debugResult.debugInfo;
+
+                // 显示调试结果
+                displayDebugResults();
+                showSuccess('调试信息生成成功！');
+
+            } catch (error) {
+                console.error('处理失败:', error);
+                showError('处理失败: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayDebugResults() {
+            if (!debugData) return;
+
+            // 显示统计信息
+            displayStats();
+
+            // 显示文件信息
+            displayFileInfo();
+
+            // 显示处理信息
+            displayProcessingInfo();
+
+            // 显示内容预览
+            displayContentPreview();
+
+            // 显示提取的配置信息
+            displayExtractedComponents();
+
+            // 显示AI提示词
+            displayAIPrompt();
+
+            // 显示完整内容
+            displayFullContent();
+
+            // 显示结果区域
+            showResults();
+        }
+
+        function displayStats() {
+            const statsBar = document.getElementById('statsBar');
+            const stats = [
+                {
+                    value: debugData.fileType.toUpperCase(),
+                    label: '文件类型'
+                },
+                {
+                    value: formatFileSize(debugData.contentLength),
+                    label: '内容大小'
+                },
+                {
+                    value: formatFileSize(debugData.promptLength),
+                    label: '提示词长度'
+                },
+                {
+                    value: debugData.processingInfo.hasOCR ? '是' : '否',
+                    label: 'OCR处理'
+                }
+            ];
+
+            if (debugData.processingInfo.hasOCR) {
+                stats.push({
+                    value: debugData.processingInfo.ocrCount,
+                    label: '图片数量'
+                });
+            }
+
+            statsBar.innerHTML = stats.map(stat => `
+                <div class="stat-item">
+                    <div class="stat-value">${stat.value}</div>
+                    <div class="stat-label">${stat.label}</div>
+                </div>
+            `).join('');
+        }
+
+        function displayFileInfo() {
+            const fileInfo = document.getElementById('fileInfo');
+            fileInfo.innerHTML = `
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">文件名</div>
+                        <div class="info-value">${debugData.fileName}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">文件路径</div>
+                        <div class="info-value">${debugData.filePath}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">文件类型</div>
+                        <div class="info-value">${debugData.fileType}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">内容长度</div>
+                        <div class="info-value">${debugData.contentLength.toLocaleString()} 字符</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayProcessingInfo() {
+            const processingInfo = document.getElementById('processingInfo');
+            const info = debugData.processingInfo;
+            
+            let content = `
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">OCR处理</div>
+                        <div class="info-value">${info.hasOCR ? '是' : '否'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">图片数量</div>
+                        <div class="info-value">${info.ocrCount || 0}</div>
+                    </div>
+                </div>
+            `;
+
+            if (info.hasOCR && info.ocrResults) {
+                content += `
+                    <h4 style="margin: 20px 0 10px 0;">OCR识别结果:</h4>
+                    <pre>${JSON.stringify(info.ocrResults, null, 2)}</pre>
+                `;
+            }
+
+            if (info.error) {
+                content += `
+                    <div class="error-message">
+                        <strong>处理错误:</strong> ${info.error}
+                    </div>
+                `;
+            }
+
+            processingInfo.innerHTML = content;
+        }
+
+        function displayContentPreview() {
+            const contentPreview = document.getElementById('contentPreview');
+            contentPreview.innerHTML = `
+                <div class="info-item" style="margin-bottom: 20px;">
+                    <div class="info-label">内容预览 (前1000字符)</div>
+                    <div class="info-value">显示文件内容的前1000个字符，用于快速了解文件结构</div>
+                </div>
+                <pre>${escapeHtml(debugData.contentPreview)}</pre>
+                <button class="copy-btn" onclick="copyToClipboard('${escapeForJs(debugData.contentPreview)}')">复制预览</button>
+            `;
+        }
+
+        function displayExtractedComponents() {
+            const extractedComponents = document.getElementById('extractedComponents');
+            extractedComponents.innerHTML = `
+                <div class="info-item" style="margin-bottom: 20px;">
+                    <div class="info-label">提取的配置信息</div>
+                    <div class="info-value">系统从文件中提取的结构化配置信息，这些信息将被添加到AI提示词中</div>
+                </div>
+                <pre>${escapeHtml(debugData.extractedComponents)}</pre>
+                <button class="copy-btn" onclick="copyToClipboard('${escapeForJs(debugData.extractedComponents)}')">复制配置信息</button>
+            `;
+        }
+
+        function displayAIPrompt() {
+            const aiPrompt = document.getElementById('aiPrompt');
+            aiPrompt.innerHTML = `
+                <div class="info-item" style="margin-bottom: 20px;">
+                    <div class="info-label">完整AI提示词</div>
+                    <div class="info-value">
+                        发送给AI的完整提示词，包含分析规则、格式要求和文件内容<br>
+                        <strong>长度:</strong> ${debugData.promptLength.toLocaleString()} 字符
+                    </div>
+                </div>
+                <pre>${escapeHtml(debugData.aiPrompt)}</pre>
+                <button class="copy-btn" onclick="copyToClipboard('${escapeForJs(debugData.aiPrompt)}')">复制提示词</button>
+            `;
+        }
+
+        function displayFullContent() {
+            const fullContent = document.getElementById('fullContent');
+            fullContent.innerHTML = `
+                <div class="info-item" style="margin-bottom: 20px;">
+                    <div class="info-label">完整文件内容</div>
+                    <div class="info-value">
+                        文件的完整原始内容，这是AI分析的基础数据<br>
+                        <strong>长度:</strong> ${debugData.contentLength.toLocaleString()} 字符
+                    </div>
+                </div>
+                <pre>${escapeHtml(debugData.fullContent)}</pre>
+                <button class="copy-btn" onclick="copyToClipboard('${escapeForJs(debugData.fullContent)}')">复制完整内容</button>
+            `;
+        }
+
+        function toggleSection(sectionId) {
+            const content = document.getElementById(sectionId);
+            const header = content.previousElementSibling;
+            
+            content.classList.toggle('collapsed');
+            header.classList.toggle('collapsed');
+        }
+
+        function copyToClipboard(text) {
+            // 解码转义的文本
+            const decodedText = text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\'/g, "'");
+            
+            navigator.clipboard.writeText(decodedText).then(() => {
+                showSuccess('内容已复制到剪贴板！');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                showError('复制失败，请手动选择复制');
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeForJs(text) {
+            return text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showResults() {
+            document.getElementById('debugResults').style.display = 'block';
+        }
+
+        function hideResults() {
+            document.getElementById('debugResults').style.display = 'none';
+        }
+
+        function showError(message) {
+            clearMessages();
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            document.querySelector('.main-content').insertBefore(errorDiv, document.getElementById('debugResults'));
+        }
+
+        function showSuccess(message) {
+            clearMessages();
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = message;
+            document.querySelector('.main-content').insertBefore(successDiv, document.getElementById('debugResults'));
+            
+            // 3秒后自动隐藏成功消息
+            setTimeout(() => {
+                if (successDiv.parentNode) {
+                    successDiv.parentNode.removeChild(successDiv);
+                }
+            }, 3000);
+        }
+
+        function clearMessages() {
+            const messages = document.querySelectorAll('.error-message, .success-message');
+            messages.forEach(msg => {
+                if (msg.parentNode) {
+                    msg.parentNode.removeChild(msg);
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

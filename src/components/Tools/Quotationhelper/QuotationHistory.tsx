@@ -18,7 +18,6 @@ import {
     getQuotationList, 
     getQuotationDetail, 
     downloadAttachment, 
-    mockQuotations,
     PRODUCT_CATEGORIES,
     REGIONS
 } from '../../../services/quotationHistory';

@@ -19,7 +19,8 @@ import {
     Divider,
     Tooltip,
     Tag,
-    Progress
+    Progress,
+    Switch
 } from '@douyinfe/semi-ui';
 import { IconUpload, IconFile, IconTickCircle, IconClose, IconEdit, IconPlus, IconPlay, IconTick, IconAlertTriangle } from '@douyinfe/semi-icons';
 import type { BeforeUploadProps, BeforeUploadObjectResult } from '@douyinfe/semi-ui/lib/es/upload';
@@ -91,6 +92,7 @@ const QuotationImport: React.FC = () => {
     const [pendingProducts, setPendingProducts] = useState<any[]>([]);
     const [forceRender, setForceRender] = useState(0); // 强制重新渲染的标志
     const [currentCurrency, setCurrentCurrency] = useState('CNY'); // 当前选择的币种
+    const [enableDetailedAI, setEnableDetailedAI] = useState<boolean>(true); // AI详细识别开关
     
     // 文件重复相关状态
     const [fileExistsDialogVisible, setFileExistsDialogVisible] = useState(false);
@@ -198,84 +200,7 @@ const QuotationImport: React.FC = () => {
                 body: JSON.stringify({
                     filePath: uploadedFile.filePath,
                     fileName: uploadedFile.fileName,
-                    // 添加详细的AI识别提示词
-                    analysisPrompt: `
-请仔细分析这个报价单文档，提取以下关键信息：
-
-1. 报价单标题识别：
-   - 优先识别文档标题、表头或第一行的主要产品名称
-   - 如果没有明确标题，则提取最主要的产品或服务名称
-   - 避免提取公司名称作为产品名称
-
-2. 供应商信息识别（关键重点）：
-   ⚠️ 重要：正确区分供应商和设备制造商！
-   
-   - 供应商(Supplier/Vendor)：实际提供报价的公司、经销商、代理商
-   - 设备商/制造商(Manufacturer)：产品品牌方（如Dell、HP、Cisco、IBM等）
-   
-   识别规则：
-   - 优先识别报价单抬头、联系信息、签名处的公司名称作为供应商
-   - Dell、HP、Cisco、IBM、Lenovo等是设备制造商，不是供应商
-   - 如果只能识别到设备制造商，供应商字段留空或标注"未识别"
-   - 在备注中说明："制造商: Dell" 等信息
-
-3. 价格信息识别（重要更新）：
-   ⚠️ 绝对禁止：不要用总价除以数量来计算任何价格！
-   
-   价格字段定义：
-   - List Price：产品的官方标准定价（单个设备的标价）
-   - 设备单价：单个设备的实际价格（如表格中明确标注的单价）
-   - 折后总价：客户最终需要支付的总金额（包含所有费用）
-   
-   识别规则：
-   a) List Price：从产品规格或价格表中找到官方标价
-   b) 设备单价：直接从表格的单价列读取，不要计算
-   c) 折后总价：使用文档最终的总金额（包含运费、税费等）
-   d) 绝对不要进行任何价格计算或除法运算
-   
-   币种识别：
-   * 符号形式：$、€、£、¥、₹、₩、C$、A$等
-   * 文字形式：USD、EUR、GBP、CNY、JPY、INR、KRW、CAD、AUD等
-
-4. 折扣率识别：
-   ⚠️ 重要：只识别明确标注的折扣率，不要计算！
-   
-   - 只有当文档中明确写明"折扣率"、"Discount"、"折扣%"时才提取
-   - 不要根据价格差异计算折扣率
-   - 如果没有明确标注，折扣率字段留空
-
-5. 数量和规格识别：
-   - 数量字段：Qty、Quantity、数量、件数、Units、Pieces等
-   - 如果没有明确数量，默认为1
-   - 产品规格：配置详情、技术参数、型号规格
-   - 产品型号：完整的产品型号或SKU
-
-6. 费用结构分析：
-   - 识别产品基础费用和附加费用（运费、税费、服务费）
-   - 折后总价应包含所有费用
-   - 在备注中说明费用构成
-
-7. 数据验证要求：
-   - 不进行任何价格计算
-   - 直接从文档中读取明确标注的数值
-   - 如果某些信息无法明确识别，标注"未识别"
-   - 供应商不能是设备制造商品牌
-
-示例说明：
-如果表格显示：
-- 产品：Dell Server，数量：3，单价：$15,895，小计：$47,685
-- 运费：$5,100，税费：$9,060，总计：$61,845
-- 报价方：ABC Technology Company
-
-则应提取：
-- 供应商：ABC Technology Company（不是Dell）
-- 设备单价：$15,895（直接读取，不计算）
-- 折后总价：$61,845（最终总金额）
-- 数量：3
-- 备注：制造商: Dell | 运费: $5,100 | 税费: $9,060
-
-请严格按照以上要求分析，不要进行任何计算。
-                    `
+                    enableDetailedAI: enableDetailedAI // 传递开关状态
                 })
             });
 
@@ -322,6 +247,13 @@ const QuotationImport: React.FC = () => {
             // 转换为组件期望的格式
             const productsData = result.products || result.data || [];
             console.log('🔍 AI返回的原始产品数据:', productsData);
+            console.log('🔍 AI返回的完整结果结构:', result);
+            
+            if (!productsData || !Array.isArray(productsData)) {
+                console.error('❌ AI返回的产品数据格式错误:', productsData);
+                Toast.error('AI分析结果格式错误，请重试');
+                return;
+            }
             
             const formattedData: AnalyzedQuotation[] = productsData.map((item: any, index: number) => {
                 // 产品名称识别 - 优先级更新
@@ -336,11 +268,13 @@ const QuotationImport: React.FC = () => {
                 const unitPrice = item.unitPrice || item.unit_price || item.single_price || 
                                  item.item_price || item.device_price || undefined;
                 
-                const finalPrice = item.discountedTotalPrice || item.final_price || item.finalPrice || 
-                                  item.total_price || item.quote_total_price || item.grand_total || 
-                                  item.quote_total || item.amount_due || item.totalPrice || 0;
-                
                 const quantity = item.quantity || item.qty || item.units || item.pieces || 1;
+                
+                // 确保finalPrice不为0，至少为1
+                const rawFinalPrice = item.discountedTotalPrice || item.final_price || item.finalPrice || 
+                                     item.total_price || item.quote_total_price || item.grand_total || 
+                                     item.quote_total || item.amount_due || item.totalPrice;
+                const finalPrice = rawFinalPrice || (listPrice && quantity ? listPrice * quantity : 1);
                 
                 // 供应商识别 - 排除设备制造商
                 const deviceBrands = ['Dell', 'HP', 'Cisco', 'IBM', 'Lenovo', 'Microsoft', 'VMware', 'Oracle', 'Intel', 'AMD'];
@@ -543,9 +477,9 @@ const QuotationImport: React.FC = () => {
             console.log('🔄 使用AI服务器保存数据:', productsData.length, '条记录');
             console.log('📁 文件信息:', uploadedFile);
 
-            // 调用AI服务器的确认保存API
-            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
-            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
+            // 调用API服务器的确认保存API
+            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+            const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -585,9 +519,9 @@ const QuotationImport: React.FC = () => {
             
             // 检查是否是网络连接错误
             if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-                Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口3002)');
+                Toast.error('无法连接到API服务器，请确保服务器正在运行 (端口3001)');
             } else if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
-                Toast.error('连接被拒绝，请检查AI服务器状态');
+                Toast.error('连接被拒绝，请检查API服务器状态');
             } else {
                 Toast.error(`保存失败：${error instanceof Error ? error.message : '未知错误'}`);
             }
@@ -726,10 +660,10 @@ const QuotationImport: React.FC = () => {
             console.log('📋 产品数据:', products);
 
             // 调用确认保存API
-            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
-            console.log('🌐 AI服务器地址:', aiServerUrl);
+            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+            console.log('🌐 API服务器地址:', apiServerUrl);
             
-            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
+            const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -770,9 +704,9 @@ const QuotationImport: React.FC = () => {
             
             // 检查是否是网络连接错误
             if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-                Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口3002)');
+                Toast.error('无法连接到API服务器，请确保服务器正在运行 (端口3001)');
             } else if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
-                Toast.error('连接被拒绝，请检查AI服务器状态');
+                Toast.error('连接被拒绝，请检查API服务器状态');
             } else {
                 Toast.error(`处理失败：${error instanceof Error ? error.message : '未知错误'}`);
             }
@@ -821,6 +755,34 @@ const QuotationImport: React.FC = () => {
                                 <Text>上传时间：{uploadedFile ? new Date(uploadedFile.uploadTime).toLocaleString() : ''}</Text>
                             </div>
                             
+                            {/* AI识别设置 */}
+                            <div style={{ 
+                                marginBottom: '24px', 
+                                padding: '16px', 
+                                border: '1px solid var(--semi-color-border)', 
+                                borderRadius: '8px',
+                                backgroundColor: 'var(--semi-color-bg-1)'
+                            }}>
+                                <Title heading={6} style={{ marginBottom: '12px' }}>AI识别设置</Title>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <Switch 
+                                        checked={enableDetailedAI}
+                                        onChange={(checked: boolean) => setEnableDetailedAI(checked)}
+                                        size="large"
+                                    />
+                                    <div>
+                                        <Text strong>启用AI详细配置识别</Text>
+                                        <br />
+                                        <Text type="secondary" size="small">
+                                            {enableDetailedAI ? 
+                                                '将进行基础信息识别 + 详细配置标注分析（慎用，当前版本识别效果很烂）' : 
+                                                '仅进行基础信息识别（产品名称、供应商、价格等）'
+                                            }
+                                        </Text>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <Button
                                 type="primary"
                                 onClick={handleAnalyze}
@@ -834,9 +796,9 @@ const QuotationImport: React.FC = () => {
                                 <div style={{ marginTop: '20px' }}>
                                     <Text>正在使用AI大模型分析报价单内容，请稍候...</Text>
                                     <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--semi-color-text-2)' }}>
-                                        <div>📊 提取表格数据...</div>
-                                        <div>🖼️ 检测并识别图片内容 (OCR)...</div>
-                                        <div>🤖 AI智能分析中...</div>
+                                        <div> 提取表格数据...</div>
+                                        <div> 检测并识别图片内容 (OCR)...</div>
+                                        <div> AI智能分析中...</div>
                                     </div>
                                     <Progress percent={-1} style={{ marginTop: '12px' }} />
                                 </div>
@@ -846,7 +808,46 @@ const QuotationImport: React.FC = () => {
                 );
 
             case 2:
+                console.log('🎨 渲染第2步 - 数据确认页面');
+                console.log('📊 analyzedData:', analyzedData);
+                console.log('📍 currentIndex:', currentIndex);
+                
+                if (!analyzedData || analyzedData.length === 0) {
+                    console.warn('⚠️ analyzedData为空，返回到第1步');
+                    return (
+                        <Card style={{ marginTop: '20px' }}>
+                            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                                <Title heading={4} style={{ color: 'var(--semi-color-warning)' }}>
+                                    没有分析数据
+                                </Title>
+                                <Text style={{ marginBottom: '20px', display: 'block' }}>
+                                    请重新进行AI分析
+                                </Text>
+                                <Button type="primary" onClick={() => setCurrentStep(1)}>
+                                    返回分析
+                                </Button>
+                            </div>
+                        </Card>
+                    );
+                }
+                
                 const currentData = analyzedData[currentIndex];
+                console.log('📋 当前数据:', currentData);
+                
+                if (!currentData) {
+                    console.warn('⚠️ 当前数据为空，重置索引');
+                    setCurrentIndex(0);
+                    return (
+                        <Card style={{ marginTop: '20px' }}>
+                            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                                <Title heading={4} style={{ color: 'var(--semi-color-warning)' }}>
+                                    数据加载中...
+                                </Title>
+                            </div>
+                        </Card>
+                    );
+                }
+                
                 const pendingCount = analyzedData.filter(item => item.status === 'pending').length;
                 const confirmedCount = analyzedData.filter(item => item.status === 'confirmed').length;
                 
@@ -937,23 +938,23 @@ const QuotationImport: React.FC = () => {
                                             {currentData.originalPrice && (
                                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                     <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>List Price:</Text>
-                                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>
-                                                        {CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥'}{currentData.originalPrice.toLocaleString()}
-                                                    </Text>
+                                                                                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>
+                                                    {currentCurrency || 'CNY'} {currentData.originalPrice.toLocaleString()}
+                                                </Text>
                                                 </div>
                                             )}
                                             {currentData.unitPrice && (
                                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                     <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>设备单价:</Text>
                                                     <Text style={{ color: '#fbbf24', fontWeight: 'bold', fontSize: '16px' }}>
-                                                        {CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥'}{currentData.unitPrice.toLocaleString()}
+                                                        {currentCurrency || 'CNY'} {currentData.unitPrice.toLocaleString()}
                                                     </Text>
                                                 </div>
                                             )}
                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                 <Text style={{ color: 'rgba(255, 255, 255, 0.8)' }}>折后总价:</Text>
                                                 <Text style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '18px' }}>
-                                                    {CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥'}{currentData.finalPrice.toLocaleString()}
+                                                    {currentCurrency || 'CNY'} {currentData.finalPrice.toLocaleString()}
                                                 </Text>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1119,8 +1120,8 @@ const QuotationImport: React.FC = () => {
                                         placeholder="请输入List Price"
                                         disabled={currentData?.status !== 'editing'}
                                         formatter={value => {
-                                            const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
-                                            return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                            const currencyCode = currentCurrency || 'CNY';
+                                            return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                                         }}
                                         parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
@@ -1130,8 +1131,8 @@ const QuotationImport: React.FC = () => {
                                         placeholder="请输入设备单价"
                                         disabled={currentData?.status !== 'editing'}
                                         formatter={value => {
-                                            const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
-                                            return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                            const currencyCode = currentCurrency || 'CNY';
+                                            return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                                         }}
                                         parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
@@ -1142,8 +1143,8 @@ const QuotationImport: React.FC = () => {
                                         rules={[{ required: true, message: '请输入折后总价' }]}
                                         disabled={currentData?.status !== 'editing'}
                                         formatter={value => {
-                                            const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
-                                            return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                            const currencyCode = currentCurrency || 'CNY';
+                                            return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                                         }}
                                         parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
@@ -1696,8 +1697,8 @@ const QuotationImport: React.FC = () => {
                             label="List Price"
                             placeholder="请输入List Price"
                             formatter={value => {
-                                const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
-                                return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                const currencyCode = currentCurrency || 'CNY';
+                                return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                             }}
                             parser={value => value!.replace(/[^\d.]/g, '')}
                         />
@@ -1706,8 +1707,8 @@ const QuotationImport: React.FC = () => {
                             label="设备单价（如有）"
                             placeholder="请输入设备单价"
                             formatter={value => {
-                                const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
-                                return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                const currencyCode = currentCurrency || 'CNY';
+                                return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                             }}
                             parser={value => value!.replace(/[^\d.]/g, '')}
                         />
@@ -1717,8 +1718,8 @@ const QuotationImport: React.FC = () => {
                             placeholder="请输入折后总价"
                             rules={[{ required: true, message: '请输入折后总价' }]}
                             formatter={value => {
-                                const symbol = CURRENCIES.find(c => c.value === currentCurrency)?.symbol || '¥';
-                                return `${symbol} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                const currencyCode = currentCurrency || 'CNY';
+                                return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                             }}
                             parser={value => value!.replace(/[^\d.]/g, '')}
                         />

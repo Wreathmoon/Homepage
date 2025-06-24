@@ -24,6 +24,634 @@ const YUANJING_CONFIG = {
     baseUrl: process.env.YUANJING_API_ENDPOINT || 'https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1'
 };
 
+// 🔥 AI数据清洗统一管理类
+class AIDataCleaner {
+    constructor() {
+        this.cache = new Map(); // 简单的内存缓存
+        this.config = {
+            minLinesForAI: 10,        // 启用AI清洗的最小行数
+            maxCacheSize: 100,        // 最大缓存条目数
+            cacheExpiryTime: 60 * 60 * 1000, // 缓存过期时间(1小时)
+            maxLinesToProcess: 100    // AI处理的最大行数
+        };
+    }
+
+    // 生成缓存键
+    generateCacheKey(rawData, dataType) {
+        const hash = crypto.createHash('md5').update(rawData + dataType).digest('hex');
+        return `ai_annotation_${hash}`;
+    }
+
+    // 检查缓存
+    getCachedAnnotation(cacheKey) {
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.config.cacheExpiryTime) {
+            console.log('✅ 使用缓存的AI标注结果');
+            return cached.data;
+        }
+        return null;
+    }
+
+    // 设置缓存
+    setCachedAnnotation(cacheKey, data) {
+        if (this.cache.size >= this.config.maxCacheSize) {
+            // 清理最旧的缓存条目
+            const oldestKey = this.cache.keys().next().value;
+            this.cache.delete(oldestKey);
+        }
+        this.cache.set(cacheKey, {
+            data: data,
+            timestamp: Date.now()
+        });
+    }
+
+    // 统一的AI数据标注函数
+    async annotateData(rawData, dataType = 'excel') {
+        console.log('🤖 开始AI数据标注 (简化版)...');
+        
+        if (!rawData || rawData.trim().length === 0) {
+            console.warn('⚠️ 数据为空，跳过AI标注');
+            return null;
+        }
+        
+        // 🔥 检查缓存
+        const cacheKey = this.generateCacheKey(rawData, dataType);
+        const cachedResult = this.getCachedAnnotation(cacheKey);
+        if (cachedResult) {
+            console.log('✅ 使用缓存的AI标注结果');
+            return cachedResult;
+        }
+        
+        try {
+            console.log('🤖 调用AI进行数据标注...');
+            
+            // 🔥 简化的AI提示词 - 只识别有用行
+            const prompt = `你是一个专业的ICT产品数据分析专家。请分析以下数据，识别出包含有用产品信息的行号。
+
+**数据内容：**
+${rawData}
+
+**识别标准：**
+一行一行查看，不要跳过任何一行，不要遗漏任何一行
+✅ **有用信息包括：**
+- 产品型号（如CPU型号，内存型号，硬件型号，软件型号，数据库型号，license型号 ）， 注意观察各种英文型号， 如 INTEL，AMD，HPE，DELL，CISCO，VMWARE，MICROSOFT，ORACLE，SAP，MYSQL，SQLSERVER，LINUX，WINDOWS，MACOS，IOS，ANDROID
+-还有可以看专属于科技产品的名词，比如：SATA,Nvme,SSD,HDD,GB,TB,GHz,MHz,Gbps,W,cores,license,TB,SAS等科技领域常用词
+- 技术规格参数（CPU、内存、存储、网络等,也包括软件方面，以及数据库和lience相关），
+- 产品描述和配置信息
+- 价格和数量信息
+- 品牌产品信息
+- 一切包含了产品型号和描述的行都是有用信息
+-不要省略任何产品型号和描述的行号
+
+❌ **无用信息包括：**
+- 纯表格标题行
+- 空行或只有分隔符的行
+- 重复的标识符
+- 法律条文等
+- 报价单的页眉页脚
+-一切与技术无关的行
+
+**输出要求：**
+请返回JSON格式，只包含有用行号的数组：
+
+\`\`\`json
+{
+  "useful": [3, 5, 7, 9, 12, 15, 18, 20, 23, 25, 28, 30]
+}
+\`\`\`
+
+**重要：**
+- 只返回有用行的行号数组
+- 不需要解释原因
+- 不需要分类
+- 不需要识别无用行
+- 行号从1开始计数`;
+
+            const aiResponse = await this.callAI(prompt, '第二次AI-识别有用行');
+            
+            // 🔥 解析AI响应
+            try {
+                const annotation = SmartJSONParser.parseAIResponse(aiResponse, 'AI数据标注');
+                
+                if (annotation && annotation.useful && Array.isArray(annotation.useful)) {
+                    console.log(`✅ AI标注成功: 识别出${annotation.useful.length}个有用行`);
+                    
+                    // 🔥 缓存结果
+                    this.setCachedAnnotation(cacheKey, annotation);
+                    
+                    return annotation;
+                } else {
+                    console.warn('⚠️ AI返回结果格式无效');
+                    return this.fallbackAnnotation(rawData);
+                }
+                
+            } catch (parseError) {
+                console.warn('⚠️ AI响应解析失败:', parseError.message);
+                return this.fallbackAnnotation(rawData);
+            }
+            
+        } catch (error) {
+            console.error('❌ AI数据标注失败:', error);
+            return this.fallbackAnnotation(rawData);
+        }
+    }
+
+    // 🔥 简化的降级标注（本地规则）
+    fallbackAnnotation(rawData) {
+        console.log('🔧 本地规则标注...');
+        
+        const dataLines = rawData.split('\n');
+        const useful = [];
+        
+        // 🔥 简化的本地规则：识别有价值的行
+        dataLines.forEach((line, index) => {
+            const trimmedLine = line.trim();
+            const lineNumber = index + 1;
+            
+            // 跳过明显无用的行
+            if (!trimmedLine || trimmedLine.length < 3) return;
+            if (/^[\|\s\-_=,\.]{5,}$/.test(trimmedLine)) return;
+            if (/^(列\d+:|行\d+:.*\[空\]|PART\s+NUMBER|DESCRIPTION)$/i.test(trimmedLine)) return;
+            
+            // 识别有价值的行
+            const hasValue = (
+                /[A-Z]\d{5}-[A-Z]\d{2}/.test(trimmedLine) ||  // SKU格式
+                /\b(HPE|Dell|Cisco|Intel|AMD|Microsoft|VMware)\b/i.test(trimmedLine) ||  // 品牌
+                /\d+\s*(GB|TB|GHz|MHz|Gbps|W|cores?)\b/i.test(trimmedLine) ||  // 技术规格
+                /\\$\\d+[\\d,]*\\.?\\d*/.test(trimmedLine) ||  // 价格
+                /\b(Server|Storage|Switch|Router|Processor|Memory|SSD|HDD)\b/i.test(trimmedLine) ||  // 产品类型
+                /\b(Gen\d+|R\d+|DL\d+|ML\d+)\b/i.test(trimmedLine)  // 产品代数
+            );
+            
+            if (hasValue) {
+                useful.push(lineNumber);
+            }
+        });
+        
+        console.log(`🔧 本地规则标注完成: 有用${useful.length}行`);
+        
+        return {
+            useful: useful
+        };
+    }
+
+    // 统一的数据清洗函数
+    cleanDataByAnnotation(rawData, annotation) {
+        console.log('🧹 根据AI标注清洗数据...');
+        
+        if (!annotation || !annotation.useful) {
+            console.warn('⚠️ 标注结果无效，返回原始数据');
+            return rawData;
+        }
+        
+        const lines = rawData.split('\n');
+        const cleanedLines = [];
+        
+        // 根据AI标注的有用行号提取数据
+        annotation.useful.forEach(lineNumber => {
+            const lineIndex = lineNumber - 1; // 转换为数组索引
+            if (lineIndex >= 0 && lineIndex < lines.length) {
+                const line = lines[lineIndex].trim();
+                if (line) {
+                    cleanedLines.push(line);
+                }
+            }
+        });
+        
+        const retentionRate = Math.round(cleanedLines.length / lines.length * 100);
+        console.log(`✅ 数据清洗完成: ${lines.length} 行 → ${cleanedLines.length} 行 (保留 ${retentionRate}%)`);
+        
+        // 按类别组织数据
+        let organizedData = cleanedLines.join('\n');
+        
+        if (annotation.categories && Object.keys(annotation.categories).length > 0) {
+            console.log('📂 按类别重新组织数据...');
+            const categorizedData = [];
+            
+            for (const [category, lineNumbers] of Object.entries(annotation.categories)) {
+                if (lineNumbers && lineNumbers.length > 0) {
+                    categorizedData.push(`\n=== ${category} ===`);
+                    lineNumbers.forEach(lineNumber => {
+                        const lineIndex = lineNumber - 1;
+                        if (lineIndex >= 0 && lineIndex < lines.length) {
+                            const line = lines[lineIndex].trim();
+                            if (line) {
+                                categorizedData.push(`• ${line}`);
+                            }
+                        }
+                    });
+                }
+            }
+            
+            if (categorizedData.length > 0) {
+                organizedData = categorizedData.join('\n');
+            }
+        }
+        
+        return organizedData;
+    }
+
+    // 🔥 新增：AI格式整理和OCR修复函数
+    async formatAndFixDataWithAI(rawData, annotation) {
+        console.log('🤖 开始AI格式整理和OCR修复...');
+        
+        if (!annotation || !annotation.useful || annotation.useful.length === 0) {
+            console.warn('⚠️ 标注结果无效，跳过AI格式整理');
+            return rawData;
+        }
+        
+        try {
+            const lines = rawData.split('\n');
+            const extractedData = [];
+            
+            // 🔥 提取标注行号对应的实际内容
+            annotation.useful.forEach((lineNumber, index) => {
+                const lineIndex = lineNumber - 1;
+                if (lineIndex >= 0 && lineIndex < lines.length) {
+                    const line = lines[lineIndex].trim();
+                    if (line) {
+                        extractedData.push({
+                            lineNumber: lineNumber,
+                            originalContent: line,
+                            category: this.findLineCategory(lineNumber, annotation.categories)
+                        });
+                    }
+                }
+            });
+            
+            if (extractedData.length === 0) {
+                console.warn('⚠️ 没有提取到有效数据');
+                return rawData;
+            }
+            
+            console.log('🤖 正在调用AI进行格式整理...');
+            const aiResponse = await this.callAI(prompt, 'AI格式整理和OCR修复');
+            
+            // 🔥 解析AI响应
+            const formattedResult = SmartJSONParser.parseAIResponse(aiResponse, 'AI格式整理');
+            
+            if (formattedResult && formattedResult.formattedData) {
+                console.log('✅ AI格式整理完成');
+                console.log(`📊 整理统计: 总行数${formattedResult.summary?.totalLines || extractedData.length}, 修复${formattedResult.summary?.fixedCount || 0}处`);
+                
+                // 🔥 重新组织数据
+                const organizedContent = [];
+                
+                formattedResult.formattedData.forEach(categoryGroup => {
+                    if (categoryGroup.items && categoryGroup.items.length > 0) {
+                        organizedContent.push(`\n=== ${categoryGroup.category} ===`);
+                        categoryGroup.items.forEach(item => {
+                            organizedContent.push(`• ${item.formattedContent}`);
+                            if (item.fixes && item.fixes.length > 0) {
+                                console.log(`🔧 行${item.lineNumber}修复: ${item.fixes.join(', ')}`);
+                            }
+                        });
+                    }
+                });
+                
+                return organizedContent.join('\n');
+            } else {
+                console.warn('⚠️ AI格式整理结果无效，使用原始清洗结果');
+                return this.cleanDataByAnnotation(rawData, annotation);
+            }
+            
+        } catch (error) {
+            console.error('❌ AI格式整理失败:', error);
+            console.warn('⚠️ 降级使用基础清洗结果');
+            return this.cleanDataByAnnotation(rawData, annotation);
+        }
+    }
+    
+    // 🔥 辅助函数：查找行号对应的类别
+    findLineCategory(lineNumber, categories) {
+        if (!categories) return '其他产品';
+        
+        for (const [categoryName, lineNumbers] of Object.entries(categories)) {
+            if (lineNumbers && lineNumbers.includes(lineNumber)) {
+                return categoryName;
+            }
+        }
+        return '其他产品';
+    }
+
+    // 🔥 新增：格式化显示函数 - 简化版本，不分类
+    formatForDisplay(cleanedData, annotation = null) {
+        console.log('🎨 开始格式化数据用于显示...');
+        
+        if (!cleanedData || typeof cleanedData !== 'string') {
+            return '暂无配置信息';
+        }
+        
+        try {
+            const lines = cleanedData.split('\n');
+            const result = [];
+            
+            // 🔥 优化的图标映射
+            const getIconForContent = (text) => {
+                if (/server|svr|dl\d+|proliant|poweredge/i.test(text)) return '🖥️';
+                if (/storage|disk|drive|ssd|hdd|raid/i.test(text)) return '💿';
+                if (/cpu|processor|xeon|intel|amd|core/i.test(text)) return '⚡';
+                if (/memory|ram|ddr|dimm/i.test(text)) return '💾';
+                if (/network|switch|router|ethernet|adapter/i.test(text)) return '🌐';
+                if (/power|psu|电源/i.test(text)) return '🔌';
+                if (/cloud|greenlake|aws|azure/i.test(text)) return '☁️';
+                if (/support|service|warranty|maintenance/i.test(text)) return '🛠️';
+                if (/software|license|os|operating/i.test(text)) return '💻';
+                if (/security|firewall|antivirus/i.test(text)) return '🔒';
+                return '📋';
+            };
+            
+            // 🔥 简化处理：不分类，直接格式化所有行
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (trimmedLine && trimmedLine.length > 2) {
+                    const formattedLine = this.formatConfigLine(trimmedLine, getIconForContent(trimmedLine));
+                    if (formattedLine && formattedLine.trim()) {
+                        result.push(formattedLine);
+                    }
+                }
+            });
+            
+            if (result.length === 0) {
+                return '暂无有效配置信息';
+            }
+            
+            // 🔥 添加简单的标题
+            const finalResult = ['📋 **产品配置信息**', '─'.repeat(30), ...result].join('\n');
+            
+            console.log(`✅ 数据格式化完成，共 ${result.length} 行有效内容`);
+            return finalResult;
+            
+        } catch (error) {
+            console.error('❌ 数据格式化失败:', error);
+            return cleanedData; // 返回原始数据
+        }
+    }
+    
+    // 🔥 优化的单行格式化（修复换行问题）
+    formatConfigLine(line, icon = '▪️') {
+        if (!line || line.trim().length === 0) {
+            return null;
+        }
+        
+        let formattedLine = line.trim();
+        
+        // 🔥 预处理：移除多余的空白和换行符
+        formattedLine = formattedLine.replace(/\s+/g, ' ').replace(/\n+/g, ' ');
+        
+        // 🔥 只过滤明显的无用信息
+        if (/^[\|\s\-_=,\.]{5,}$/.test(formattedLine)) {
+            return null;
+        }
+        
+        if (/^\[空\]$|^Empty$|^N\/A$|^null$|^undefined$/i.test(formattedLine)) {
+            return null;
+        }
+        
+        if (/^(PART\s+NUMBER\s*\|.*DESCRIPTION\s*\|.*PRICE)/i.test(formattedLine)) {
+            return null;
+        }
+        
+        // 🔥 智能高亮关键信息
+        formattedLine = formattedLine.replace(/\b([A-Z]\d{5}-[A-Z]\d{2})\b/g, '**$1**');
+        formattedLine = formattedLine.replace(/\b([A-Z]{2,4}[\d\-]{4,})\b/g, '**$1**');
+        formattedLine = formattedLine.replace(/(\d+\s*(GB|TB|GHz|MHz|Gbps|Mbps|W|V|cores?))\b/gi, '`$1`');
+        formattedLine = formattedLine.replace(/\b(Gen\d+|R\d+|v\d+\.\d+)\b/gi, '`$1`');
+        formattedLine = formattedLine.replace(/(\d+)\s*[×xX]\s*/g, '**$1×**');
+        formattedLine = formattedLine.replace(/\b(HPE|Dell|Cisco|VMware|Microsoft|Oracle|Intel|AMD)\b/gi, '**$1**');
+        formattedLine = formattedLine.replace(/\b(Enterprise|Professional|Standard|Premium|Smart|Array)\b/gi, '**$1**');
+        
+        // 🔥 修复表格数据显示（特别处理价格格式）
+        if (formattedLine.includes('|')) {
+            const parts = formattedLine.split('|').map(p => p.trim());
+            const meaningfulParts = parts.filter(p => {
+                if (!p || p === '[空]' || p === 'Empty') return false;
+                return /[a-zA-Z0-9]/.test(p);
+            });
+            
+            if (meaningfulParts.length > 0) {
+                // 🔥 修复价格格式
+                const fixedParts = [];
+                let i = 0;
+                
+                while (i < meaningfulParts.length) {
+                    let currentPart = meaningfulParts[i];
+                    
+                    if (i < meaningfulParts.length - 1) {
+                        const nextPart = meaningfulParts[i + 1];
+                        
+                        if (/^\$[\d,]+,$/.test(currentPart) && /^\d+\.\d{2}$/.test(nextPart)) {
+                            currentPart = currentPart.replace(/,$/, '') + nextPart;
+                            i++;
+                        } else if (/[\d,]+,$/.test(currentPart) && /^\d+(\.\d{2})?$/.test(nextPart)) {
+                            currentPart = currentPart.replace(/,$/, '') + nextPart;
+                            i++;
+                        }
+                    }
+                    
+                    fixedParts.push(currentPart);
+                    i++;
+                }
+                
+                const importantParts = fixedParts.slice(0, 4);
+                formattedLine = importantParts.join(' | ');
+            } else {
+                return null;
+            }
+        }
+        
+        // 🔥 最终检查和清理
+        if (!formattedLine || formattedLine.trim().length < 2) {
+            return null;
+        }
+        
+        // 🔥 再次确保没有多余的空白和换行
+        formattedLine = formattedLine.replace(/\s+/g, ' ').trim();
+        
+        // 🔥 长度控制 - 增加长度限制，避免重要信息被截断
+        if (formattedLine.length > 200) {
+            formattedLine = formattedLine.substring(0, 197) + '...';
+        }
+        
+        // 添加图标和缩进，确保是单行
+        return `  ${icon} ${formattedLine}`;
+    }
+
+    // 统一的AI调用函数
+    async callAI(prompt, callType = 'AI数据标注') {
+        return await callYuanJingAI(prompt, callType);
+    }
+
+    // 获取统计信息
+    getStats() {
+        return {
+            cacheSize: this.cache.size,
+            maxCacheSize: this.config.maxCacheSize,
+            config: this.config
+        };
+    }
+
+    // 清理缓存
+    clearCache() {
+        this.cache.clear();
+        console.log('🗑️ AI数据清洗缓存已清理');
+    }
+}
+
+// 创建全局AI数据清洗器实例
+const aiDataCleaner = new AIDataCleaner();
+
+// 🔥 智能JSON解析器 - 整合三次解析逻辑
+class SmartJSONParser {
+    static parseAIResponse(text, context = 'AI响应') {
+        console.log(`🔧 开始智能JSON解析 (${context})...`);
+        
+        // 第一阶段：预处理清理
+        let cleanedText = this.preprocessJSON(text);
+        console.log('🔧 预处理后的JSON:', cleanedText.substring(0, 200) + '...');
+        
+        // 第二阶段：直接解析尝试
+        let result = this.attemptDirectParse(cleanedText);
+        if (result.success) {
+            console.log('✅ 第一次解析成功！');
+            return result.data;
+        }
+        
+        // 第三阶段：修复后解析
+        result = this.attemptFixedParse(cleanedText);
+        if (result.success) {
+            console.log('✅ 修复后解析成功！');
+            return result.data;
+        }
+        
+        // 第四阶段：正则提取（降级方案）
+        result = this.attemptRegexExtraction(text);
+        if (result.success) {
+            console.log('✅ 正则提取成功！');
+            return result.data;
+        }
+        
+        // 全部失败
+        console.error('❌ 所有JSON解析方法都失败了');
+        throw new Error(`JSON解析失败: ${result.error}`);
+    }
+    
+    // 预处理JSON文本
+    static preprocessJSON(text) {
+        return text
+            // 移除markdown代码块
+            .replace(/```json\s*/g, '').replace(/```\s*/g, '')
+            // 移除注释
+            .replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+            // 修复常见格式问题
+            .replace(/,(\s*[\]}])/g, '$1')  // 移除多余逗号
+            .replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3')  // 单引号 → 双引号
+            .replace(/:\s*'([^']*)'(\s*[,}])/g, ': "$1"$2')
+            // 修复数字格式
+            .replace(/:\s*([0-9.]+)%/g, ': $1')
+            .replace(/:\s*([0-9.]+),([0-9]+)/g, ': $1$2')
+            // 修复中文标点
+            .replace(/，/g, ',').replace(/：/g, ':').replace(/；/g, ';')
+            // 统一引号
+            .replace(/"/g, '"').replace(/"/g, '"')
+            .replace(/'/g, "'").replace(/'/g, "'")
+            // 修复属性名
+            .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+            // 清理空白
+            .replace(/\s+/g, ' ').trim();
+    }
+    
+    // 直接解析尝试
+    static attemptDirectParse(text) {
+        try {
+            const data = JSON.parse(text);
+            return { success: true, data };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+    
+    // 修复后解析
+    static attemptFixedParse(text) {
+        try {
+            let fixedText = text
+                // 更强的属性名修复
+                .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+                // 修复字符串值缺少引号
+                .replace(/:\s*([^",\[\]{}0-9null][^,}]*?)(?=[,}])/g, (match, content) => {
+                    const trimmed = content.trim();
+                    if (!trimmed.startsWith('"') && !trimmed.endsWith('"') && 
+                        trimmed !== 'true' && trimmed !== 'false' && trimmed !== 'null') {
+                        const escaped = trimmed.replace(/"/g, '\\"');
+                        return `: "${escaped}"`;
+                    }
+                    return match;
+                })
+                // 修复特殊值
+                .replace(/:\s*null\s*([,}])/g, ': null$1')
+                .replace(/:\s*true\s*([,}])/g, ': true$1')
+                .replace(/:\s*false\s*([,}])/g, ': false$1')
+                // 修复数字
+                .replace(/:\s*([0-9]+\.?[0-9]*)\s*([,}])/g, ': $1$2')
+                // 最终清理
+                .replace(/,(\s*[}\]])/g, '$1').trim();
+            
+            const data = JSON.parse(fixedText);
+            return { success: true, data };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+    
+    // 正则提取（降级方案）
+    static attemptRegexExtraction(text) {
+        try {
+            console.log('🔧 使用正则表达式提取关键信息...');
+            
+            const extractedData = {
+                quotationCategory: this.extractField(text, 'quotationCategory', '其他'),
+                quotationTitle: this.extractField(text, 'quotationTitle', '未识别产品'),
+                supplier: this.extractField(text, 'supplier', '未知供应商'),
+                region: this.extractField(text, 'region', null),
+                totalPrice: this.extractNumericField(text, 'totalPrice'),
+                discountedTotalPrice: this.extractNumericField(text, 'discountedTotalPrice'),
+                unitPrice: this.extractNumericField(text, 'unitPrice'),
+                quantity: this.extractIntegerField(text, 'quantity', 1),
+                currency: this.extractField(text, 'currency', 'USD'),
+                discount_rate: this.extractNumericField(text, 'discount_rate'),
+                quote_validity: this.extractField(text, 'quote_validity', null),
+                delivery_date: this.extractField(text, 'delivery_date', null),
+                notes: this.extractField(text, 'notes', '')
+            };
+            
+            return { success: true, data: [extractedData] };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+    
+    // 辅助方法：提取字符串字段
+    static extractField(text, fieldName, defaultValue = null) {
+        const pattern = new RegExp(`"${fieldName}":\\s*"([^"]*)"`, 'i');
+        const match = text.match(pattern);
+        return match ? match[1] : defaultValue;
+    }
+    
+    // 辅助方法：提取数字字段
+    static extractNumericField(text, fieldName) {
+        const pattern = new RegExp(`"${fieldName}":\\s*([0-9.]+)`, 'i');
+        const match = text.match(pattern);
+        return match ? parseFloat(match[1]) : null;
+    }
+    
+    // 辅助方法：提取整数字段
+    static extractIntegerField(text, fieldName, defaultValue = null) {
+        const pattern = new RegExp(`"${fieldName}":\\s*([0-9]+)`, 'i');
+        const match = text.match(pattern);
+        return match ? parseInt(match[1]) : defaultValue;
+    }
+}
+
 // OCR处理类
 class ExcelOCRProcessor {
     constructor() {
@@ -222,13 +850,12 @@ class ExcelOCRProcessor {
             console.log('📊 开始处理Excel文件（包含OCR）...');
             console.log('📁 文件路径:', filePath);
             
-            // 1. 提取表格数据（现有功能）
-            console.log('📋 步骤1: 提取表格数据...');
-            const workbook = xlsx.readFile(filePath);
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const tableContent = xlsx.utils.sheet_to_csv(worksheet);
-            console.log('✅ 表格数据提取完成，内容长度:', tableContent.length, '字符');
+            // 1. 提取结构化表格数据（新方法：保持行列对应关系）
+            console.log('📋 步骤1: 提取结构化表格数据...');
+            const tableResult = this.extractStructuredTableData(filePath);
+            const tableContent = tableResult.structuredContent;
+            console.log('✅ 结构化表格数据提取完成，内容长度:', tableContent.length, '字符');
+            console.log(`📊 表格信息: ${tableResult.rowCount}行 × ${tableResult.columnCount}列, 表头: ${tableResult.hasHeader ? '有' : '无'}`);
             
             // 2. 提取并OCR识别图片
             console.log('📋 步骤2: 提取并OCR识别图片...');
@@ -263,8 +890,8 @@ class ExcelOCRProcessor {
                 console.log('ℹ️ 未发现图片文件');
             }
             
-            // 3. 合并表格数据和OCR结果
-            console.log('📋 步骤3: 合并表格数据和OCR结果...');
+            // 3. 合并结构化表格数据和OCR结果
+            console.log('📋 步骤3: 合并结构化表格数据和OCR结果...');
             let combinedContent = tableContent;
             
             if (ocrResults.length > 0) {
@@ -278,7 +905,7 @@ class ExcelOCRProcessor {
                 console.log(`✅ OCR识别完成，共识别 ${ocrResults.length} 个图片`);
                 console.log(`📊 合并后内容总长度: ${combinedContent.length} 字符`);
             } else {
-                console.log('ℹ️ 未发现图片或OCR识别失败，仅使用表格数据');
+                console.log('ℹ️ 未发现图片或OCR识别失败，仅使用结构化表格数据');
             }
             
             return {
@@ -286,7 +913,15 @@ class ExcelOCRProcessor {
                 hasOCR: ocrResults.length > 0,
                 ocrCount: ocrResults.length,
                 tableContent: tableContent,
-                ocrResults: ocrResults
+                ocrResults: ocrResults,
+                // 🔥 新增：结构化表格信息
+                tableStructure: {
+                    hasHeader: tableResult.hasHeader,
+                    headerRow: tableResult.headerRow,
+                    rowCount: tableResult.rowCount,
+                    columnCount: tableResult.columnCount,
+                    isStructured: true
+                }
             };
             
         } catch (error) {
@@ -297,14 +932,20 @@ class ExcelOCRProcessor {
             // 降级到仅表格处理
             try {
                 console.log('🔄 降级到仅表格处理...');
-                const workbook = xlsx.readFile(filePath);
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
+                const tableResult = this.extractStructuredTableData(filePath);
                 return {
-                    content: xlsx.utils.sheet_to_csv(worksheet),
+                    content: tableResult.structuredContent,
                     hasOCR: false,
                     ocrCount: 0,
-                    error: error.message
+                    tableContent: tableResult.structuredContent,
+                    error: error.message,
+                    tableStructure: {
+                        hasHeader: tableResult.hasHeader,
+                        headerRow: tableResult.headerRow,
+                        rowCount: tableResult.rowCount || 0,
+                        columnCount: tableResult.columnCount || 0,
+                        isStructured: true
+                    }
                 };
             } catch (fallbackError) {
                 console.error('❌ 降级处理也失败:', fallbackError);
@@ -326,14 +967,125 @@ class ExcelOCRProcessor {
         }
         console.log('✅ 临时文件清理完成');
     }
+
+    // 🔥 新增：提取保持行列对应关系的Excel表格数据
+    extractStructuredTableData(filePath) {
+        try {
+            console.log('📊 开始提取结构化表格数据...');
+            
+            const workbook = xlsx.readFile(filePath);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            
+            // 获取表格范围
+            const range = xlsx.utils.decode_range(worksheet['!ref'] || 'A1:A1');
+            console.log(`📋 表格范围: ${worksheet['!ref']}`);
+            
+            // 提取表格数据为二维数组
+            const tableData = [];
+            
+            for (let row = range.s.r; row <= range.e.r; row++) {
+                const rowData = [];
+                for (let col = range.s.c; col <= range.e.c; col++) {
+                    const cellAddress = xlsx.utils.encode_cell({ r: row, c: col });
+                    const cell = worksheet[cellAddress];
+                    const cellValue = cell ? (cell.v || '') : '';
+                    rowData.push(cellValue.toString().trim());
+                }
+                tableData.push(rowData);
+            }
+            
+            console.log(`📊 提取了 ${tableData.length} 行 × ${tableData[0]?.length || 0} 列数据`);
+            
+            // 🔥 格式化为行列对应的文本格式
+            const formattedLines = [];
+            
+            // 检测表头行
+            const headerRow = tableData[0] || [];
+            const hasHeader = headerRow.some(cell => 
+                /^(PART|DESCRIPTION|PRICE|QTY|SKU|MODEL|BRAND)/i.test(cell) ||
+                cell.length > 0
+            );
+            
+            if (hasHeader) {
+                console.log('📋 检测到表头行');
+                formattedLines.push('=== 表格标题行 ===');
+                formattedLines.push(headerRow.map((cell, index) => `列${index + 1}: ${cell}`).join(' | '));
+                formattedLines.push('');
+                formattedLines.push('=== 表格数据行 ===');
+            }
+            
+            // 处理数据行（跳过空行和表头）
+            const dataStartRow = hasHeader ? 1 : 0;
+            for (let i = dataStartRow; i < tableData.length; i++) {
+                const row = tableData[i];
+                
+                // 跳过完全空的行
+                if (row.every(cell => !cell || cell.trim() === '')) {
+                    continue;
+                }
+                
+                // 🔥 格式化行数据，保持列对应关系
+                const formattedRow = [];
+                
+                for (let j = 0; j < row.length; j++) {
+                    const cellValue = row[j];
+                    const columnHeader = hasHeader ? (headerRow[j] || `列${j + 1}`) : `列${j + 1}`;
+                    
+                    if (cellValue && cellValue.trim()) {
+                        formattedRow.push(`${columnHeader}: ${cellValue}`);
+                    }
+                }
+                
+                if (formattedRow.length > 0) {
+                    formattedLines.push(`行${i + 1}: ${formattedRow.join(' | ')}`);
+                }
+            }
+            
+            const structuredContent = formattedLines.join('\n');
+            console.log(`✅ 结构化表格数据提取完成，内容长度: ${structuredContent.length} 字符`);
+            
+            return {
+                structuredContent: structuredContent,
+                rawTableData: tableData,
+                hasHeader: hasHeader,
+                headerRow: hasHeader ? headerRow : null,
+                rowCount: tableData.length,
+                columnCount: tableData[0]?.length || 0
+            };
+            
+        } catch (error) {
+            console.error('❌ 结构化表格数据提取失败:', error);
+            // 降级到原始CSV方法
+            const workbook = xlsx.readFile(filePath);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            return {
+                structuredContent: xlsx.utils.sheet_to_csv(worksheet),
+                rawTableData: null,
+                hasHeader: false,
+                headerRow: null,
+                error: error.message
+            };
+        }
+    }
 }
 
 // 创建OCR处理器实例
 const ocrProcessor = new ExcelOCRProcessor();
 
 // 元景AI调用函数
-async function callYuanJingAI(prompt) {
+async function callYuanJingAI(prompt, callType = '未知') {
     console.log('🤖 正在调用元景70B大模型...');
+    
+    // 🔥 新增：显示完整提示词
+    console.log('📝 ========== AI提示词开始 ==========');
+    console.log(prompt);
+    console.log('📝 ========== AI提示词结束 ==========');
+    console.log(`📊 提示词长度: ${prompt.length} 字符`);
+    
+    let responseContent = null;
+    let duration = 0;
     
     try {
         const startTime = Date.now();
@@ -364,14 +1116,24 @@ async function callYuanJingAI(prompt) {
         );
 
         const endTime = Date.now();
-        const duration = endTime - startTime;
+        duration = endTime - startTime;
         
         console.log(`✅ 元景70B模型调用成功！耗时: ${duration}ms`);
         
-        // 安全地提取响应内容
+        // 🔥 新增：显示AI响应内容
         if (response.data && response.data.choices && response.data.choices.length > 0) {
             const content = response.data.choices[0].message.content;
+            console.log('🤖 ========== AI响应开始 ==========');
+            console.log(content);
+            console.log('🤖 ========== AI响应结束 ==========');
+            console.log(`📊 响应长度: ${content ? content.length : 0} 字符`);
+            
             if (content && content.trim()) {
+                responseContent = content;
+                
+                // 🔥 记录成功的AI调用
+                recordAICall(prompt, responseContent, duration, callType);
+                
                 return content;
             } else {
                 throw new Error('AI返回内容为空');
@@ -386,6 +1148,9 @@ async function callYuanJingAI(prompt) {
             message: error.message,
             code: error.code
         });
+        
+        // 🔥 记录失败的AI调用
+        recordAICall(prompt, null, duration, callType);
         
         // 详细的错误分类和处理
         if (error.code === 'ECONNABORTED') {
@@ -818,6 +1583,532 @@ VendorSchema.index({ brands: 1 });
 
 const Vendor = mongoose.model('Vendor', VendorSchema);
 
+// 🔥 新增：三步AI分析处理函数
+const performThreeStepAIAnalysis = async (content, processingInfo, fileName, filePath, fileHash, ocrPromptAddition, enableDetailedAI = true) => {
+    console.log('🔧 开始重构的三步AI处理流程...');
+    console.log(`⚙️ 详细AI识别: ${enableDetailedAI ? '启用' : '仅基础识别'}`);
+    
+    // 确保processingInfo包含fileName信息
+    const enhancedProcessingInfo = {
+        ...processingInfo,
+        fileName: fileName
+    };
+    
+    // 🔥 步骤1：统一数据合并和行号分配
+    console.log('📊 步骤1：统一数据合并和行号分配...');
+    const mergedData = mergeAndAssignLineNumbers(enhancedProcessingInfo, content);
+    
+    // 🔥 步骤2：第一次AI - 基本信息提取
+    console.log('🤖 步骤2：第一次AI - 基本信息提取...');
+    console.log(`📊 用于AI基础分析的数据长度: ${mergedData.mergedContent.length} 字符`);
+    
+    const basicInfoPrompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，专注于提取基础信息和价格信息。${ocrPromptAddition}
+
+🔥 重要提示：
+1. 必须返回标准的JSON数组格式，不要包含任何markdown标记或其他文字
+2. 所有字符串值必须用双引号包围
+3. 数字值不要加引号，百分号等符号也不要包含在数字值中
+4. 只分析基础信息和价格信息，不要分析详细配置
+5. 所有属性名必须用双引号包围
+6. 字符串内容中的特殊字符需要转义
+
+⚠️ JSON格式要求：
+- 属性名必须用双引号："propertyName"
+- 字符串值必须用双引号："string value"
+- 数字值不要引号：123.45
+- 布尔值不要引号：true/false
+- null值不要引号：null
+- 数组格式：[item1, item2]
+- 对象格式：{"key": "value"}
+
+通用报价单分析规则：
+
+📋 产品名称识别：
+- 优先识别：文档标题、主标题、产品型号、服务名称
+- 表格中的：Product Name、Item、Description、Service、Model等
+- 配置清单中的主要产品型号或解决方案名称
+- 如果是多产品组合，使用主要产品名称或整体方案名称
+-注意不要把配件当作主要产品名称，产品名称应该为关于服务器、存储、网络、安全、软件、云服务等设备名称，而不是下属配件名称!
+
+🔍 主要产品识别规则：
+- 服务器类：如 "HPE DL380 Gen11 Server"、"Dell PowerEdge R750"、"IBM Power10"以及更多
+- 存储类：如 "HPE MSA 2060"、"NetApp FAS2750"、"Dell EMC PowerStore"
+- 网络类：如 "Cisco Catalyst 9300"、"Aruba 6300"、"Juniper EX4650"
+- 安全类：如 "Fortinet FortiGate 600E"、"Cisco ASA 5516"
+- 软件类：如 "VMware vSphere"、"Microsoft Windows Server"
+- 云服务：如 "AWS EC2"、"Azure Virtual Machine"
+
+⚠️ 避免识别为主要设备的内容：
+- CPU (如 Intel Xeon、AMD EPYC)
+- 内存条 (如 DDR4、DDR5 Memory Kit)
+- 硬盘 (如 SSD、HDD、Storage Drive)
+- 网卡 (如 Network Adapter、NIC Card)
+- 电源 (如 Power Supply、PSU)
+- 风扇 (如 Fan Kit、Cooling)
+- 线缆 (如 Cable、Cord)
+- 控制器 (如 Controller Card、RAID Card)
+
+如果报价单包含多个产品，应该识别主要的服务器/存储/网络设备名称，而不是其中的配件。
+
+🏢 供应商识别（重要）：
+- 供应商：实际提供报价的公司、经销商、代理商、服务商
+- 制造商：产品品牌方（Dell、HP、Cisco、IBM、Microsoft、VMware、华为、联想等）
+- 优先识别报价单抬头、公司信息、联系方式、签名处的公司名称作为供应商
+- 如果只能识别到制造商品牌，供应商字段使用"未识别"
+
+💰 价格术语识别：
+原价相关：List Price、MSRP、标准价格、官方价格、零售价、原价
+实际价格：Customer Price、Net Price、Final Price、折扣价格、成交价、实际价
+单价相关：Unit Price、单价、每个、单位价格
+总价相关: 总计、合计、Total Price、总金额
+注意，总价识别一定是整份报价单的总价，而不是单个产品的总价！要结合整个报价单分析,一般总价都比单价高，如果单价很高，总价很低，则需要检查是否是单个产品的总价
+
+⚠️ 重要：绝对禁止进行任何价格计算！只识别文档中明确标注的价格数值
+
+💱 币种识别：
+- 符号：$、€、£、¥、₹、₩等
+- 代码：USD、EUR、GBP、CNY、JPY、INR、KRW等
+- 文字：美元、欧元、英镑、人民币、日元等
+
+📦 数量识别：
+- Qty、Quantity、数量、件数、台数、个数、套数、份数
+- Units、Pieces、Sets、Items、Licenses、Subscriptions
+- 单位：台、个、套、件、份、年、月、用户数、许可数
+- 默认为1（如果找不到明确数量）
+
+请严格按照以下JSON格式返回基础信息和价格信息，不要包含任何其他文字：
+
+[
+  {
+    "quotationCategory": "报价单类别（服务器解决方案、云服务方案、网络设备方案、存储解决方案、安全设备方案、软件系统方案、其他）",
+    "quotationTitle": "主要产品名称或解决方案名称",
+    "supplier": "供应商名称（不能是产品品牌）",
+    "region": "地区（美国、中国、韩国、日本、德国、法国、英国、其他等）",
+    "totalPrice": 折扣前总价数字（没有则为null）,
+    "discountedTotalPrice": 折扣后总价数字（没有则为null）,
+    "unitPrice": 单价数字（没有则为null）,
+    "quantity": 数量数字（默认为1）,
+    "currency": "货币代码（如USD、EUR、CNY等）",
+    "discount_rate": 折扣率数字（如25表示25%，没有则为null）,
+    "quote_validity": "报价有效期（YYYY-MM-DD格式，没有则为null）",
+    "delivery_date": "交付日期（YYYY-MM-DD格式，没有则为null）",
+    "notes": "备注信息"
+  }
+]
+
+**分析数据：**
+${mergedData.mergedContent}`;
+
+    let basicInfo = null;
+    try {
+        const aiResponse1 = await callYuanJingAI(basicInfoPrompt, '第一次AI-基础信息提取');
+        basicInfo = SmartJSONParser.parseAIResponse(aiResponse1, 'AI基础信息分析');
+        console.log('✅ 第一次AI基础信息提取完成');
+    } catch (error) {
+        console.error('❌ 第一次AI基础信息提取失败:', error);
+        throw error;
+    }
+    
+    // 🔥 步骤3：第二次AI - 识别有用行号（根据开关决定是否执行）
+    if (!enableDetailedAI) {
+        console.log('⚙️ 跳过详细AI识别，仅返回基础信息');
+        return {
+            basicInfo: basicInfo,
+            detailedConfig: '', // 详细配置为空
+            annotation: null
+        };
+    }
+    
+    console.log('🤖 步骤3：第二次AI - 识别有用行号...');
+    const annotation = await aiDataCleaner.annotateData(mergedData.mergedContent, 'excel');
+    
+    if (!annotation || !annotation.useful || annotation.useful.length === 0) {
+        console.warn('⚠️ 没有识别到有用行，使用全部数据');
+        const detailedConfig = mergedData.mergedContent;
+        console.log(`📊 最终配置长度: ${detailedConfig.length} 字符`);
+        
+        return {
+            basicInfo: basicInfo,
+            detailedConfig: detailedConfig,
+            annotation: null
+        };
+    }
+    
+    // 🔥 步骤4：第三次AI - 格式整理和OCR补全（修复版本）
+    console.log('🤖 步骤4：第三次AI - 格式整理和OCR补全...');
+    
+    // 提取有用行的实际内容
+    const usefulLines = [];
+    const allLines = mergedData.mergedContent.split('\n');
+    
+    annotation.useful.forEach(lineNumber => {
+        const lineIndex = lineNumber - 1;
+        if (lineIndex >= 0 && lineIndex < allLines.length) {
+            const line = allLines[lineIndex].trim();
+            if (line) {
+                usefulLines.push({
+                    lineNumber: lineNumber,
+                    content: line
+                });
+            }
+        }
+    });
+    
+    console.log(`📊 提取了 ${usefulLines.length} 行有用内容`);
+    
+    // 🔥 修复：如果没有有用行，使用全部数据
+    if (usefulLines.length === 0) {
+        console.warn('⚠️ 没有提取到有用行，使用全部数据');
+        const detailedConfig = mergedData.mergedContent;
+        console.log(`📊 最终配置长度: ${detailedConfig.length} 字符`);
+        
+        return {
+            basicInfo: basicInfo,
+            detailedConfig: detailedConfig,
+            annotation: null
+        };
+    }
+    
+    // 第三次AI提示词：加强版格式整理
+    const formatPrompt = `你是一个专业的ICT产品数据整理专家。请对以下有用行进行详细的格式整理
+
+**有用行数据：**
+${usefulLines.map(line => `行${line.lineNumber}: ${line.content}`).join('\n')}
+
+**重要任务要求：**
+使得以上配置的格式更加统一，更加清晰，更加完整，更加准确。
+
+**重要提醒：**
+- 不要省略任何内容，完整保留所有信息
+- 重点修复OCR识别错误，使产品信息清晰可读
+- 保持专业的ICT产品描述格式
+- 不要添加不存在的信息，只修复和整理现有内容
+
+请直接返回文本内容，不要使用JSON格式。`;
+
+    let detailedConfig = '';
+    try {
+        const aiResponse3 = await callYuanJingAI(formatPrompt, '第三次AI-格式整理和OCR修复');
+        detailedConfig = aiResponse3.trim();
+        console.log('✅ 第三次AI格式整理完成');
+        console.log(`📊 整理后配置长度: ${detailedConfig.length} 字符`);
+    } catch (error) {
+        console.error('❌ 第三次AI格式整理失败:', error);
+        // 降级处理：使用有用行的原始内容
+        detailedConfig = usefulLines.map(line => `• ${line.content}`).join('\n');
+        console.log(`📊 降级处理后配置长度: ${detailedConfig.length} 字符`);
+    }
+    
+    // 🔥 确保配置信息不为空
+    if (!detailedConfig || detailedConfig.trim().length === 0) {
+        console.warn('⚠️ 配置信息为空，使用原始有用行');
+        detailedConfig = usefulLines.map(line => `• ${line.content}`).join('\n');
+    }
+    
+    console.log(`📊 最终配置长度: ${detailedConfig.length} 字符`);
+    
+    return {
+        basicInfo: basicInfo,
+        detailedConfig: detailedConfig,
+        annotation: annotation
+    };
+};
+
+// 🔥 新增：统一数据合并和行号分配函数
+const mergeAndAssignLineNumbers = (processingInfo, content = null) => {
+    console.log('📋 开始统一数据合并和行号分配...');
+    
+    const mergedLines = [];
+    let currentLineNumber = 1;
+    
+    try {
+        // 🔥 0. 处理直接传入的文本内容（PDF、Word等）
+        if (content && typeof content === 'string' && content.trim().length > 0) {
+            console.log('📄 合并直接文本内容 (PDF/Word等)...');
+            
+            const fileType = processingInfo.fileName ? 
+                processingInfo.fileName.toLowerCase().split('.').pop() : 
+                'unknown';
+            
+            mergedLines.push(`行${currentLineNumber}: === ${fileType.toUpperCase()}文件内容 ===`);
+            currentLineNumber++;
+            
+            // 将内容按行分割并添加行号
+            const contentLines = content.trim().split('\n');
+            contentLines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (trimmedLine && trimmedLine.length > 0) {
+                    mergedLines.push(`行${currentLineNumber}: ${trimmedLine}`);
+                    currentLineNumber++;
+                }
+            });
+            
+            console.log(`📄 添加了 ${contentLines.length} 行文本内容`);
+        }
+        // 1. 处理Excel表格数据（优化：保持结构化格式）
+        if (processingInfo.tableContent) {
+            console.log('📊 合并Excel表格数据...');
+            
+            // 🔥 检查是否为结构化表格数据
+            const isStructuredTable = processingInfo.tableStructure?.isStructured;
+            
+            if (isStructuredTable) {
+                console.log('📋 检测到结构化Excel表格数据，保持行列对应关系');
+                mergedLines.push(`行${currentLineNumber}: === Excel结构化表格数据 ===`);
+                currentLineNumber++;
+                
+                if (processingInfo.tableStructure.hasHeader) {
+                    mergedLines.push(`行${currentLineNumber}: 表格规格: ${processingInfo.tableStructure.rowCount}行 × ${processingInfo.tableStructure.columnCount}列 (含表头)`);
+                    currentLineNumber++;
+                }
+            } else {
+                console.log('📋 处理传统CSV格式表格数据');
+                mergedLines.push(`行${currentLineNumber}: === Excel表格数据 ===`);
+                currentLineNumber++;
+            }
+            
+            const tableLines = processingInfo.tableContent.split('\n');
+            tableLines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (trimmedLine && trimmedLine.length > 0) {
+                    // 🔥 对于结构化数据，保持原有格式
+                    if (isStructuredTable && trimmedLine.startsWith('行')) {
+                        // 已经有行号的结构化数据，直接使用
+                        mergedLines.push(trimmedLine);
+                    } else if (isStructuredTable && (trimmedLine.startsWith('===') || trimmedLine.includes('列'))) {
+                        // 表头和分隔符信息
+                        mergedLines.push(`行${currentLineNumber}: ${trimmedLine}`);
+                        currentLineNumber++;
+                    } else {
+                        // 普通数据行
+                        mergedLines.push(`行${currentLineNumber}: ${trimmedLine}`);
+                        currentLineNumber++;
+                    }
+                }
+            });
+        }
+        
+        // 2. 处理OCR结果（保持原有逻辑）
+        if (processingInfo.ocrResults && processingInfo.ocrResults.length > 0) {
+            console.log('🔍 合并OCR识别结果...');
+            
+            processingInfo.ocrResults.forEach((ocrResult, index) => {
+                if (ocrResult && ocrResult.text && ocrResult.text.trim()) {
+                    // 添加OCR图片标题
+                    mergedLines.push(`行${currentLineNumber}: === 配置图片 ${index + 1} (OCR识别, 置信度: ${Math.round(ocrResult.confidence)}%) ===`);
+                    currentLineNumber++;
+                    
+                    // 添加OCR识别的每一行
+                    const ocrLines = ocrResult.text.trim().split('\n');
+                    ocrLines.forEach(line => {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine && trimmedLine.length > 0) {
+                            mergedLines.push(`行${currentLineNumber}: ${trimmedLine}`);
+                            currentLineNumber++;
+                        }
+                    });
+                }
+            });
+        }
+        
+        const mergedContent = mergedLines.join('\n');
+        console.log(`✅ 数据合并完成，总共 ${currentLineNumber - 1} 行`);
+        
+        // 🔥 输出结构化信息用于调试
+        if (processingInfo.tableStructure?.isStructured) {
+            console.log(`📊 结构化表格信息:`);
+            console.log(`   - 行数: ${processingInfo.tableStructure.rowCount}`);
+            console.log(`   - 列数: ${processingInfo.tableStructure.columnCount}`);
+            console.log(`   - 表头: ${processingInfo.tableStructure.hasHeader ? '有' : '无'}`);
+            if (processingInfo.tableStructure.headerRow) {
+                console.log(`   - 表头内容: ${processingInfo.tableStructure.headerRow.join(' | ')}`);
+            }
+        }
+        
+        return {
+            mergedContent: mergedContent,
+            totalLines: currentLineNumber - 1,
+            mergedLines: mergedLines,
+            isStructured: processingInfo.tableStructure?.isStructured || false
+        };
+        
+    } catch (error) {
+        console.error('❌ 数据合并失败:', error);
+        return {
+            mergedContent: '数据合并失败',
+            totalLines: 0,
+            mergedLines: [],
+            isStructured: false
+        };
+    }
+};
+
+// 🔥 新增：处理AI分析结果函数
+const processAIAnalysisResult = async (analysisResult, fileName, filePath, fileHash) => {
+    console.log('🔧 开始处理AI分析结果...');
+    
+    const { basicInfo, detailedConfig } = analysisResult;
+    
+    // 确保返回的是数组
+    let products = Array.isArray(basicInfo) ? basicInfo : [basicInfo];
+    
+    // 处理AI分析结果
+    const processedProducts = products.map(product => {
+        // 价格字段清理函数
+        const cleanPrice = (value) => {
+            if (value === null || value === undefined) return null;
+            if (typeof value === 'string') {
+                const cleanedValue = value.toString().replace(/[,\s]/g, '');
+                const numValue = parseFloat(cleanedValue);
+                return isNaN(numValue) ? null : numValue;
+            }
+            return typeof value === 'number' ? value : null;
+        };
+        
+        // 清理数量字段
+        const cleanQuantity = (value) => {
+            if (value === null || value === undefined) return 1;
+            if (typeof value === 'string') {
+                const cleanedValue = value.toString().replace(/[,\s]/g, '');
+                const numValue = parseInt(cleanedValue);
+                return isNaN(numValue) ? 1 : Math.max(1, numValue);
+            }
+            return typeof value === 'number' ? Math.max(1, Math.floor(value)) : 1;
+        };
+        
+        // 智能价格处理逻辑
+        const originalTotalPrice = cleanPrice(product.totalPrice) || 0;
+        const discountedTotalPrice = cleanPrice(product.discountedTotalPrice);
+        const unitPrice = cleanPrice(product.unitPrice);
+        const quantity = cleanQuantity(product.quantity);
+        let discountRate = cleanPrice(product.discount_rate);
+        
+        let finalTotalPrice = originalTotalPrice;
+        let finalDiscountedPrice = discountedTotalPrice;
+        let finalUnitPrice = unitPrice;
+        
+        // 智能计算单价和总价
+        if (!finalUnitPrice && finalTotalPrice > 0 && quantity > 0) {
+            finalUnitPrice = Math.round((finalTotalPrice / quantity) * 100) / 100;
+        }
+        
+        if (!finalTotalPrice && finalUnitPrice > 0 && quantity > 0) {
+            finalTotalPrice = finalUnitPrice * quantity;
+        }
+        
+        // 计算折扣率
+        if (finalTotalPrice > 0 && finalDiscountedPrice && finalDiscountedPrice < finalTotalPrice) {
+            if (!discountRate) {
+                discountRate = Math.round(((finalTotalPrice - finalDiscountedPrice) / finalTotalPrice) * 100);
+            }
+        } else if (!finalTotalPrice && finalDiscountedPrice) {
+            finalTotalPrice = finalDiscountedPrice;
+        }
+        
+        // 获取文件信息
+        let fileSize = 0;
+        let mimeType = 'application/octet-stream';
+        
+        try {
+            const stats = require('fs').statSync(filePath);
+            fileSize = stats.size;
+        } catch (error) {
+            console.warn('⚠️ 无法获取文件大小:', error.message);
+        }
+        
+        // 根据文件扩展名确定MIME类型
+        const ext = fileName.toLowerCase().split('.').pop();
+        const mimeTypes = {
+            'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'txt': 'text/plain',
+            'csv': 'text/csv'
+        };
+        mimeType = mimeTypes[ext] || mimeType;
+        
+        // 确保category字段有值并映射到正确的枚举值
+        if (!product.quotationCategory) {
+            product.quotationCategory = '其他';
+        } else {
+            const categoryMapping = {
+                '服务器解决方案': '服务器',
+                '存储解决方案': '存储设备', 
+                '网络设备方案': '网络设备',
+                '安全设备方案': '安全设备',
+                '软件系统方案': '软件系统',
+                '云服务方案': '云服务'
+            };
+            
+            product.quotationCategory = categoryMapping[product.quotationCategory] || product.quotationCategory;
+            
+            const validCategories = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他'];
+            if (!validCategories.includes(product.quotationCategory)) {
+                product.quotationCategory = '其他';
+            }
+        }
+        
+        return {
+            // 基本信息
+            name: product.quotationTitle || product.productName || '报价单',
+            productName: product.quotationTitle || product.productName || '报价单',
+            quotationCategory: product.quotationCategory || '其他',
+            quotationTitle: product.quotationTitle || '',
+            supplier: product.supplier || '未知供应商',
+            region: product.region || '其他',
+            
+            // 价格信息 - 新结构
+            totalPrice: finalTotalPrice,
+            discountedTotalPrice: finalDiscountedPrice,
+            unitPrice: finalUnitPrice,
+            
+            // 价格信息 - 向后兼容
+            list_price: finalTotalPrice,
+            quote_unit_price: finalDiscountedPrice ? Math.round((finalDiscountedPrice / quantity) * 100) / 100 : finalUnitPrice,
+            unit_price: finalUnitPrice,
+            quantity: quantity,
+            discount_rate: discountRate,
+            quote_total_price: finalDiscountedPrice || finalTotalPrice,
+            currency: product.currency || 'USD',
+            
+            // 详细信息 - 🔥 使用AI三步处理后的配置信息
+            detailedComponents: detailedConfig ? aiDataCleaner.formatForDisplay(detailedConfig) : '',
+            notes: product.notes || '',
+            configDetail: product.configDetail || '',
+            productSpec: product.projectDescription || '',
+            
+            // 时间信息
+            quote_validity: product.quote_validity ? new Date(product.quote_validity) : null,
+            delivery_date: product.delivery_date ? new Date(product.delivery_date) : null,
+            
+            // 分类信息
+            category: product.quotationCategory === '服务器解决方案' ? '服务器' :
+                     product.quotationCategory === '存储解决方案' ? '存储设备' :
+                     product.quotationCategory === '网络设备方案' ? '网络设备' :
+                     product.quotationCategory === '安全设备方案' ? '安全设备' :
+                     product.quotationCategory === '软件系统方案' ? '软件系统' :
+                     product.quotationCategory === '云服务方案' ? '云服务' : '其他',
+            
+            // 状态和文件信息
+            status: 'active',
+            originalFile: {
+                filename: fileName,
+                originalName: fileName,
+                path: filePath,
+                fileSize: fileSize,
+                mimetype: mimeType,
+                fileHash: fileHash,
+                uploadedAt: new Date()
+            }
+        };
+    });
+    
+    console.log(`✅ AI分析结果处理完成，产品数量: ${processedProducts.length}`);
+    return processedProducts;
+};
+
 // 创建uploads目录
 const createUploadsDir = async () => {
     try {
@@ -891,7 +2182,7 @@ app.post('/api/quotations/upload', upload.single('file'), async (req, res) => {
 
 // API 2: 分析已上传的文件
 app.post('/api/quotations/analyze', async (req, res) => {
-    const { fileName, filePath } = req.body;
+    const { fileName, filePath, enableDetailedAI = true } = req.body;
     
     if (!fileName || !filePath) {
         return res.status(400).json({ error: '缺少文件信息' });
@@ -902,7 +2193,6 @@ app.post('/api/quotations/analyze', async (req, res) => {
         
         // 计算文件hash
         const fileHash = await calculateFileHash(filePath);
-        
         
         // 读取文件内容
         let content;
@@ -923,9 +2213,56 @@ app.post('/api/quotations/analyze', async (req, res) => {
             
             console.log(`📊 Excel处理完成: 表格数据✅ OCR图片${excelResult.ocrCount}个 ${excelResult.hasOCR ? '✅' : '❌'}`);
         } else if (fileName.toLowerCase().includes('.pdf')) {
-            const dataBuffer = await fs.readFile(fullPath);
-            const data = await pdf(dataBuffer);
-            content = data.text;
+            console.log('📄 开始处理PDF文件...');
+            try {
+                const dataBuffer = await fs.readFile(fullPath);
+                console.log(`📄 PDF文件读取成功，大小: ${dataBuffer.length} bytes`);
+                
+                const data = await pdf(dataBuffer);
+                content = data.text;
+                
+                console.log(`📄 PDF文字提取完成，内容长度: ${content ? content.length : 0} 字符`);
+                console.log(`📄 PDF页数: ${data.numpages || '未知'}`);
+                
+                if (!content || content.trim().length === 0) {
+                    console.warn('⚠️ PDF文字提取结果为空，可能是图片PDF或受保护的PDF');
+                    console.log('🔄 尝试使用OCR处理PDF...');
+                    
+                    // 尝试使用OCR处理PDF
+                    try {
+                        const ocrResult = await processPDFWithOCR(fullPath);
+                        if (ocrResult.success && ocrResult.text) {
+                            content = ocrResult.text;
+                            processingInfo = {
+                                hasOCR: true,
+                                ocrCount: ocrResult.pageCount || 1,
+                                ocrResults: ocrResult.results || [],
+                                isPDFOCR: true
+                            };
+                            console.log(`✅ PDF OCR成功，提取文字: ${content.length} 字符`);
+                        } else {
+                            console.warn('⚠️ PDF OCR也失败，使用空内容继续');
+                            content = '';
+                        }
+                    } catch (ocrError) {
+                        console.warn('⚠️ PDF OCR处理失败:', ocrError.message);
+                        console.log('💡 建议：如果是图片PDF，请转换为图片格式或使用专业OCR工具');
+                        content = '';
+                    }
+                } else {
+                    console.log(`📄 PDF前100字符预览: ${content.substring(0, 100)}...`);
+                }
+            } catch (pdfError) {
+                console.error('❌ PDF处理失败:', pdfError);
+                console.log('🔄 尝试按纯文本读取...');
+                try {
+                    content = await fs.readFile(fullPath, 'utf8');
+                    console.log('📄 按纯文本读取成功');
+                } catch (textError) {
+                    console.error('❌ 纯文本读取也失败:', textError);
+                    throw new Error(`PDF处理失败: ${pdfError.message}`);
+                }
+            }
         } else if (fileName.toLowerCase().includes('.docx') || fileName.toLowerCase().includes('.doc')) {
             const result = await mammoth.extractRawText({ path: fullPath });
             content = result.value;
@@ -955,733 +2292,13 @@ ${processingInfo.ocrResults ? processingInfo.ocrResults.map((r, i) =>
 🔥 重要：专注于基础信息和价格信息的识别！`;
         }
         
-        // 🔥 创建改进的详细配置信息提取函数
-        const extractDetailedComponents = (content, processingInfo) => {
-            console.log('📋 开始提取详细配置信息...');
-            let detailedComponents = '';
-            
-            try {
-                // 🔥 改进1: 正确解析CSV行，处理引号包围的字段
-                const parseCSVLine = (line) => {
-                    const fields = [];
-                    let current = '';
-                    let inQuotes = false;
-                    
-                    for (let i = 0; i < line.length; i++) {
-                        const char = line[i];
-                        const nextChar = line[i + 1];
-                        
-                        if (char === '"') {
-                            if (inQuotes && nextChar === '"') {
-                                // 双引号转义
-                                current += '"';
-                                i++; // 跳过下一个引号
-                            } else {
-                                // 切换引号状态
-                                inQuotes = !inQuotes;
-                            }
-                        } else if (char === ',' && !inQuotes) {
-                            // 字段分隔符
-                            fields.push(current.trim());
-                            current = '';
-                        } else {
-                            current += char;
-                        }
-                    }
-                    
-                    // 添加最后一个字段
-                    fields.push(current.trim());
-                    
-                    return fields;
-                };
-
-                // 🔥 改进2: 智能Excel处理函数
-                const processExcelForAI = (tableContent) => {
-                    console.log('📊 开始处理Excel数据，保持完整结构...');
-                    
-                    const lines = tableContent.split('\n');
-                    const processedLines = [];
-                    
-                    // 1. 智能识别表头
-                    let headerRowIndex = -1;
-                    let headerRow = null;
-                    
-                    for (let i = 0; i < lines.length; i++) {
-                        const line = lines[i];
-                        const upperLine = line.toUpperCase();
-                        
-                        // 寻找包含常见表头关键词的行
-                        if (upperLine.includes('PART') || upperLine.includes('SKU') || 
-                            upperLine.includes('DESCRIPTION') || upperLine.includes('描述') ||
-                            upperLine.includes('PRICE') || upperLine.includes('单价') ||
-                            upperLine.includes('QTY') || upperLine.includes('数量') ||
-                            upperLine.includes('AMOUNT') || upperLine.includes('合计') ||
-                            upperLine.includes('TOTAL') || upperLine.includes('总计')) {
-                            headerRowIndex = i;
-                            headerRow = parseCSVLine(line);
-                            break;
-                        }
-                    }
-                    
-                    // 2. 处理表头信息
-                    if (headerRowIndex !== -1) {
-                        console.log(`✅ 找到表头行 (第${headerRowIndex + 1}行)`);
-                        
-                        // 添加表头说明
-                        processedLines.push('=== 报价单表头结构 ===');
-                        headerRow.forEach((header, index) => {
-                            if (header && header.trim()) {
-                                processedLines.push(`列${index + 1}: ${header.trim()}`);
-                            }
-                        });
-                        processedLines.push('');
-                        
-                        // 添加格式化的表头行
-                        processedLines.push('=== 表格数据 ===');
-                        processedLines.push('表头: ' + headerRow.join(' | '));
-                        processedLines.push('-'.repeat(100));
-                        
-                        // 3. 处理数据行（🔥 移除截断限制，处理所有行）
-                        let dataRowCount = 0;
-                        for (let i = headerRowIndex + 1; i < lines.length; i++) {
-                            const line = lines[i].trim();
-                            
-                            // 跳过完全空行
-                            if (!line || line.match(/^,+$/)) {
-                                continue;
-                            }
-                            
-                            const fields = parseCSVLine(line);
-                            
-                            // 检查是否是有意义的数据行
-                            const hasContent = fields.some(field => 
-                                field && 
-                                field.length > 0 && 
-                                field !== '0' && 
-                                field !== '0.00' &&
-                                !field.match(/^,+$/)
-                            );
-                            
-                            if (hasContent) {
-                                dataRowCount++;
-                                
-                                // 格式化数据行，保持原始格式
-                                const formattedFields = fields.map(field => field || '[空]');
-                                
-                                processedLines.push(`行${dataRowCount}: ` + formattedFields.join(' | '));
-                                
-                                // 🔥 移除截断限制 - 处理所有数据行
-                                // if (dataRowCount >= 50) {
-                                //     processedLines.push(`... (还有 ${lines.length - headerRowIndex - 1 - dataRowCount} 行数据)`);
-                                //     break;
-                                // }
-                            }
-                        }
-                        
-                        console.log(`✅ 处理了 ${dataRowCount} 行有效数据（完整处理，无截断）`);
-                        
-                    } else {
-                        // 如果没有找到明确的表头，智能处理第一行作为表头
-                        console.log('⚠️ 未找到标准表头，将第一行作为表头处理');
-                        
-                        if (lines.length > 0) {
-                            const firstLine = lines[0].trim();
-                            if (firstLine) {
-                                const firstRowFields = parseCSVLine(firstLine);
-                                
-                                processedLines.push('=== 报价单表头结构 ===');
-                                firstRowFields.forEach((header, index) => {
-                                    if (header && header.trim()) {
-                                        processedLines.push(`列${index + 1}: ${header.trim()}`);
-                                    }
-                                });
-                                processedLines.push('');
-                                
-                                processedLines.push('=== 表格数据 ===');
-                                processedLines.push('表头: ' + firstRowFields.join(' | '));
-                                processedLines.push('-'.repeat(100));
-                                
-                                // 处理数据行（🔥 移除截断限制）
-                                let dataRowCount = 0;
-                                for (let i = 1; i < lines.length; i++) {
-                                    const line = lines[i].trim();
-                                    
-                                    if (!line || line.match(/^,+$/)) {
-                                        continue;
-                                    }
-                                    
-                                    const fields = parseCSVLine(line);
-                                    const hasContent = fields.some(field => field && field.length > 0);
-                                    
-                                    if (hasContent) {
-                                        dataRowCount++;
-                                        const formattedFields = fields.map(field => field || '[空]');
-                                        processedLines.push(`行${dataRowCount}: ` + formattedFields.join(' | '));
-                                        
-                                        // 🔥 移除截断限制
-                                        // if (dataRowCount >= 30) {
-                                        //     processedLines.push(`... (还有更多行)`);
-                                        //     break;
-                                        // }
-                                    }
-                                }
-                                
-                                console.log(`✅ 处理了 ${dataRowCount} 行有效数据（完整处理，无截断）`);
-                            }
-                        }
-                    }
-                    
-                    return processedLines.join('\n');
-                };
-                
-                // 1. 优先处理Excel表格数据
-                if (processingInfo.tableContent) {
-                    console.log('📊 处理Excel表格数据...');
-                    const processedContent = processExcelForAI(processingInfo.tableContent);
-                    if (processedContent) {
-                        detailedComponents += processedContent;
-                    }
-                }
-                
-                // 2. 从OCR结果中提取配置信息
-                if (processingInfo.ocrResults && processingInfo.ocrResults.length > 0) {
-                    console.log('🔍 从OCR结果中提取配置信息...');
-                    
-                    if (detailedComponents) {
-                        detailedComponents += '\n\n=== 图片中的详细配置信息 ===\n';
-                    }
-                    
-                    processingInfo.ocrResults.forEach((result, index) => {
-                        if (result.text && result.text.trim()) {
-                            detailedComponents += `\n--- 配置图片 ${index + 1} ---\n`;
-                            
-                            // 清理和格式化OCR文本
-                            const formatOCRText = (text) => {
-                                // 按行分割
-                                const lines = text.split('\n');
-                                const formattedLines = [];
-                                let currentSection = '';
-                                
-                                // 定义组件分类
-                                const componentCategories = {
-                                    '处理器': ['CPU', '处理器', 'Processor', 'Intel', 'Xeon', '至强'],
-                                    '内存': ['Memory', '内存', 'DIMM', 'DDR', 'RAM'],
-                                    '存储': ['Storage', '存储', 'SSD', 'HDD', '硬盘', 'SATA', 'NVMe', 'RAID'],
-                                    '网络': ['Network', '网络', 'Ethernet', 'GbE', 'NIC', 'Adapter', 'OCP'],
-                                    '电源': ['Power', '电源', 'PSU', 'Watt', '电源线'],
-                                    '机箱': ['Chassis', '机箱', 'Rack', '导轨', 'Rail', 'Riser'],
-                                    '管理': ['Management', '管理', 'iDRAC', 'BIOS', 'BMC'],
-                                    '服务': ['Service', '服务', 'Support', '支持', '延保']
-                                };
-                                
-                                for (const line of lines) {
-                                    let cleanLine = line.trim();
-                                    
-                                    // 跳过空行和无用行
-                                    if (!cleanLine || cleanLine.length < 3) continue;
-                                    if (cleanLine.match(/^[\d\s\.,\$€¥£\-]+$/)) continue;
-                                    
-                                    // 清理OCR识别错误（多余空格）
-                                    cleanLine = cleanLine.replace(/\s+/g, ' ');
-                                    
-                                    // 查找型号模式
-                                    const partMatch = cleanLine.match(/([A-Z0-9][\w\-]{4,})\s+(\d+)?\s*(.*)/);
-                                    if (partMatch) {
-                                        const [, partNumber, quantity, description] = partMatch;
-                                        if (description && description.length > 3) {
-                                            const qty = quantity ? ` × ${quantity}` : '';
-                                            cleanLine = `${partNumber}: ${description}${qty}`;
-                                        }
-                                    }
-                                    
-                                    // 分类识别
-                                    let category = '';
-                                    for (const [catName, keywords] of Object.entries(componentCategories)) {
-                                        if (keywords.some(keyword => 
-                                            cleanLine.toLowerCase().includes(keyword.toLowerCase()))) {
-                                            category = catName;
-                                            break;
-                                        }
-                                    }
-                                    
-                                    // 如果找到新的分类，添加分类标题
-                                    if (category && category !== currentSection) {
-                                        if (formattedLines.length > 0) {
-                                            formattedLines.push(''); // 空行分隔
-                                        }
-                                        formattedLines.push(`【${category}配置】`);
-                                        currentSection = category;
-                                    }
-                                    
-                                    // 添加配置项
-                                    formattedLines.push(`  • ${cleanLine}`);
-                                }
-                                
-                                return formattedLines.join('\n');
-                            };
-                            
-                            const formattedText = formatOCRText(result.text);
-                            detailedComponents += formattedText + '\n';
-                        }
-                    });
-                    
-                    console.log(`✅ 从 ${processingInfo.ocrResults.length} 个OCR结果中提取了配置信息`);
-                }
-                
-                // 3. 如果没有表格数据，尝试处理原始内容
-                if (!detailedComponents && content) {
-                    console.log('📝 处理原始内容...');
-                    
-                    // 🔥 修复：根据文件类型决定处理方式，而不是仅仅检查逗号
-                    const isExcelFile = processingInfo.fileName && 
-                        (processingInfo.fileName.toLowerCase().includes('.xlsx') || 
-                         processingInfo.fileName.toLowerCase().includes('.xls') ||
-                         processingInfo.fileName.toLowerCase().includes('.csv'));
-                    
-                    // 只有Excel/CSV文件且内容包含逗号时才使用CSV处理
-                    if (isExcelFile && content.includes(',') && content.split('\n').length > 10) {
-                        console.log('📊 检测到Excel/CSV文件，使用CSV处理逻辑');
-                        const processedContent = processExcelForAI(content);
-                        if (processedContent) {
-                            detailedComponents = processedContent;
-                        }
-                    } else {
-                        // 处理PDF、Word等其他格式的内容
-                        console.log('📄 处理非表格文件内容 (PDF/Word等)');
-                        const contentLines = content.split('\n');
-                        const configLines = [];
-                        
-                        for (const line of contentLines) {
-                            const cleanLine = line.trim();
-                            if (cleanLine && 
-                                cleanLine.length > 5 &&
-                                !cleanLine.toLowerCase().includes('price') &&
-                                !cleanLine.toLowerCase().includes('total') &&
-                                !cleanLine.toLowerCase().includes('amount') &&
-                                !cleanLine.match(/^\d+[\.,]\d+/) &&
-                                (cleanLine.includes('HPE') || cleanLine.includes('Intel') ||
-                                 cleanLine.includes('CPU') || cleanLine.includes('Memory') ||
-                                 cleanLine.includes('Storage') || cleanLine.includes('Network') ||
-                                 cleanLine.includes('Server') || cleanLine.includes('SolarWinds') ||
-                                 cleanLine.includes('Database') || cleanLine.includes('SQL') ||
-                                 cleanLine.includes('Performance') || cleanLine.includes('Analyzer') ||
-                                 cleanLine.length > 20)) {
-                                configLines.push(`- ${cleanLine}`);
-                            }
-                        }
-                        
-                        if (configLines.length > 0) {
-                            // 🔥 移除截断限制，使用所有配置行
-                            detailedComponents = configLines.join('\n');
-                            console.log(`✅ 从原始内容中提取了 ${configLines.length} 行配置信息（完整处理，无截断）`);
-                        }
-                    }
-                }
-                
-                // 4. 后处理：清理和格式化（🔥 移除长度截断限制）
-                if (detailedComponents) {
-                    // 移除重复行
-                    const lines = detailedComponents.split('\n');
-                    const uniqueLines = [...new Set(lines)];
-                    detailedComponents = uniqueLines.join('\n');
-                    
-                    // 🔥 移除长度截断限制，保持完整内容
-                    // if (detailedComponents.length > 5000) {
-                    //     detailedComponents = detailedComponents.substring(0, 5000) + '\n\n[配置信息过长，已截断...]';
-                    //     console.log('⚠️ 配置信息过长，已截断至5000字符');
-                    // }
-                    
-                    console.log(`✅ 详细配置信息提取完成，总长度: ${detailedComponents.length} 字符（完整处理，无截断）`);
-                } else {
-                    detailedComponents = '未能提取到详细配置信息';
-                    console.log('⚠️ 未能提取到详细配置信息');
-                }
-                
-            } catch (error) {
-                console.error('❌ 提取详细配置信息失败:', error);
-                detailedComponents = '配置信息提取失败: ' + error.message;
-            }
-            
-            return detailedComponents;
-        };
-        
-        // 🔥 直接提取详细配置信息（不依赖AI）
-        console.log('🔧 直接提取详细配置信息...');
-        // 确保processingInfo包含fileName信息
-        const enhancedProcessingInfo = {
-            ...processingInfo,
-            fileName: fileName // 添加文件名信息
-        };
-        
-        const extractedDetailedComponents = extractDetailedComponents(content, enhancedProcessingInfo);
-        
-        const prompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，专注于提取基础信息和价格信息。${ocrPromptAddition}
-
-🔥 重要提示：
-1. 必须返回标准的JSON数组格式，不要包含任何markdown标记或其他文字
-2. 所有字符串值必须用双引号包围
-3. 数字值不要加引号，百分号等符号也不要包含在数字值中
-4. 只分析基础信息和价格信息，不要分析详细配置
-5. 所有属性名必须用双引号包围
-6. 字符串内容中的特殊字符需要转义
-
-⚠️ JSON格式要求：
-- 属性名必须用双引号："propertyName"
-- 字符串值必须用双引号："string value"
-- 数字值不要引号：123.45
-- 布尔值不要引号：true/false
-- null值不要引号：null
-- 数组格式：[item1, item2]
-- 对象格式：{"key": "value"}
-
-通用报价单分析规则：
-
-📋 产品名称识别：
-- 优先识别：文档标题、主标题、产品型号、服务名称
-- 表格中的：Product Name、Item、Description、Service、Model等
-- 配置清单中的主要产品型号或解决方案名称
-- 如果是多产品组合，使用主要产品名称或整体方案名称
--注意不要把配件当作主要产品名称，产品名称应该为关于服务器、存储、网络、安全、软件、云服务等设备名称，而不是下属配件名称!
-
-🔍 主要产品识别规则：
-- 服务器类：如 "HPE DL380 Gen11 Server"、"Dell PowerEdge R750"、"IBM Power10"
-- 存储类：如 "HPE MSA 2060"、"NetApp FAS2750"、"Dell EMC PowerStore"
-- 网络类：如 "Cisco Catalyst 9300"、"Aruba 6300"、"Juniper EX4650"
-- 安全类：如 "Fortinet FortiGate 600E"、"Cisco ASA 5516"
-- 软件类：如 "VMware vSphere"、"Microsoft Windows Server"
-- 云服务：如 "AWS EC2"、"Azure Virtual Machine"
-
-⚠️ 避免识别为配件的内容：
-- CPU (如 Intel Xeon、AMD EPYC)
-- 内存条 (如 DDR4、DDR5 Memory Kit)
-- 硬盘 (如 SSD、HDD、Storage Drive)
-- 网卡 (如 Network Adapter、NIC Card)
-- 电源 (如 Power Supply、PSU)
-- 风扇 (如 Fan Kit、Cooling)
-- 线缆 (如 Cable、Cord)
-- 控制器 (如 Controller Card、RAID Card)
-
-如果报价单包含多个产品，应该识别主要的服务器/存储/网络设备名称，而不是其中的配件。
-
-🏢 供应商识别（重要）：
-- 供应商：实际提供报价的公司、经销商、代理商、服务商
-- 制造商：产品品牌方（Dell、HP、Cisco、IBM、Microsoft、VMware、华为、联想等）
-- 优先识别报价单抬头、公司信息、联系方式、签名处的公司名称作为供应商
-- 如果只能识别到制造商品牌，供应商字段使用"未识别"
-
-💰 价格术语识别：
-原价相关：List Price、MSRP、标准价格、官方价格、零售价、原价
-实际价格：Customer Price、Net Price、Final Price、折扣价格、成交价、实际价
-单价相关：Unit Price、单价、每个、单位价格
-总价相关：Total、总计、合计、Grand Total、总金额
-
-⚠️ 重要：绝对禁止进行任何价格计算！只识别文档中明确标注的价格数值
-
-💱 币种识别：
-- 符号：$、€、£、¥、₹、₩等
-- 代码：USD、EUR、GBP、CNY、JPY、INR、KRW等
-- 文字：美元、欧元、英镑、人民币、日元等
-
-📦 数量识别：
-- Qty、Quantity、数量、件数、台数、个数、套数、份数
-- Units、Pieces、Sets、Items、Licenses、Subscriptions
-- 单位：台、个、套、件、份、年、月、用户数、许可数
-- 默认为1（如果找不到明确数量）
-
-请严格按照以下JSON格式返回基础信息和价格信息，不要包含任何其他文字：
-
-[
-  {
-    "quotationCategory": "报价单类别（服务器解决方案、云服务方案、网络设备方案、存储解决方案、安全设备方案、软件系统方案、其他）",
-    "quotationTitle": "主要产品名称或解决方案名称",
-    "supplier": "供应商名称（不能是产品品牌）",
-    "region": "地区（美国、中国、韩国、日本、德国、法国、英国、其他等）",
-    "totalPrice": 折扣前总价数字（没有则为null）,
-    "discountedTotalPrice": 折扣后总价数字（没有则为null）,
-    "unitPrice": 单价数字（没有则为null）,
-    "quantity": 数量数字（默认为1）,
-    "currency": "货币代码（如USD、EUR、CNY等）",
-    "discount_rate": 折扣率数字（如25表示25%，没有则为null）,
-    "quote_validity": "报价有效期（YYYY-MM-DD格式，没有则为null）",
-    "delivery_date": "交付日期（YYYY-MM-DD格式，没有则为null）",
-    "notes": "备注信息"
-  }
-]
-
-文件内容：
-${extractedDetailedComponents}`;
-
-        const result = await callYuanJingAI(prompt);
-        let text = result;
-        
-        console.log('🤖 AI原始回复:', text);
-        
-        // 强化版清理响应文本
-        text = text
-            // 首先移除markdown代码块标记
-            .replace(/```json\s*/g, '').replace(/```\s*/g, '')
-            // 移除JavaScript风格的注释
-            .replace(/\/\/.*$/gm, '')          // 移除单行注释 //...
-            .replace(/\/\*[\s\S]*?\*\//g, '')  // 移除多行注释 /*...*/
-            // 修复常见的JSON格式错误
-            .replace(/,(\s*[\]}])/g, '$1')     // 移除多余的逗号
-            .replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3')  // 修复属性名的单引号
-            .replace(/:\s*'([^']*)'(\s*[,}])/g, ': "$1"$2')     // 修复属性值的单引号
-            // 修复百分号等特殊字符
-            .replace(/:\s*([0-9.]+)%/g, ': $1')  // 移除百分号
-            .replace(/:\s*([0-9.]+),([0-9]+)/g, ': $1$2')  // 修复数字中的逗号
-            // 修复中文标点符号
-            .replace(/，/g, ',')     // 中文逗号 → 英文逗号
-            .replace(/：/g, ':')     // 中文冒号 → 英文冒号
-            .replace(/；/g, ';')     // 中文分号 → 英文分号
-            // 修复引号问题
-            .replace(/"/g, '"').replace(/"/g, '"')  // 统一引号
-            .replace(/'/g, "'").replace(/'/g, "'")  // 统一单引号
-            // 修复属性名缺少引号的问题
-            .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
-            // 清理多余的空白字符和空行
-            .replace(/\s+/g, ' ')
-            .trim();
-        
-        console.log('🔧 清理后的JSON:', text);
-
-        let parsedData;
-        try {
-            parsedData = JSON.parse(text);
-        } catch (parseError) {
-            console.error('❌ JSON解析失败:', parseError);
-            console.error('❌ 清理后的文本:', text);
-            
-            // 尝试更激进的修复方法
-            try {
-                // 使用更强的修复逻辑
-                let fixedText = text
-                    // 修复属性名缺少引号
-                    .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
-                    // 修复其他字符串值缺少引号
-                    .replace(/:\s*([^",\[\]{}0-9null][^,}]*?)(?=[,}])/g, (match, content) => {
-                        if (!content.trim().startsWith('"') && !content.trim().endsWith('"')) {
-                            const cleanContent = content.trim().replace(/"/g, '\\"');
-                            return `: "${cleanContent}"`;
-                        }
-                        return match;
-                    })
-                    // 修复null值
-                    .replace(/:\s*null\s*([,}])/g, ': null$1')
-                    // 修复数字值
-                    .replace(/:\s*([0-9]+\.?[0-9]*)\s*([,}])/g, ': $1$2')
-                    // 最终清理
-                    .replace(/,(\s*[}\]])/g, '$1')  // 移除多余逗号
-                    .trim();
-                
-                console.log('🔧 二次修复后的JSON:', fixedText);
-                parsedData = JSON.parse(fixedText);
-                console.log('✅ 二次修复成功！');
-            } catch (secondParseError) {
-                console.error('❌ 二次JSON解析也失败:', secondParseError);
-                
-                // 第三次尝试：使用正则表达式提取关键信息
-                try {
-                    console.log('🔧 尝试第三次修复...');
-                    const extractedData = {
-                        quotationCategory: (text.match(/"quotationCategory":\s*"([^"]*)"/) || [])[1] || '其他',
-                        quotationTitle: (text.match(/"quotationTitle":\s*"([^"]*)"/) || [])[1] || '未识别产品',
-                        supplier: (text.match(/"supplier":\s*"([^"]*)"/) || [])[1] || '未知供应商',
-                        region: (text.match(/"region":\s*"([^"]*)"/) || [])[1] || null,
-                        totalPrice: parseFloat((text.match(/"totalPrice":\s*([0-9.]+)/) || [])[1]) || null,
-                        discountedTotalPrice: parseFloat((text.match(/"discountedTotalPrice":\s*([0-9.]+)/) || [])[1]) || null,
-                        unitPrice: parseFloat((text.match(/"unitPrice":\s*([0-9.]+)/) || [])[1]) || null,
-                        quantity: parseInt((text.match(/"quantity":\s*([0-9]+)/) || [])[1]) || 1,
-                        currency: (text.match(/"currency":\s*"([^"]*)"/) || [])[1] || 'USD',
-                        discount_rate: parseFloat((text.match(/"discount_rate":\s*([0-9.]+)/) || [])[1]) || null,
-                        quote_validity: (text.match(/"quote_validity":\s*"([^"]*)"/) || [])[1] || null,
-                        delivery_date: (text.match(/"delivery_date":\s*"([^"]*)"/) || [])[1] || null,
-                        notes: (text.match(/"notes":\s*"([^"]*)"/) || [])[1] || ''
-                    };
-                    
-                    parsedData = [extractedData];
-                    console.log('✅ 第三次修复成功，使用正则提取！');
-                } catch (thirdError) {
-                    console.error('❌ 第三次修复也失败:', thirdError);
-                    return res.status(500).json({ 
-                        error: 'AI返回的JSON格式不正确，请重试',
-                        rawResponse: text,
-                        parseError: parseError.message
-                    });
-                }
-            }
-        }
-
-        // 确保返回的是数组
-        let products = Array.isArray(parsedData) ? parsedData : [parsedData];
+        // 🔥 调用新的三步AI处理流程
+        console.log(`⚙️ AI详细识别开关: ${enableDetailedAI ? '开启' : '关闭'}`);
+        const analysisResult = await performThreeStepAIAnalysis(content, processingInfo, fileName, filePath, fileHash, ocrPromptAddition, enableDetailedAI);
         
         // 处理AI分析结果
-        const processedProducts = products.map(product => {
-            // 价格字段清理函数
-            const cleanPrice = (value) => {
-                if (value === null || value === undefined) return null;
-                if (typeof value === 'string') {
-                    const cleanedValue = value.toString().replace(/[,\s]/g, '');
-                    const numValue = parseFloat(cleanedValue);
-                    return isNaN(numValue) ? null : numValue;
-                }
-                return typeof value === 'number' ? value : null;
-            };
-            
-            // 清理数量字段
-            const cleanQuantity = (value) => {
-                if (value === null || value === undefined) return 1;
-                if (typeof value === 'string') {
-                    const cleanedValue = value.toString().replace(/[,\s]/g, '');
-                    const numValue = parseInt(cleanedValue);
-                    return isNaN(numValue) ? 1 : Math.max(1, numValue);
-                }
-                return typeof value === 'number' ? Math.max(1, Math.floor(value)) : 1;
-            };
-            
-            // 新的智能价格处理逻辑
-            const originalTotalPrice = cleanPrice(product.totalPrice) || 0; // 折扣前总价
-            const discountedTotalPrice = cleanPrice(product.discountedTotalPrice); // 折扣后总价
-            const unitPrice = cleanPrice(product.unitPrice); // 单价
-            const quantity = cleanQuantity(product.quantity); // 数量
-            let discountRate = cleanPrice(product.discount_rate); // AI识别的折扣率
-            
-            // 智能价格处理：
-            // 1. 如果有折扣前和折扣后价格，自动计算折扣率
-            // 2. 如果只有一个价格，根据AI的判断决定是折扣前还是折扣后
-            // 3. 智能计算单价：如果有总价和数量，自动计算单价
-            let finalTotalPrice = originalTotalPrice; // 最终的折扣前价格
-            let finalDiscountedPrice = discountedTotalPrice; // 最终的折扣后价格
-            let finalUnitPrice = unitPrice; // 最终的单价
-            
-            // 如果有总价和数量，但没有单价，自动计算单价
-            if (!finalUnitPrice && finalTotalPrice > 0 && quantity > 0) {
-                finalUnitPrice = Math.round((finalTotalPrice / quantity) * 100) / 100; // 保留两位小数
-            }
-            
-            // 如果有单价和数量，但没有总价，自动计算总价
-            if (!finalTotalPrice && finalUnitPrice > 0 && quantity > 0) {
-                finalTotalPrice = finalUnitPrice * quantity;
-            }
-            
-            // 如果有折扣前和折扣后价格，且折扣后价格小于折扣前价格，计算折扣率
-            if (finalTotalPrice > 0 && finalDiscountedPrice && finalDiscountedPrice < finalTotalPrice) {
-                if (!discountRate) {
-                    // 自动计算折扣率：(原价 - 折扣价) / 原价 * 100
-                    discountRate = Math.round(((finalTotalPrice - finalDiscountedPrice) / finalTotalPrice) * 100);
-                }
-            } 
-            // 如果只有折扣后价格，将其作为最终价格
-            else if (!finalTotalPrice && finalDiscountedPrice) {
-                finalTotalPrice = finalDiscountedPrice; // 将折扣后价格作为总价显示
-            }
-            
-            // 为了向后兼容，保留原有字段
-            const listPrice = finalTotalPrice; // 使用折扣前价格作为列表价
-            const quoteUnitPrice = finalDiscountedPrice ? Math.round((finalDiscountedPrice / quantity) * 100) / 100 : finalUnitPrice; // 优先使用折扣后单价
-            
-            // 获取文件信息
-            let fileSize = 0;
-            let mimeType = 'application/octet-stream';
-            
-            try {
-                const stats = require('fs').statSync(filePath);
-                fileSize = stats.size;
-            } catch (error) {
-                console.warn('⚠️ 无法获取文件大小:', error.message);
-            }
-            
-            // 根据文件扩展名确定MIME类型
-            const ext = fileName.toLowerCase().split('.').pop();
-            const mimeTypes = {
-                'pdf': 'application/pdf',
-                'doc': 'application/msword',
-                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'xls': 'application/vnd.ms-excel',
-                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'txt': 'text/plain',
-                'csv': 'text/csv'
-            };
-            mimeType = mimeTypes[ext] || mimeType;
-            
-            // 确保category字段有值并映射到正确的枚举值
-            if (!product.quotationCategory) {
-                product.quotationCategory = '其他';
-            } else {
-                // 映射类别名称到MongoDB枚举值
-                const categoryMapping = {
-                    '服务器解决方案': '服务器',
-                    '存储解决方案': '存储设备', 
-                    '网络设备方案': '网络设备',
-                    '安全设备方案': '安全设备',
-                    '软件系统方案': '软件系统',
-                    '云服务方案': '云服务'
-                };
-                
-                product.quotationCategory = categoryMapping[product.quotationCategory] || product.quotationCategory;
-                
-                // 确保最终值在有效枚举范围内
-                const validCategories = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他'];
-                if (!validCategories.includes(product.quotationCategory)) {
-                    product.quotationCategory = '其他';
-                }
-            }
-            
-            return {
-                // 基本信息
-                name: product.quotationTitle || product.productName || '报价单',
-                productName: product.quotationTitle || product.productName || '报价单',
-                quotationCategory: product.quotationCategory || '其他',
-                quotationTitle: product.quotationTitle || '',
-                supplier: product.supplier || '未知供应商',
-                region: product.region || '其他',
-                
-                // 价格信息 - 新结构
-                totalPrice: finalTotalPrice,
-                discountedTotalPrice: finalDiscountedPrice,
-                unitPrice: finalUnitPrice,
-                
-                // 价格信息 - 向后兼容
-                list_price: listPrice,
-                quote_unit_price: quoteUnitPrice,
-                unit_price: finalUnitPrice,
-                quantity: quantity,
-                discount_rate: discountRate,
-                quote_total_price: finalDiscountedPrice || finalTotalPrice,
-                currency: product.currency || 'EUR',
-                
-                // 详细信息 - 🔥 使用直接提取的配置信息，不依赖AI
-                detailedComponents: extractedDetailedComponents,
-                notes: product.notes || '',
-                configDetail: product.configDetail || '',
-                productSpec: product.projectDescription || '',
-                
-                // 时间信息
-                quote_validity: product.quote_validity ? new Date(product.quote_validity) : null,
-                delivery_date: product.delivery_date ? new Date(product.delivery_date) : null,
-                
-                // 分类信息
-                category: product.quotationCategory === '服务器解决方案' ? '服务器' :
-                         product.quotationCategory === '存储解决方案' ? '存储设备' :
-                         product.quotationCategory === '网络设备方案' ? '网络设备' :
-                         product.quotationCategory === '安全设备方案' ? '安全设备' :
-                         product.quotationCategory === '软件系统方案' ? '软件系统' :
-                         product.quotationCategory === '云服务方案' ? '云服务' : '其他',
-                
-                // 状态和文件信息
-                status: 'active',
-                originalFile: {
-                    filename: fileName,
-                    originalName: fileName,
-                    path: filePath,
-                    fileSize: fileSize,
-                    mimetype: mimeType,
-                    fileHash: fileHash, // 确保fileHash被正确传递
-                    uploadedAt: new Date()
-                }
-            };
-        });
-
+        const processedProducts = await processAIAnalysisResult(analysisResult, fileName, filePath, fileHash);
+        
         console.log(`✅ 数据验证完成，产品数量: ${processedProducts.length}`);
         
         // 🔍 检测重复
@@ -1699,7 +2316,7 @@ ${extractedDetailedComponents}`;
                 fileInfo: {
                     fileName: fileName,
                     filePath: filePath,
-                    fileHash: fileHash // 确保fileHash在这里也被正确传递
+                    fileHash: fileHash
                 },
                 message: '检测到重复内容，请选择处理方式'
             });
@@ -1718,608 +2335,6 @@ ${extractedDetailedComponents}`;
         console.error('❌ 分析文件失败:', error);
         res.status(500).json({ 
             error: '文件分析失败',
-            details: error.message 
-        });
-    }
-});
-
-// API: 查询历史报价列表
-app.get('/api/quotations/list', async (req, res) => {
-    console.log('📋 收到历史报价查询请求');
-    
-    try {
-        const {
-            page = 1,
-            pageSize = 10,
-            supplier,
-            productName,
-            category,
-            region,
-            currency,
-            status,
-            startDate,
-            endDate,
-            keyword
-        } = req.query;
-
-        // 构建查询条件
-        const filter = {};
-        
-        if (supplier) {
-            filter.supplier = { $regex: supplier, $options: 'i' };
-        }
-        
-        if (productName) {
-            filter.productName = { $regex: productName, $options: 'i' };
-        }
-        
-        if (category) {
-            filter.category = category;
-        }
-        
-        if (region) {
-            filter.region = region;
-        }
-        
-        if (currency) {
-            filter.currency = currency;
-        }
-        
-        if (status) {
-            filter.status = status;
-        }
-        
-        if (startDate || endDate) {
-            filter.created_at = {};
-            if (startDate) {
-                filter.created_at.$gte = new Date(startDate);
-            }
-            if (endDate) {
-                filter.created_at.$lte = new Date(endDate + 'T23:59:59.999Z');
-            }
-        }
-        
-        if (keyword) {
-            filter.$or = [
-                { productName: { $regex: keyword, $options: 'i' } },
-                { supplier: { $regex: keyword, $options: 'i' } },
-                { notes: { $regex: keyword, $options: 'i' } },
-                { configDetail: { $regex: keyword, $options: 'i' } }
-            ];
-        }
-
-        console.log('🔍 查询条件:', JSON.stringify(filter, null, 2));
-
-        // 计算分页
-        const skip = (parseInt(page) - 1) * parseInt(pageSize);
-        
-        // 执行查询
-        const [data, total] = await Promise.all([
-            Quotation.find(filter)
-                .sort({ created_at: -1 })
-                .skip(skip)
-                .limit(parseInt(pageSize))
-                .lean(),
-            Quotation.countDocuments(filter)
-        ]);
-
-        console.log(`📊 查询结果: ${data.length} 条记录，总计 ${total} 条`);
-
-        res.json({
-            success: true,
-            data: data,
-            total: total,
-            page: parseInt(page),
-            pageSize: parseInt(pageSize),
-            totalPages: Math.ceil(total / parseInt(pageSize))
-        });
-
-    } catch (error) {
-        console.error('❌ 查询历史报价失败:', error);
-        res.status(500).json({ 
-            error: '查询失败',
-            details: error.message 
-        });
-    }
-});
-
-// API: 获取单个报价详情
-app.get('/api/quotations/detail/:id', async (req, res) => {
-    const quotationId = req.params.id;
-    
-    console.log(`📋 收到单个报价查询请求，ID: ${quotationId}`);
-    
-    try {
-        const quotation = await Quotation.findById(quotationId).lean();
-        
-        if (!quotation) {
-            console.log('❌ 未找到对应的报价记录');
-            return res.status(404).json({ error: '找不到报价记录' });
-        }
-        
-        console.log(`✅ 找到报价记录: ${quotation.productName}`);
-        
-        res.json({
-            success: true,
-            data: quotation
-        });
-        
-    } catch (error) {
-        console.error('❌ 查询报价详情失败:', error);
-        if (error.name === 'CastError') {
-            return res.status(400).json({ error: '无效的记录ID格式' });
-        }
-        res.status(500).json({ 
-            error: '查询失败',
-            details: error.message 
-        });
-    }
-});
-
-// API: 下载原始文件
-app.get('/api/quotations/download/:id', async (req, res) => {
-    const quotationId = req.params.id;
-    
-    console.log(`📥 收到下载请求，ID: ${quotationId}`);
-    
-    try {
-        console.log('🔍 开始查询数据库...');
-        const quotation = await Quotation.findById(quotationId);
-        
-        console.log(`📋 查询结果: ${quotation ? '找到记录' : '未找到记录'}`);
-        
-        if (!quotation) {
-            console.log('❌ 数据库中没有找到对应记录');
-            return res.status(404).json({ error: '找不到报价记录' });
-        }
-        
-        console.log(`📋 查询结果: ${quotation ? '找到记录' : '未找到记录'}`);
-        
-        if (!quotation.originalFile) {
-            console.log('❌ 记录没有原始文件信息');
-            return res.status(404).json({ 
-                error: '该记录没有关联的原始文件',
-                reason: 'missing_original_file',
-                suggestion: '此记录可能是手动添加的，或者在文件信息保存时出现了问题'
-            });
-        }
-        
-        const filePath = quotation.originalFile.path;
-        const originalFileName = quotation.originalFile.originalName || quotation.originalFile.filename;
-        const storedMimeType = quotation.originalFile.mimetype;
-        
-        console.log(`📂 文件路径: ${filePath}`);
-        console.log(`📝 原始文件名: ${originalFileName}`);
-        console.log(`🎭 MIME类型: ${storedMimeType}`);
-        
-        if (!filePath) {
-            console.log('❌ 原始文件路径为空');
-            return res.status(404).json({ 
-                error: '原始文件路径不存在',
-                reason: 'empty_file_path',
-                suggestion: '文件路径信息丢失，可能是数据保存时出现了问题'
-            });
-        }
-        
-        // 检查文件是否存在
-        console.log('🔍 检查文件是否存在...');
-        try {
-            await fs.access(filePath);
-            console.log('✅ 文件存在');
-        } catch (fileError) {
-            console.log(`❌ 文件不存在: ${fileError.message}`);
-            console.log(`🔍 检查的路径: ${filePath}`);
-            return res.status(404).json({ error: '原始文件不存在或已被删除' });
-        }
-        
-        // 确定MIME类型
-        let mimeType = storedMimeType || 'application/octet-stream';
-        
-        // 根据文件扩展名确定MIME类型（如果数据库中没有存储）
-        if (!storedMimeType || storedMimeType === 'application/octet-stream') {
-            const ext = originalFileName ? originalFileName.toLowerCase().split('.').pop() : 
-                        filePath.toLowerCase().split('.').pop();
-            
-            const mimeTypes = {
-                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'xls': 'application/vnd.ms-excel',
-                'pdf': 'application/pdf',
-                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'doc': 'application/msword',
-                'csv': 'text/csv',
-                'txt': 'text/plain'
-            };
-            
-            mimeType = mimeTypes[ext] || 'application/octet-stream';
-        }
-        
-        // 使用原始文件名或生成合适的文件名
-        let downloadFileName = originalFileName;
-        if (!downloadFileName) {
-            const productName = quotation.productName || 'quotation';
-            const fileExtension = filePath.split('.').pop();
-            downloadFileName = `${productName}.${fileExtension}`;
-        }
-        
-        console.log(`📤 开始下载文件: ${downloadFileName} (MIME: ${mimeType})`);
-        console.log(`📂 文件路径: ${filePath}`);
-        
-        // 设置正确的响应头
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(downloadFileName)}`);
-        
-        // 可选：添加文件大小信息
-        if (quotation.originalFile.fileSize) {
-            res.setHeader('Content-Length', quotation.originalFile.fileSize);
-        }
-        
-        const fileStream = require('fs').createReadStream(filePath);
-        fileStream.pipe(res);
-        
-        fileStream.on('error', (error) => {
-            console.error('❌ 文件读取错误:', error);
-            if (!res.headersSent) {
-                res.status(500).json({ error: '文件读取失败' });
-            }
-        });
-        
-        fileStream.on('end', () => {
-            console.log('✅ 文件下载完成');
-        });
-        
-    } catch (error) {
-        console.error('❌ 查询报价记录失败:', error);
-        if (error.name === 'CastError') {
-            console.log('❌ 无效的MongoDB ObjectId格式');
-            return res.status(400).json({ error: '无效的记录ID格式' });
-        }
-        res.status(500).json({ error: '查询失败' });
-    }
-});
-
-// API 3: 确认保存（处理重复情况）
-app.post('/api/quotations/confirm-save', async (req, res) => {
-    console.log('✅ 收到确认保存请求');
-    
-    const { products, action, skipDuplicates, fileInfo } = req.body;
-    
-    console.log('📋 确认保存请求参数:');
-    console.log(`   action: ${action}`);
-    console.log(`   skipDuplicates: ${skipDuplicates}`);
-    console.log(`   products数量: ${products ? products.length : 0}`);
-    console.log(`   fileInfo:`, fileInfo);
-    
-    if (products && products.length > 0) {
-        console.log('🔍 检查第一个产品的结构:');
-        const firstProduct = products[0];
-        console.log({
-            productName: firstProduct.productName,
-            supplier: firstProduct.supplier,
-            hasOriginalFile: !!firstProduct.originalFile,
-            originalFileKeys: firstProduct.originalFile ? Object.keys(firstProduct.originalFile) : []
-        });
-        
-        if (firstProduct.originalFile) {
-            console.log('📁 第一个产品的originalFile详情:', firstProduct.originalFile);
-        }
-    }
-    
-    if (!products || !Array.isArray(products)) {
-        return res.status(400).json({ error: '缺少产品数据' });
-    }
-
-    // 数据清理函数 - 处理价格字段中的逗号
-    const cleanPriceData = async (productData) => {
-        const cleaned = { ...productData };
-        
-        // 如果产品数据没有originalFile信息，但有fileInfo，则重新构建
-        if (!cleaned.originalFile && fileInfo) {
-            console.log(`🔧 为产品 "${cleaned.productName}" 重新构建originalFile`);
-            
-            // 计算文件大小和MIME类型
-            let fileSize = fileInfo.size || 0;
-            let mimeType = 'application/octet-stream';
-            
-            // 根据文件扩展名确定MIME类型
-            const ext = fileInfo.fileName ? fileInfo.fileName.toLowerCase().split('.').pop() : '';
-            const mimeTypes = {
-                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'xls': 'application/vnd.ms-excel',
-                'pdf': 'application/pdf',
-                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'doc': 'application/msword',
-                'csv': 'text/csv',
-                'txt': 'text/plain'
-            };
-            mimeType = mimeTypes[ext] || 'application/octet-stream';
-            
-            // 计算文件hash（如果需要的话）
-            let fileHash = null;
-            if (fileInfo.filePath) {
-                try {
-                    fileHash = await calculateFileHash(fileInfo.filePath);
-                } catch (error) {
-                    console.warn('⚠️ 无法计算文件hash:', error.message);
-                }
-            }
-            
-            cleaned.originalFile = {
-                filename: fileInfo.fileName,
-                originalName: fileInfo.originalName || fileInfo.fileName,
-                path: fileInfo.filePath,
-                fileSize: fileSize,
-                mimetype: mimeType,
-                fileHash: fileHash,
-                uploadedAt: new Date()
-            };
-            
-            console.log('✅ 重新构建的originalFile:', cleaned.originalFile);
-        }
-        
-        // 清理价格字段，移除逗号并转换为数字
-        const priceFields = ['list_price', 'quote_unit_price', 'quote_total_price'];
-        
-        priceFields.forEach(field => {
-            if (cleaned[field] !== null && cleaned[field] !== undefined) {
-                if (typeof cleaned[field] === 'string') {
-                    // 移除逗号、空格和其他非数字字符（保留小数点和负号）
-                    const cleanedValue = cleaned[field].toString().replace(/[,\s]/g, '');
-                    const numValue = parseFloat(cleanedValue);
-                    cleaned[field] = isNaN(numValue) ? null : numValue;
-                } else if (typeof cleaned[field] === 'number') {
-                    // 已经是数字，保持不变
-                    cleaned[field] = cleaned[field];
-                } else {
-                    // 其他类型设为null
-                    cleaned[field] = null;
-                }
-            }
-        });
-        
-        // 清理折扣率
-        if (cleaned.discount_rate !== null && cleaned.discount_rate !== undefined) {
-            if (typeof cleaned.discount_rate === 'string') {
-                const cleanedValue = cleaned.discount_rate.toString().replace(/[%,\s]/g, '');
-                const numValue = parseFloat(cleanedValue);
-                cleaned.discount_rate = isNaN(numValue) ? null : numValue;
-            } else if (typeof cleaned.discount_rate !== 'number') {
-                cleaned.discount_rate = null;
-            }
-        }
-        
-        // 清理数量
-        if (cleaned.quantity !== null && cleaned.quantity !== undefined) {
-            if (typeof cleaned.quantity === 'string') {
-                const cleanedValue = cleaned.quantity.toString().replace(/[,\s]/g, '');
-                const numValue = parseInt(cleanedValue);
-                cleaned.quantity = isNaN(numValue) ? 1 : Math.max(1, numValue);
-            } else if (typeof cleaned.quantity === 'number') {
-                cleaned.quantity = Math.max(1, Math.floor(cleaned.quantity));
-            } else {
-                cleaned.quantity = 1;
-            }
-        } else {
-            cleaned.quantity = 1;
-        }
-        
-        // 确保必填的数字字段不为null
-        if (cleaned.quote_unit_price === null || cleaned.quote_unit_price === undefined) {
-            cleaned.quote_unit_price = 0;
-        }
-        if (cleaned.quote_total_price === null || cleaned.quote_total_price === undefined) {
-            cleaned.quote_total_price = cleaned.quote_unit_price * cleaned.quantity;
-        }
-        
-        // 确保totalPrice字段有值（新增的必需字段）
-        if (cleaned.totalPrice === null || cleaned.totalPrice === undefined) {
-            cleaned.totalPrice = cleaned.quote_total_price || cleaned.quote_unit_price * cleaned.quantity;
-        }
-        
-        // 确保quote_validity字段有值
-        if (!cleaned.quote_validity) {
-            // 如果没有报价有效期，设置为30天后
-            const futureDate = new Date();
-            futureDate.setDate(futureDate.getDate() + 30);
-            cleaned.quote_validity = futureDate;
-        } else if (typeof cleaned.quote_validity === 'string') {
-            // 如果是字符串，转换为Date对象
-            cleaned.quote_validity = new Date(cleaned.quote_validity);
-        }
-        
-        // 确保currency字段有值
-        if (!cleaned.currency) {
-            cleaned.currency = 'CNY';
-        }
-        
-        // 货币符号到标准代码的映射
-        const currencyMapping = {
-            '$': 'USD',
-            '€': 'EUR', 
-            '£': 'GBP',
-            '¥': 'CNY',
-            '₹': 'INR',
-            '₩': 'KRW',
-            'A$': 'AUD',
-            'C$': 'CAD',
-            'S$': 'SGD',
-            'CHF': 'CHF',
-            '₽': 'RUB',
-            'kr': 'SEK',
-            'NOK': 'NOK',
-            'DKK': 'DKK',
-            '₪': 'ILS',
-            '﷼': 'SAR',
-            'AED': 'AED',
-            'USD': 'USD',
-            'EUR': 'EUR',
-            'GBP': 'GBP',
-            'CNY': 'CNY',
-            'JPY': 'JPY',
-            'HKD': 'HKD',
-            'AUD': 'AUD',
-            'CAD': 'CAD',
-            'SGD': 'SGD',
-            'INR': 'INR',
-            'KRW': 'KRW',
-            'THB': 'THB',
-            'MYR': 'MYR',
-            'TWD': 'TWD',
-            'VND': 'VND',
-            'IDR': 'IDR',
-            'BRL': 'BRL',
-            'ZAR': 'ZAR',
-            'MXN': 'MXN',
-            'NZD': 'NZD',
-            'SEK': 'SEK',
-            'PLN': 'PLN',
-            'HUF': 'HUF',
-            'CZK': 'CZK',
-            'TRY': 'TRY',
-            'RUB': 'RUB',
-            '美元': 'USD',
-            '欧元': 'EUR',
-            '英镑': 'GBP', 
-            '人民币': 'CNY',
-            '日元': 'JPY'
-        };
-        
-        // 转换货币符号到标准代码
-        if (cleaned.currency && typeof cleaned.currency === 'string') {
-            const originalCurrency = cleaned.currency.trim();
-            const mappedCurrency = currencyMapping[originalCurrency];
-            if (mappedCurrency) {
-                cleaned.currency = mappedCurrency;
-                console.log(`🔄 货币转换: ${originalCurrency} → ${mappedCurrency}`);
-            } else {
-                // 如果无法映射，默认使用USD
-                console.warn(`⚠️ 未知货币符号: ${originalCurrency}，默认使用USD`);
-                cleaned.currency = 'USD';
-            }
-        }
-        
-        // 确保最终的货币代码在有效枚举范围内
-        const validCurrencies = ['CNY', 'USD', 'EUR', 'GBP', 'JPY', 'HKD', 'AUD', 'CAD', 'SGD', 'CHF', 'RUB', 'INR', 'KRW', 'THB', 'MYR', 'TWD', 'VND', 'IDR', 'BRL', 'ZAR', 'MXN', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'HUF', 'CZK', 'TRY', 'SAR', 'AED', 'ILS'];
-        if (!validCurrencies.includes(cleaned.currency)) {
-            console.warn(`⚠️ 无效货币代码: ${cleaned.currency}，默认使用USD`);
-            cleaned.currency = 'USD';
-        }
-        
-        // 确保category字段有值并映射到正确的枚举值
-        if (!cleaned.category) {
-            cleaned.category = '其他';
-        } else {
-            // 映射类别名称到MongoDB枚举值
-            const categoryMapping = {
-                '服务器解决方案': '服务器',
-                '存储解决方案': '存储设备', 
-                '网络设备方案': '网络设备',
-                '安全设备方案': '安全设备',
-                '软件系统方案': '软件系统',
-                '云服务方案': '云服务'
-            };
-            
-            cleaned.category = categoryMapping[cleaned.category] || cleaned.category;
-            
-            // 确保最终值在有效枚举范围内
-            const validCategories = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他'];
-            if (!validCategories.includes(cleaned.category)) {
-                cleaned.category = '其他';
-            }
-        }
-        
-        // 确保region字段有值
-        if (!cleaned.region) {
-            cleaned.region = '其他';
-        }
-        
-        return cleaned;
-    };
-
-    try {
-        const savedQuotations = [];
-        const errors = [];
-        
-        for (const productData of products) {
-            try {
-                // 清理价格数据
-                const cleanedProductData = await cleanPriceData(productData);
-                
-                console.log(`🧹 清理后的产品数据:`, {
-                    productName: cleanedProductData.productName,
-                    supplier: cleanedProductData.supplier,
-                    list_price: cleanedProductData.list_price,
-                    quote_unit_price: cleanedProductData.quote_unit_price,
-                    quote_total_price: cleanedProductData.quote_total_price,
-                    totalPrice: cleanedProductData.totalPrice,
-                    quantity: cleanedProductData.quantity,
-                    currency: cleanedProductData.currency,
-                    quote_validity: cleanedProductData.quote_validity,
-                    category: cleanedProductData.category,
-                    region: cleanedProductData.region,
-                    hasOriginalFile: !!cleanedProductData.originalFile
-                });
-                
-                // 验证必需字段
-                const requiredFields = ['productName', 'supplier', 'quote_unit_price', 'quote_total_price', 'totalPrice', 'quote_validity'];
-                const missingFields = requiredFields.filter(field => 
-                    cleanedProductData[field] === null || 
-                    cleanedProductData[field] === undefined || 
-                    cleanedProductData[field] === ''
-                );
-                
-                if (missingFields.length > 0) {
-                    console.error(`❌ 缺少必需字段: ${missingFields.join(', ')}`);
-                    errors.push({
-                        productName: productData.productName,
-                        error: `缺少必需字段: ${missingFields.join(', ')}`
-                    });
-                    continue;
-                }
-                
-                // 如果选择跳过重复，检查是否已存在相似产品
-                if (skipDuplicates) {
-                    const existingProduct = await Quotation.findOne({
-                        productName: { $regex: cleanedProductData.productName, $options: 'i' },
-                        supplier: cleanedProductData.supplier,
-                        quote_unit_price: cleanedProductData.quote_unit_price,
-                        quantity: cleanedProductData.quantity
-                    });
-                    
-                    if (existingProduct) {
-                        console.log(`⏭️ 跳过重复产品: ${cleanedProductData.productName}`);
-                        continue;
-                    }
-                }
-                
-                const quotation = new Quotation(cleanedProductData);
-                const saved = await quotation.save();
-                savedQuotations.push(saved);
-                console.log(`✅ 成功保存: ${cleanedProductData.productName} (ID: ${saved._id})`);
-                
-            } catch (error) {
-                console.error(`❌ 保存失败: ${productData.productName}`, error.message);
-                errors.push({
-                    productName: productData.productName,
-                    error: error.message
-                });
-            }
-        }
-        
-        console.log(`💾 保存完成: ${savedQuotations.length} 个产品成功, ${errors.length} 个失败`);
-        
-        res.json({
-            success: true,
-            message: `保存完成！成功: ${savedQuotations.length} 个，失败: ${errors.length} 个`,
-            data: savedQuotations,
-            errors: errors,
-            savedCount: savedQuotations.length,
-            totalCount: products.length
-        });
-        
-    } catch (error) {
-        console.error('❌ 确认保存失败:', error);
-        res.status(500).json({ 
-            error: '保存失败',
             details: error.message 
         });
     }
@@ -2667,4 +2682,103 @@ app.listen(PORT, () => {
     console.log(`🤖 AI模型: ${YUANJING_CONFIG.model}`);
     console.log(`💾 数据库: ${MONGODB_URI}`);
     console.log(`📄 系统版本: v1.0.0`);
+    console.log(`🧠 AI数据清洗器: 已初始化 (缓存: ${aiDataCleaner.config.maxCacheSize}条, 阈值: ${aiDataCleaner.config.minLinesForAI}行)`);
+});
+
+// 🔥 新增：AI调用记录存储
+const aiCallHistory = [];
+const MAX_HISTORY_SIZE = 10; // 保存最近10次调用记录
+
+// 🔥 新增：记录AI调用的函数
+function recordAICall(prompt, response, duration, callType = '未知') {
+    const record = {
+        timestamp: new Date().toISOString(),
+        callType: callType,
+        promptLength: prompt.length,
+        responseLength: response ? response.length : 0,
+        duration: duration,
+        prompt: prompt,
+        response: response,
+        success: !!response
+    };
+    
+    aiCallHistory.unshift(record); // 添加到开头
+    
+    // 保持历史记录大小
+    if (aiCallHistory.length > MAX_HISTORY_SIZE) {
+        aiCallHistory.splice(MAX_HISTORY_SIZE);
+    }
+    
+    console.log(`📝 AI调用记录已保存 (类型: ${callType}, 总记录数: ${aiCallHistory.length})`);
+}
+
+// 🔥 新增：调试接口 - 查看AI调用历史
+app.get('/api/debug/ai-calls', (req, res) => {
+    try {
+        const { index, type } = req.query;
+        
+        if (index !== undefined) {
+            // 查看特定索引的调用记录
+            const idx = parseInt(index);
+            if (idx >= 0 && idx < aiCallHistory.length) {
+                const record = aiCallHistory[idx];
+                res.json({
+                    success: true,
+                    record: record,
+                    message: `第${idx + 1}次AI调用记录 (${record.callType})`
+                });
+            } else {
+                res.status(404).json({
+                    success: false,
+                    error: '记录索引超出范围',
+                    availableRange: `0-${aiCallHistory.length - 1}`
+                });
+            }
+        } else {
+            // 返回所有记录的摘要
+            const summary = aiCallHistory.map((record, index) => ({
+                index: index,
+                timestamp: record.timestamp,
+                callType: record.callType,
+                promptLength: record.promptLength,
+                responseLength: record.responseLength,
+                duration: record.duration,
+                success: record.success
+            }));
+            
+            res.json({
+                success: true,
+                totalRecords: aiCallHistory.length,
+                summary: summary,
+                message: '使用 ?index=0 查看具体记录内容'
+            });
+        }
+    } catch (error) {
+        console.error('❌ 获取AI调用历史失败:', error);
+        res.status(500).json({
+            success: false,
+            error: '获取记录失败',
+            details: error.message
+        });
+    }
+});
+
+// 🔥 新增：调试接口 - 清空AI调用历史
+app.delete('/api/debug/ai-calls', (req, res) => {
+    try {
+        const oldCount = aiCallHistory.length;
+        aiCallHistory.length = 0; // 清空数组
+        
+        res.json({
+            success: true,
+            message: `已清空${oldCount}条AI调用记录`
+        });
+    } catch (error) {
+        console.error('❌ 清空AI调用历史失败:', error);
+        res.status(500).json({
+            success: false,
+            error: '清空记录失败',
+            details: error.message
+        });
+    }
 });

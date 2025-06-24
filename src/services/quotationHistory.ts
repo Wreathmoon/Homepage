@@ -146,9 +146,9 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
             apiParams.keyword = params.keyword || params.productKeyword;
         }
 
-        // 连接到AI服务器获取数据，因为AI服务器有完整的originalFile信息
-        const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
-        const response = await fetch(`${aiServerUrl}/api/quotations/list?${new URLSearchParams(apiParams).toString()}`);
+        // 连接到API服务器获取数据
+        const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+        const response = await fetch(`${apiServerUrl}/api/quotations/list?${new URLSearchParams(apiParams).toString()}`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -197,9 +197,9 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
 // 获取单个报价详情
 export async function getQuotationDetail(id: string): Promise<QuotationRecord> {
     try {
-        // 连接到AI服务器获取数据，因为AI服务器有完整的originalFile信息
-        const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
-        const response = await fetch(`${aiServerUrl}/api/quotations/detail/${id}`);
+        // 连接到API服务器获取数据
+        const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+        const response = await fetch(`${apiServerUrl}/api/quotations/${id}`);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -354,35 +354,7 @@ export async function downloadAttachment(attachmentId: string, quotationId?: str
     }
 }
 
-// 导出向后兼容的模拟数据（如果需要降级）
-export const mockQuotations: QuotationRecord[] = [
-    {
-        id: '1',
-        _id: '1',
-        productName: '服务器Pro Max',
-        category: '服务器',
-        region: '德国',
-        productSpec: 'CPU: 2.5GHz, 内存: 64GB, 硬盘: 2TB',
-        configDetail: 'CPU: 2.5GHz, 内存: 64GB, 硬盘: 2TB',
-        supplier: '联想',
-        vendor: '联想',
-        list_price: 45000,
-        originalPrice: 45000,
-        quote_unit_price: 42000,
-        finalPrice: 42000,
-        quantity: 10,
-        quote_total_price: 420000,
-        discount_rate: 7,
-        discount: 0.93,
-        currency: 'EUR',
-        quote_validity: '2024-06-15',
-        quotationDate: '2024-03-15',
-        status: 'active',
-        isValid: true,
-        notes: '含三年原厂质保',
-        remark: '含三年原厂质保'
-    }
-];
+// Mock数据已移除 - 现在只使用真实数据库数据
 
 // 向后兼容的简化接口
 export async function getQuotationListLegacy(params: QuotationQueryParams): Promise<QuotationRecord[]> {

@@ -115,8 +115,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
                 return;
             }
             
-            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
-            const downloadUrl = `${aiServerUrl}/api/quotations/download/${quotationId}`;
+            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+            const downloadUrl = `${apiServerUrl}/api/quotations/download/${quotationId}`;
             console.log('📥 下载URL:', downloadUrl);
             
             const response = await fetch(downloadUrl);

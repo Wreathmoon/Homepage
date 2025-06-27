@@ -851,26 +851,12 @@ class ExcelOCRProcessor {
                 console.log('ℹ️ 未发现图片文件');
             }
             
-            // 3. 合并结构化表格数据和OCR结果
-            console.log('📋 步骤3: 合并结构化表格数据和OCR结果...');
-            let combinedContent = tableContent;
+            // 3. 合并结构化表格数据和OCR结果（修复：避免重复）
+            console.log('📋 步骤3: 准备Excel数据和OCR结果...');
             
-            if (ocrResults.length > 0) {
-                combinedContent += '\n\n=== 图片中的详细配置信息 (OCR识别) ===\n';
-                ocrResults.forEach((result, index) => {
-                    combinedContent += `\n--- 图片 ${index + 1} (置信度: ${Math.round(result.confidence)}%) ---\n`;
-                    combinedContent += `原始文件: ${result.originalName}\n`;
-                    combinedContent += `识别内容:\n${result.text}\n`;
-                });
-                
-                console.log(`✅ OCR识别完成，共识别 ${ocrResults.length} 个图片`);
-                console.log(`📊 合并后内容总长度: ${combinedContent.length} 字符`);
-            } else {
-                console.log('ℹ️ 未发现图片或OCR识别失败，仅使用结构化表格数据');
-            }
-            
+            // 🔥 修复：不要在content中重复包含tableContent，让mergeAndAssignLineNumbers统一处理
             return {
-                content: combinedContent,
+                content: null, // 不在这里合并，避免重复
                 hasOCR: ocrResults.length > 0,
                 ocrCount: ocrResults.length,
                 tableContent: tableContent,
@@ -895,7 +881,7 @@ class ExcelOCRProcessor {
                 console.log('🔄 降级到仅表格处理...');
                 const tableResult = this.extractStructuredTableData(filePath);
                 return {
-                    content: tableResult.structuredContent,
+                    content: null, // 修复：避免重复
                     hasOCR: false,
                     ocrCount: 0,
                     tableContent: tableResult.structuredContent,
@@ -1802,7 +1788,7 @@ const mergeAndAssignLineNumbers = (processingInfo, content = null) => {
             
             console.log(`📄 添加了 ${contentLines.length} 行文本内容`);
         }
-        // 1. 处理Excel表格数据（优化：保持结构化格式）
+        // 1. 处理Excel表格数据（优化：避免重复处理）
         if (processingInfo.tableContent) {
             console.log('📊 合并Excel表格数据...');
             
@@ -1810,39 +1796,42 @@ const mergeAndAssignLineNumbers = (processingInfo, content = null) => {
             const isStructuredTable = processingInfo.tableStructure?.isStructured;
             
             if (isStructuredTable) {
-                console.log('📋 检测到结构化Excel表格数据，保持行列对应关系');
-                mergedLines.push(`行${currentLineNumber}: === Excel结构化表格数据 ===`);
-                currentLineNumber++;
+                console.log('📋 检测到结构化Excel表格数据，直接使用已格式化的内容');
                 
-                if (processingInfo.tableStructure.hasHeader) {
-                    mergedLines.push(`行${currentLineNumber}: 表格规格: ${processingInfo.tableStructure.rowCount}行 × ${processingInfo.tableStructure.columnCount}列 (含表头)`);
-                    currentLineNumber++;
-                }
+                // 🔥 直接使用已经格式化的内容，避免重复处理
+                const tableLines = processingInfo.tableContent.split('\n');
+                let addedLines = 0;
+                tableLines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine && trimmedLine.length > 0) {
+                        mergedLines.push(trimmedLine);
+                        addedLines++;
+                        // 更新行号计数器（从已有行号中提取最大值）
+                        const lineMatch = trimmedLine.match(/^行(\d+):/);
+                        if (lineMatch) {
+                            const lineNum = parseInt(lineMatch[1]);
+                            if (lineNum >= currentLineNumber) {
+                                currentLineNumber = lineNum + 1;
+                            }
+                        }
+                    }
+                });
+                
+                console.log(`📊 已添加 ${addedLines} 行Excel结构化数据`);
             } else {
                 console.log('📋 处理传统CSV格式表格数据');
                 mergedLines.push(`行${currentLineNumber}: === Excel表格数据 ===`);
                 currentLineNumber++;
-            }
-            
-            const tableLines = processingInfo.tableContent.split('\n');
-            tableLines.forEach(line => {
-                const trimmedLine = line.trim();
-                if (trimmedLine && trimmedLine.length > 0) {
-                    // 🔥 对于结构化数据，保持原有格式
-                    if (isStructuredTable && trimmedLine.startsWith('行')) {
-                        // 已经有行号的结构化数据，直接使用
-                        mergedLines.push(trimmedLine);
-                    } else if (isStructuredTable && (trimmedLine.startsWith('===') || trimmedLine.includes('列'))) {
-                        // 表头和分隔符信息
-                        mergedLines.push(`行${currentLineNumber}: ${trimmedLine}`);
-                        currentLineNumber++;
-                    } else {
-                        // 普通数据行
+                
+                const tableLines = processingInfo.tableContent.split('\n');
+                tableLines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine && trimmedLine.length > 0) {
                         mergedLines.push(`行${currentLineNumber}: ${trimmedLine}`);
                         currentLineNumber++;
                     }
-                }
-            });
+                });
+            }
         }
         
         // 2. 处理OCR结果（保持原有逻辑）

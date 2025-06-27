@@ -457,6 +457,16 @@ router.get('/download/:id', async (req, res) => {
         
         // 使用res.download()方法，它会自动设置正确的下载头
         console.log('🔧 使用res.download()方法下载文件...');
+        
+        // 添加响应头监听，看看实际发送了什么
+        const originalSetHeader = res.setHeader.bind(res);
+        res.setHeader = function(name, value) {
+            if (name.toLowerCase() === 'content-disposition') {
+                console.log('📤 实际设置的Content-Disposition:', value);
+            }
+            return originalSetHeader(name, value);
+        };
+        
         res.download(path.resolve(filePath), safeFileName, (err) => {
             if (err) {
                 console.error('❌ 文件下载失败:', err);
@@ -537,6 +547,16 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
         
         // 使用res.download()方法，它会自动设置正确的下载头
         console.log('🔧 使用res.download()方法下载附件...');
+        
+        // 添加响应头监听，看看实际发送了什么
+        const originalSetHeader = res.setHeader.bind(res);
+        res.setHeader = function(name, value) {
+            if (name.toLowerCase() === 'content-disposition') {
+                console.log('📤 附件实际设置的Content-Disposition:', value);
+            }
+            return originalSetHeader(name, value);
+        };
+        
         res.download(path.resolve(filePath), safeFileName, (err) => {
             if (err) {
                 console.error('❌ 附件下载失败:', err);

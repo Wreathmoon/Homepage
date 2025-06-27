@@ -599,8 +599,8 @@ const QuotationHistory: React.FC = () => {
                             return;
                         }
                         
-                                                 const aiServerUrl = API_CONFIG.AI_SERVER_URL;
-                        const downloadUrl = `${aiServerUrl}/api/quotations/download/${quotationId}`;
+                                                 const apiServerUrl = API_CONFIG.API_URL;
+                        const downloadUrl = `${apiServerUrl}/api/quotations/download/${quotationId}`;
                         console.log('📥 表格下载URL:', downloadUrl);
                         
                         const response = await fetch(downloadUrl);

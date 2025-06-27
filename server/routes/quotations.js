@@ -424,17 +424,27 @@ router.get('/download/:id', async (req, res) => {
             });
         }
 
-        // 设置响应头 - 使用纯ASCII方式避免编码问题
+        // 设置响应头 - 支持中文文件名
         console.log('📋 原始文件名:', JSON.stringify(fileName));
         
-        // 创建安全的ASCII文件名
-        const fileExt = path.extname(fileName) || '.xlsx';
-        const safeFileName = `quotation_${Date.now()}${fileExt}`;
+        // 尝试修复可能的编码问题
+        let displayFileName = fileName;
+        try {
+            // 如果文件名看起来是乱码，尝试修复编码
+            if (fileName && fileName.includes('�') || /[^\x20-\x7E\u4e00-\u9fa5]/.test(fileName)) {
+                displayFileName = Buffer.from(fileName, 'latin1').toString('utf8');
+                console.log('📋 修复编码后的文件名:', JSON.stringify(displayFileName));
+            }
+        } catch (error) {
+            console.warn('📋 文件名编码修复失败，使用原文件名');
+        }
         
-        console.log('📋 使用安全文件名:', safeFileName);
+        // 使用URL编码的方式设置中文文件名
+        const encodedFileName = encodeURIComponent(displayFileName);
+        console.log('📋 URL编码后的文件名:', encodedFileName);
         
-        // 使用简单的ASCII文件名
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+        // 使用标准的RFC6266格式
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
         res.setHeader('Content-Type', 'application/octet-stream');
         
         console.log('✅ HTTP头设置成功');

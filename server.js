@@ -1674,10 +1674,10 @@ ${mergedData.mergedContent}`;
     
     // 🔥 步骤3：第二次AI - 识别有用行号（根据开关决定是否执行）
     if (!enableDetailedAI) {
-        console.log('⚙️ 跳过详细AI识别，仅返回基础信息');
+        console.log('⚙️ 跳过详细AI识别，仅使用第一次AI的基础信息');
         return {
             basicInfo: basicInfo,
-            detailedConfig: '', // 详细配置为空
+            detailedConfig: '', // 简易模式不生成详细配置
             annotation: null
         };
     }
@@ -1752,9 +1752,9 @@ ${usefulLines.map(line => `行${line.lineNumber}: ${line.content}`).join('\n')}
     let detailedConfig = '';
     try {
         const aiResponse3 = await callYuanJingAI(formatPrompt, '第三次AI-格式整理和OCR修复');
-        detailedConfig = aiResponse3.trim();
+        detailedConfig = aiResponse3; // 直接使用AI输出，不做任何处理
         console.log('✅ 第三次AI格式整理完成');
-        console.log(`📊 整理后配置长度: ${detailedConfig.length} 字符`);
+        console.log(`📊 AI原始输出长度: ${detailedConfig.length} 字符`);
     } catch (error) {
         console.error('❌ 第三次AI格式整理失败:', error);
         // 降级处理：使用有用行的原始内容

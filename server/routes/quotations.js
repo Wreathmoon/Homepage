@@ -403,16 +403,19 @@ router.get('/download/:id', async (req, res) => {
         // 获取文件名，优先使用filename
         let fileName = quotation.originalFile.filename || quotation.originalFile.originalName;
         
-        // 如果文件名是乱码，尝试从latin1转换为utf8
-        if (fileName && fileName.includes('æ')) {
+        // 使用与上传时相同的编码修复逻辑
+        if (fileName) {
             try {
-                const buffer = Buffer.from(fileName, 'latin1');
-                const decodedFileName = buffer.toString('utf8');
+                // 如果文件名看起来像是被错误编码的（包含特殊字符），尝试修复
+                const fixedFileName = Buffer.from(fileName, 'latin1').toString('utf8');
                 
-                // 验证解码是否成功（包含中文字符）
-                if (decodedFileName && decodedFileName.match(/[\u4e00-\u9fff]/)) {
-                    fileName = decodedFileName;
-                    console.log('🔧 修复文件名编码:', fileName);
+                // 验证修复后的文件名是否合理（包含中文字符或看起来更正常）
+                if (fixedFileName !== fileName && (
+                    fixedFileName.match(/[\u4e00-\u9fff]/) || // 包含中文字符
+                    (fileName.includes('æ') && !fixedFileName.includes('æ')) // 移除了乱码字符
+                )) {
+                    fileName = fixedFileName;
+                    console.log('🔧 修复文件名编码:', `${quotation.originalFile.filename} -> ${fileName}`);
                 }
             } catch (error) {
                 console.log('⚠️ 文件名编码修复失败，使用原始名称');

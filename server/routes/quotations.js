@@ -455,19 +455,21 @@ router.get('/download/:id', async (req, res) => {
         
         console.log('📋 最终使用的安全文件名:', safeFileName);
         
-        // 使用最基本的ASCII文件名
-        try {
-            console.log('🔧 准备设置主文件下载HTTP头...');
-            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-            res.setHeader('Content-Type', 'application/octet-stream');
-            console.log('✅ 主文件下载HTTP头设置成功');
-        } catch (headerError) {
-            console.error('❌ 主文件下载HTTP头设置失败:', headerError);
-            throw headerError;
-        }
-
-        // 发送文件
-        res.sendFile(path.resolve(filePath));
+        // 使用res.download()方法，它会自动设置正确的下载头
+        console.log('🔧 使用res.download()方法下载文件...');
+        res.download(path.resolve(filePath), safeFileName, (err) => {
+            if (err) {
+                console.error('❌ 文件下载失败:', err);
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        success: false,
+                        message: '文件下载失败'
+                    });
+                }
+            } else {
+                console.log('✅ 文件下载成功');
+            }
+        });
 
     } catch (error) {
         console.error('下载文件失败:', error);
@@ -533,18 +535,21 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
         
         console.log('📋 附件安全文件名:', safeFileName);
         
-        try {
-            console.log('🔧 准备设置附件下载HTTP头...');
-            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-            res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
-            console.log('✅ 附件下载HTTP头设置成功');
-        } catch (headerError) {
-            console.error('❌ 附件下载HTTP头设置失败:', headerError);
-            throw headerError;
-        }
-
-        // 发送文件
-        res.sendFile(path.resolve(filePath));
+        // 使用res.download()方法，它会自动设置正确的下载头
+        console.log('🔧 使用res.download()方法下载附件...');
+        res.download(path.resolve(filePath), safeFileName, (err) => {
+            if (err) {
+                console.error('❌ 附件下载失败:', err);
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        success: false,
+                        message: '附件下载失败'
+                    });
+                }
+            } else {
+                console.log('✅ 附件下载成功');
+            }
+        });
 
     } catch (error) {
         console.error('下载附件失败:', error);

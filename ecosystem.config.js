@@ -26,7 +26,7 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 3002
+        PORT: 8080
       },
       log_file: './logs/ai-server.log',
       error_file: './logs/ai-server-error.log',

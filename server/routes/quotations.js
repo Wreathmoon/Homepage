@@ -382,6 +382,7 @@ router.delete('/:id', async (req, res) => {
 // 下载报价原始文件
 router.get('/download/:id', async (req, res) => {
     try {
+        console.log('🚀🚀🚀 下载路由调用 - 版本: 2024-01-01-FINAL-FIX 🚀🚀🚀');
         const quotation = await Quotation.findById(req.params.id);
         
         if (!quotation) {
@@ -455,10 +456,15 @@ router.get('/download/:id', async (req, res) => {
         console.log('📋 最终使用的安全文件名:', safeFileName);
         
         // 使用最基本的ASCII文件名
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-        res.setHeader('Content-Type', 'application/octet-stream');
-        
-        console.log('✅ 使用纯ASCII格式设置HTTP头');
+        try {
+            console.log('🔧 准备设置主文件下载HTTP头...');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+            res.setHeader('Content-Type', 'application/octet-stream');
+            console.log('✅ 主文件下载HTTP头设置成功');
+        } catch (headerError) {
+            console.error('❌ 主文件下载HTTP头设置失败:', headerError);
+            throw headerError;
+        }
 
         // 发送文件
         res.sendFile(path.resolve(filePath));
@@ -527,10 +533,15 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
         
         console.log('📋 附件安全文件名:', safeFileName);
         
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-        res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
-        
-        console.log('✅ 附件HTTP头设置成功');
+        try {
+            console.log('🔧 准备设置附件下载HTTP头...');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+            res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
+            console.log('✅ 附件下载HTTP头设置成功');
+        } catch (headerError) {
+            console.error('❌ 附件下载HTTP头设置失败:', headerError);
+            throw headerError;
+        }
 
         // 发送文件
         res.sendFile(path.resolve(filePath));

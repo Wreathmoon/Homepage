@@ -478,9 +478,9 @@ const QuotationImport: React.FC = () => {
             console.log('🔄 使用AI服务器保存数据:', productsData.length, '条记录');
             console.log('📁 文件信息:', uploadedFile);
 
-            // 调用AI服务器的确认保存API
-            const aiServerUrl = API_CONFIG.AI_SERVER_URL;
-            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
+            // 调用API服务器的确认保存API
+            const apiServerUrl = API_CONFIG.API_URL;
+            const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -661,10 +661,10 @@ const QuotationImport: React.FC = () => {
             console.log('📋 产品数据:', products);
 
             // 调用确认保存API
-            const aiServerUrl = API_CONFIG.AI_SERVER_URL;
-            console.log('🌐 AI服务器地址:', aiServerUrl);
+            const apiServerUrl = API_CONFIG.API_URL;
+            console.log('🌐 API服务器地址:', apiServerUrl);
             
-            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
+            const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

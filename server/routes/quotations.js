@@ -443,11 +443,22 @@ router.get('/download/:id', async (req, res) => {
         const encodedFileName = encodeURIComponent(displayFileName);
         console.log('📋 URL编码后的文件名:', encodedFileName);
         
-        // 使用标准的RFC6266格式
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
+        // 调试：检查字符串的实际内容
+        console.log('🔍 调试编码后的文件名字节:', Buffer.from(encodedFileName));
+        console.log('🔍 调试编码后的文件名长度:', encodedFileName.length);
+        
+        // 使用最简单的方式，完全避免中文
+        const timestamp = Date.now();
+        const fileExt = path.extname(displayFileName) || '.xlsx';
+        const safeFileName = `quotation_${timestamp}${fileExt}`;
+        
+        console.log('📋 最终使用的安全文件名:', safeFileName);
+        
+        // 使用最基本的ASCII文件名
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
         res.setHeader('Content-Type', 'application/octet-stream');
         
-        console.log('✅ HTTP头设置成功');
+        console.log('✅ 使用纯ASCII格式设置HTTP头');
 
         // 发送文件
         res.sendFile(path.resolve(filePath));

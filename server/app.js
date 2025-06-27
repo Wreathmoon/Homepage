@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3001;
 // 中间件配置
 const allowedOrigins = process.env.FRONTEND_URL ? 
     process.env.FRONTEND_URL.split(',').map(url => url.trim()) : 
-    ['http://localhost:3000'];
+    ['http://localhost:3000', 'http://localhost:8080', 'http://103.77.22.42', 'http://103.77.22.42:8080'];
 
 app.use(cors({
     origin: allowedOrigins,

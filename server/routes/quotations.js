@@ -424,17 +424,20 @@ router.get('/download/:id', async (req, res) => {
             });
         }
 
-        // 设置响应头 - 确保文件名被正确编码
-        console.log('📋 编码前的文件名:', JSON.stringify(fileName));
-        const encodedFileName = encodeURIComponent(fileName);
-        console.log('📋 编码后的文件名:', encodedFileName);
+        // 设置响应头 - 使用纯ASCII方式避免编码问题
+        console.log('📋 原始文件名:', JSON.stringify(fileName));
         
-        // 使用RFC6266标准的UTF-8编码格式
-        const contentDisposition = `attachment; filename*=UTF-8''${encodedFileName}`;
-        console.log('📋 Content-Disposition:', contentDisposition);
+        // 创建安全的ASCII文件名
+        const fileExt = path.extname(fileName) || '.xlsx';
+        const safeFileName = `quotation_${Date.now()}${fileExt}`;
         
-        res.setHeader('Content-Disposition', contentDisposition);
+        console.log('📋 使用安全文件名:', safeFileName);
+        
+        // 使用简单的ASCII文件名
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
         res.setHeader('Content-Type', 'application/octet-stream');
+        
+        console.log('✅ HTTP头设置成功');
 
         // 发送文件
         res.sendFile(path.resolve(filePath));

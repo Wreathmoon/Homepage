@@ -336,10 +336,10 @@ export async function downloadAttachment(attachmentId: string, quotationId?: str
         
         if (quotationId) {
             // 新的API端点格式
-            url = `${process.env.REACT_APP_API_URL || 'http://localhost:3002/api'}/quotations/attachment/${quotationId}/${attachmentId}`;
+            url = `${API_CONFIG.API_URL}/api/quotations/attachment/${quotationId}/${attachmentId}`;
         } else {
             // 通用附件下载
-            url = `${process.env.REACT_APP_API_URL || 'http://localhost:3002/api'}/attachments/${attachmentId}`;
+            url = `${API_CONFIG.API_URL}/api/attachments/${attachmentId}`;
         }
 
         const response = await fetch(url);

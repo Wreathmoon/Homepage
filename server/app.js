@@ -113,7 +113,7 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
     console.log(`🌍 允许的跨域源: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
     console.log(`📁 上传文件目录: ${path.join(__dirname, 'uploads')}`);

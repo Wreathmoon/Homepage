@@ -1,4 +1,5 @@
 import { request } from '../utils/request';
+import { API_CONFIG } from '../utils/config';
 
 // 报价记录接口定义 (扩展以匹配MongoDB模型)
 export interface QuotationRecord {
@@ -175,7 +176,7 @@ export async function uploadQuotationFile(file: File): Promise<{ success: boolea
         formData.append('quotationFile', file);
 
         // 修复URL路径问题 - 使用完整的URL而不是通过request实例
-        const response = await fetch('http://localhost:3002/api/upload/quotation', {
+        const response = await fetch(`${API_CONFIG.AI_SERVER_URL}/api/upload/quotation`, {
             method: 'POST',
             body: formData
         });
@@ -202,7 +203,7 @@ export async function uploadQuotationFile(file: File): Promise<{ success: boolea
 // 下载报价原始文件
 export async function downloadQuotationFile(id: string): Promise<void> {
     try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3002/api'}/quotations/download/${id}`);
+        const response = await fetch(`${API_CONFIG.API_URL}/api/quotations/download/${id}`);
         
         if (!response.ok) {
             throw new Error('下载失败');

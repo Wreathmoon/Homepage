@@ -377,7 +377,7 @@ const QuotationImport: React.FC = () => {
             if (error instanceof Error && error.name === 'AbortError') {
                 Toast.error('AI分析超时（6分钟），请尝试分析较小的文件或稍后重试');
             } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-                Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口3002)');
+                Toast.error('无法连接到AI服务器，请确保服务器正在运行 (端口8080)');
             } else if (error instanceof Error && error.message.includes('ERR_CONNECTION_REFUSED')) {
                 Toast.error('连接被拒绝，请检查AI服务器状态');
             } else {
@@ -478,9 +478,9 @@ const QuotationImport: React.FC = () => {
             console.log('🔄 使用AI服务器保存数据:', productsData.length, '条记录');
             console.log('📁 文件信息:', uploadedFile);
 
-            // 调用API服务器的确认保存API
-            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
-            const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
+            // 调用AI服务器的确认保存API
+            const aiServerUrl = API_CONFIG.AI_SERVER_URL;
+            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -661,10 +661,10 @@ const QuotationImport: React.FC = () => {
             console.log('📋 产品数据:', products);
 
             // 调用确认保存API
-            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
-            console.log('🌐 API服务器地址:', apiServerUrl);
+            const aiServerUrl = API_CONFIG.AI_SERVER_URL;
+            console.log('🌐 AI服务器地址:', aiServerUrl);
             
-            const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
+            const response = await fetch(`${aiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

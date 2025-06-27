@@ -467,7 +467,7 @@ class SmartJSONParser {
     static parseAIResponse(text, context = 'AI响应') {
         console.log(`🔧 开始智能JSON解析 (${context})...`);
         
-        // 第一阶段：预处理清理
+        // 第一阶段：预处理清理 
         let cleanedText = this.preprocessJSON(text);
         console.log('🔧 预处理后的JSON:', cleanedText.substring(0, 200) + '...');
         
@@ -2637,8 +2637,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 智能报价助手系统启动成功！`);
     console.log(`📡 端口: ${PORT}`);
     console.log(`🔗 访问地址: http://localhost:${PORT}`);

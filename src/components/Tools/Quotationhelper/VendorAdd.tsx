@@ -10,7 +10,8 @@ import {
     Switch,
     Divider,
     Modal,
-    Input
+    Input,
+    DatePicker
 } from '@douyinfe/semi-ui';
 import type { FormApi } from '@douyinfe/semi-ui/lib/es/form';
 import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory';
@@ -35,6 +36,8 @@ interface VendorFormData {
     agentType: 'GENERAL_AGENT' | 'AGENT' | 'OTHER';
     account?: string;
     password?: string;
+    entryPerson: string;  // 录入人
+    entryTime: string;    // 录入时间
 }
 
 // 供应商类型选项
@@ -112,7 +115,10 @@ const VendorAdd: React.FC = () => {
                 // 添加其他可能需要的字段
                 website: values.website || '',
                 remarks: values.remarks || '',
-                account: values.account || ''
+                account: values.account || '',
+                // 添加录入信息
+                entryPerson: values.entryPerson || '',
+                entryTime: values.entryTime || new Date().toISOString().split('T')[0]
             };
             
             // 移除 undefined 字段
@@ -302,9 +308,26 @@ const VendorAdd: React.FC = () => {
                     />
 
                     <Divider margin="24px" />
-                    <Title heading={4} style={{ marginBottom: '20px' }}>系统信息（可选）</Title>
+                    <Title heading={4} style={{ marginBottom: '20px' }}>系统信息</Title>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '20px' }}>
+                        <Form.Input
+                            field="entryPerson"
+                            label="录入人（必填）"
+                            placeholder="请输入录入人姓名"
+                            rules={[{ required: true, message: '请输入录入人姓名' }]}
+                            size="large"
+                        />
+                        <Form.DatePicker
+                            field="entryTime"
+                            label="录入时间（必填）"
+                            placeholder="请选择录入时间"
+                            style={{ width: '100%' }}
+                            format="yyyy-MM-dd"
+                            initValue={new Date()}
+                            rules={[{ required: true, message: '请选择录入时间' }]}
+                            size="large"
+                        />
                         <Form.Input
                             field="account"
                             label="系统账号"

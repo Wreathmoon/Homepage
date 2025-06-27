@@ -55,8 +55,9 @@ We have a demand outlined as follows:
 
 - ${details || '需求配置描述+需求数量'}
 
-End-user: ${endUserName || 'xxx'} ${endUserAddress ? endUserAddress : ''}
-${endUserContact ? `联系人：${endUserContact}` : ''}${endUserContactInfo ? `，联系方式：${endUserContactInfo}` : ''}
+End-user: ${endUserName || 'xxx'}
+Delivery Address: ${endUserAddress || '[Delivery Address Required]'}
+${endUserContact ? `Contact Person: ${endUserContact}` : ''}${endUserContactInfo ? `, Contact Info: ${endUserContactInfo}` : ''}
 
 Quotation Price Terms: Please provide DDP prices in ${currency}, excluding VAT. 
 ETA: Kindly include the estimated delivery time.${deliveryDate ? ` Our required delivery date is ${formatDate(deliveryDate)}.` : ''}
@@ -121,8 +122,9 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
           <Col span={12}>
             <Form.Input
               field="endUserAddress"
-              label="End-user 客户地址"
-              placeholder="请输入客户地址"
+              label="End-user 交付地址（必填）"
+              placeholder="请输入交付地址"
+              rules={[{ required: true, message: '请填写交付地址' }]}
             />
           </Col>
         </Row>
@@ -161,10 +163,11 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
           <Col span={12}>
             <Form.DatePicker
               field="deliveryDate"
-              label="需求交付日期"
+              label="需求交付日期（必填）"
               placeholder="请选择需求交付日期"
               style={{ width: '100%' }}
               format="yyyy-MM-dd"
+              rules={[{ required: true, message: '请选择需求交付日期' }]}
             />
           </Col>
           <Col span={12}>

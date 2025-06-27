@@ -112,17 +112,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     </Button>
                 </Form>
 
-                <div style={{ 
-                    marginTop: '24px', 
-                    textAlign: 'center',
-                    fontSize: '12px',
-                    color: '#8a8a8a'
-                }}>
-                    <Space>
-                        <Text type="tertiary">默认账号：admin</Text>
-                        <Text type="tertiary">密码：123456</Text>
-                    </Space>
-                </div>
+
             </Card>
         </div>
     );

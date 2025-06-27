@@ -11,10 +11,9 @@ export const PRODUCT_CATEGORIES = [
     '其他'
 ] as const;
 
-// 供应商区域
+// 供应商区域 - 仅EMEA地区
 export const VENDOR_REGIONS = [
-    '美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', 
-    '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'
+    '英国', '德国', '法国', '荷兰', '瑞典', '芬兰', '瑞士', '以色列', '其他'
 ] as const;
 
 export type ProductCategory = typeof PRODUCT_CATEGORIES[number];
@@ -200,7 +199,7 @@ export const mockVendors: Vendor[] = [
         name: '联想（中国）',
         code: 'LENOVO_CN',
         category: ['服务器', '网络设备'],
-        region: '中国',
+        region: '其他',
         contact: '张经理',
         phone: '+86-10-1234-5678',
         email: 'zhang@lenovo.com',
@@ -219,7 +218,7 @@ export const mockVendors: Vendor[] = [
         name: 'HPE（美国）',
         code: 'HPE_US',
         category: ['服务器', '存储设备'],
-        region: '美国',
+        region: '其他',
         contact: 'John Smith',
         phone: '+1-408-555-0123',
         email: 'john.smith@hpe.com',
@@ -257,7 +256,7 @@ export const mockVendors: Vendor[] = [
         name: '华为（中国）',
         code: 'HUAWEI_CN',
         category: ['网络设备', '存储设备', '服务器'],
-        region: '中国',
+        region: '其他',
         contact: '李总监',
         phone: '+86-755-2878-8888',
         email: 'li@huawei.com',

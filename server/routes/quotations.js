@@ -399,7 +399,8 @@ router.get('/download/:id', async (req, res) => {
         }
 
         let filePath = quotation.originalFile.path;
-        const fileName = quotation.originalFile.originalName || quotation.originalFile.filename;
+        // 优先使用filename，因为originalName可能有编码问题
+        const fileName = quotation.originalFile.filename || quotation.originalFile.originalName;
 
         // 处理相对路径，确保指向正确的目录
         if (!path.isAbsolute(filePath)) {
@@ -462,7 +463,8 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
         }
 
         let filePath = attachment.path;
-        const fileName = attachment.originalName || attachment.name;
+        // 优先使用name，因为originalName可能有编码问题
+        const fileName = attachment.name || attachment.originalName;
 
         // 处理相对路径，确保指向正确的目录
         if (!path.isAbsolute(filePath)) {

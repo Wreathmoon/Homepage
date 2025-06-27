@@ -400,27 +400,10 @@ router.get('/download/:id', async (req, res) => {
 
         let filePath = quotation.originalFile.path;
         
-        // 获取文件名，优先使用filename
+        // 获取文件名，优先使用filename（它已经是正确的中文）
         let fileName = quotation.originalFile.filename || quotation.originalFile.originalName;
         
-        // 使用与上传时相同的编码修复逻辑
-        if (fileName) {
-            try {
-                // 如果文件名看起来像是被错误编码的（包含特殊字符），尝试修复
-                const fixedFileName = Buffer.from(fileName, 'latin1').toString('utf8');
-                
-                // 验证修复后的文件名是否合理（包含中文字符或看起来更正常）
-                if (fixedFileName !== fileName && (
-                    fixedFileName.match(/[\u4e00-\u9fff]/) || // 包含中文字符
-                    (fileName.includes('æ') && !fixedFileName.includes('æ')) // 移除了乱码字符
-                )) {
-                    fileName = fixedFileName;
-                    console.log('🔧 修复文件名编码:', `${quotation.originalFile.filename} -> ${fileName}`);
-                }
-            } catch (error) {
-                console.log('⚠️ 文件名编码修复失败，使用原始名称');
-            }
-        }
+        console.log('📋 使用的文件名:', JSON.stringify(fileName));
 
         // 处理相对路径，确保指向正确的目录
         if (!path.isAbsolute(filePath)) {
@@ -441,10 +424,16 @@ router.get('/download/:id', async (req, res) => {
             });
         }
 
-        // 设置响应头 - 修复中文文件名编码问题
+        // 设置响应头 - 确保文件名被正确编码
+        console.log('📋 编码前的文件名:', JSON.stringify(fileName));
         const encodedFileName = encodeURIComponent(fileName);
-        // 只使用编码后的文件名，避免HTTP头中的非ASCII字符
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
+        console.log('📋 编码后的文件名:', encodedFileName);
+        
+        // 使用RFC6266标准的UTF-8编码格式
+        const contentDisposition = `attachment; filename*=UTF-8''${encodedFileName}`;
+        console.log('📋 Content-Disposition:', contentDisposition);
+        
+        res.setHeader('Content-Disposition', contentDisposition);
         res.setHeader('Content-Type', 'application/octet-stream');
 
         // 发送文件

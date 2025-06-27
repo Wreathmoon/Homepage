@@ -93,6 +93,7 @@ ${rawData}
 
 **识别标准：**
 一行一行查看，不要跳过任何一行，不要遗漏任何一行
+行，列对应很重要，寻找description，sku，型号，价格，数量，品牌，技术规格，产品描述，配置信息，等有用信息
 ✅ **有用信息包括：**
 - 产品型号（如CPU型号，内存型号，硬件型号，软件型号，数据库型号，license型号 ）， 注意观察各种英文型号， 如 INTEL，AMD，HPE，DELL，CISCO，VMWARE，MICROSOFT，ORACLE，SAP，MYSQL，SQLSERVER，LINUX，WINDOWS，MACOS，IOS，ANDROID
 -还有可以看专属于科技产品的名词，比如：SATA,Nvme,SSD,HDD,GB,TB,GHz,MHz,Gbps,W,cores,license,TB,SAS等科技领域常用词
@@ -125,6 +126,7 @@ ${rawData}
 - 不需要解释原因
 - 不需要分类
 - 不需要识别无用行
+-格式严格按照示例-只要json格式，不要其他任何内容,不要注释,不要解释
 - 行号从1开始计数`;
 
             const aiResponse = await this.callAI(prompt, '第二次AI-识别有用行');
@@ -221,34 +223,8 @@ ${rawData}
         const retentionRate = Math.round(cleanedLines.length / lines.length * 100);
         console.log(`✅ 数据清洗完成: ${lines.length} 行 → ${cleanedLines.length} 行 (保留 ${retentionRate}%)`);
         
-        // 按类别组织数据
-        let organizedData = cleanedLines.join('\n');
-        
-        if (annotation.categories && Object.keys(annotation.categories).length > 0) {
-            console.log('📂 按类别重新组织数据...');
-            const categorizedData = [];
-            
-            for (const [category, lineNumbers] of Object.entries(annotation.categories)) {
-                if (lineNumbers && lineNumbers.length > 0) {
-                    categorizedData.push(`\n=== ${category} ===`);
-                    lineNumbers.forEach(lineNumber => {
-                        const lineIndex = lineNumber - 1;
-                        if (lineIndex >= 0 && lineIndex < lines.length) {
-                            const line = lines[lineIndex].trim();
-                            if (line) {
-                                categorizedData.push(`• ${line}`);
-                            }
-                        }
-                    });
-                }
-            }
-            
-            if (categorizedData.length > 0) {
-                organizedData = categorizedData.join('\n');
-            }
-        }
-        
-        return organizedData;
+        // 直接返回清洗后的数据，不再按类别重新组织
+        return cleanedLines.join('\n');
     }
 
     // 🔥 新增：AI格式整理和OCR修复函数
@@ -334,7 +310,7 @@ ${rawData}
         return '其他产品';
     }
 
-    // 🔥 新增：格式化显示函数 - 简化版本，不分类
+    // 🔥 新增：格式化显示函数 - 简化版本，不分类，不使用图标
     formatForDisplay(cleanedData, annotation = null) {
         console.log('🎨 开始格式化数据用于显示...');
         
@@ -346,26 +322,11 @@ ${rawData}
             const lines = cleanedData.split('\n');
             const result = [];
             
-            // 🔥 优化的图标映射
-            const getIconForContent = (text) => {
-                if (/server|svr|dl\d+|proliant|poweredge/i.test(text)) return '🖥️';
-                if (/storage|disk|drive|ssd|hdd|raid/i.test(text)) return '💿';
-                if (/cpu|processor|xeon|intel|amd|core/i.test(text)) return '⚡';
-                if (/memory|ram|ddr|dimm/i.test(text)) return '💾';
-                if (/network|switch|router|ethernet|adapter/i.test(text)) return '🌐';
-                if (/power|psu|电源/i.test(text)) return '🔌';
-                if (/cloud|greenlake|aws|azure/i.test(text)) return '☁️';
-                if (/support|service|warranty|maintenance/i.test(text)) return '🛠️';
-                if (/software|license|os|operating/i.test(text)) return '💻';
-                if (/security|firewall|antivirus/i.test(text)) return '🔒';
-                return '📋';
-            };
-            
-            // 🔥 简化处理：不分类，直接格式化所有行
+            // 🔥 简化处理：不分类，直接格式化所有行，不添加图标
             lines.forEach(line => {
                 const trimmedLine = line.trim();
                 if (trimmedLine && trimmedLine.length > 2) {
-                    const formattedLine = this.formatConfigLine(trimmedLine, getIconForContent(trimmedLine));
+                    const formattedLine = this.formatConfigLine(trimmedLine);
                     if (formattedLine && formattedLine.trim()) {
                         result.push(formattedLine);
                     }
@@ -376,8 +337,8 @@ ${rawData}
                 return '暂无有效配置信息';
             }
             
-            // 🔥 添加简单的标题
-            const finalResult = ['📋 **产品配置信息**', '─'.repeat(30), ...result].join('\n');
+            // 🔥 简单的标题，不使用图标
+            const finalResult = ['**产品配置信息**', '─'.repeat(30), ...result].join('\n');
             
             console.log(`✅ 数据格式化完成，共 ${result.length} 行有效内容`);
             return finalResult;
@@ -388,8 +349,8 @@ ${rawData}
         }
     }
     
-    // 🔥 优化的单行格式化（修复换行问题）
-    formatConfigLine(line, icon = '▪️') {
+    // 🔥 优化的单行格式化（修复换行问题，不使用图标）
+    formatConfigLine(line) {
         if (!line || line.trim().length === 0) {
             return null;
         }
@@ -469,12 +430,12 @@ ${rawData}
         formattedLine = formattedLine.replace(/\s+/g, ' ').trim();
         
         // 🔥 长度控制 - 增加长度限制，避免重要信息被截断
-        if (formattedLine.length > 200) {
+        if (formattedLine.length > 300) {
             formattedLine = formattedLine.substring(0, 197) + '...';
         }
         
-        // 添加图标和缩进，确保是单行
-        return `  ${icon} ${formattedLine}`;
+        // 不添加图标，只保留简单缩进
+        return `  ${formattedLine}`;
     }
 
     // 统一的AI调用函数
@@ -1076,7 +1037,7 @@ const ocrProcessor = new ExcelOCRProcessor();
 
 // 元景AI调用函数
 async function callYuanJingAI(prompt, callType = '未知') {
-    console.log('🤖 正在调用元景70B大模型...');
+    console.log(' 正在调用元景70B大模型...');
     
     // 🔥 新增：显示完整提示词
     console.log('📝 ========== AI提示词开始 ==========');
@@ -1100,9 +1061,11 @@ async function callYuanJingAI(prompt, callType = '未知') {
                         content: prompt
                     }
                 ],
-                temperature: 0.3,
-                max_tokens: 6000, // 增加最大token数以处理更多内容
+                temperature: 0.5,
+                max_tokens: 10000, // 增加最大token数以处理更多内容
                 top_p: 0.9,
+                top_k: 50,
+                repetition_penalty: 1.1,
                 stream: false
             },
             {

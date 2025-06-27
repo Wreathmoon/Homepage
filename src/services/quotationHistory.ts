@@ -1,4 +1,5 @@
 import { request } from '../utils/request';
+import { API_CONFIG } from '../utils/config';
 
 // API 接口地址常量
 const API_ENDPOINTS = {
@@ -147,7 +148,7 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
         }
 
         // 连接到API服务器获取数据
-        const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+        const apiServerUrl = API_CONFIG.API_URL;
         const response = await fetch(`${apiServerUrl}/api/quotations/list?${new URLSearchParams(apiParams).toString()}`);
         
         if (!response.ok) {
@@ -198,7 +199,7 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
 export async function getQuotationDetail(id: string): Promise<QuotationRecord> {
     try {
         // 连接到API服务器获取数据
-        const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+        const apiServerUrl = API_CONFIG.API_URL;
         const response = await fetch(`${apiServerUrl}/api/quotations/${id}`);
         
         if (!response.ok) {

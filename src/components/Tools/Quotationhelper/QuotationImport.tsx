@@ -29,6 +29,7 @@ import { request } from '../../../utils/request';
 import { uploadQuotationFile, addQuotation } from '../../../services/quotation';
 import type { QuotationRecord } from '../../../services/quotation';
 import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory';
+import { API_CONFIG } from '../../../utils/config';
 
 const { Title, Text } = Typography;
 const { Step } = Steps;
@@ -141,7 +142,7 @@ const QuotationImport: React.FC = () => {
             formData.append('file', actualFile);
             
             // 调用AI服务器的上传API
-            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+            const aiServerUrl = API_CONFIG.AI_SERVER_URL;
             const response = await fetch(`${aiServerUrl}/api/quotations/upload`, {
                 method: 'POST',
                 body: formData
@@ -190,7 +191,7 @@ const QuotationImport: React.FC = () => {
             }, 360000); // 6分钟超时（比后端多1分钟）
             
             // 调用AI服务器的分析API
-            const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+            const aiServerUrl = API_CONFIG.AI_SERVER_URL;
             const response = await fetch(`${aiServerUrl}/api/quotations/analyze`, {
                 method: 'POST',
                 headers: {

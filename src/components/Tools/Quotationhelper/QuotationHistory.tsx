@@ -24,6 +24,7 @@ import {
 import type { QuotationRecord, QuotationQueryParams } from '../../../services/quotationHistory';
 import { ResizeObserverFix } from '../../../utils/resizeObserver';
 import { request } from '../../../utils/request';
+import { API_CONFIG } from '../../../utils/config';
 
 const { Title, Text } = Typography;
 
@@ -114,7 +115,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
                 return;
             }
             
-            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3001';
+            const apiServerUrl = API_CONFIG.API_URL;
             const downloadUrl = `${apiServerUrl}/api/quotations/download/${quotationId}`;
             console.log('📥 下载URL:', downloadUrl);
             
@@ -598,7 +599,7 @@ const QuotationHistory: React.FC = () => {
                             return;
                         }
                         
-                        const aiServerUrl = process.env.REACT_APP_AI_SERVER_URL || 'http://localhost:3002';
+                                                 const aiServerUrl = API_CONFIG.AI_SERVER_URL;
                         const downloadUrl = `${aiServerUrl}/api/quotations/download/${quotationId}`;
                         console.log('📥 表格下载URL:', downloadUrl);
                         

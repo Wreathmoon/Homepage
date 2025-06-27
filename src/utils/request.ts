@@ -1,10 +1,9 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import { Toast } from '@douyinfe/semi-ui';
+import { API_CONFIG } from './config';
 
 // API基础URL配置
-const API_BASE_URL = process.env.REACT_APP_API_URL 
-    ? process.env.REACT_APP_API_URL + '/api' 
-    : 'http://localhost:3002/api'  // 修改为3002端口
+const API_BASE_URL = API_CONFIG.API_URL + '/api';
 
 // 创建 axios 实例
 const request = axios.create({

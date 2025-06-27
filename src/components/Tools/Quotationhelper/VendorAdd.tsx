@@ -14,6 +14,7 @@ import {
 } from '@douyinfe/semi-ui';
 import type { FormApi } from '@douyinfe/semi-ui/lib/es/form';
 import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory';
+import { API_CONFIG } from '../../../utils/config';
 
 const { Title, Text } = Typography;
 
@@ -124,7 +125,7 @@ const VendorAdd: React.FC = () => {
             console.log('🔄 处理后的数据:', submitData);
             
             // 调用API服务器的供应商添加接口
-            const apiServerUrl = process.env.REACT_APP_API_SERVER_URL || 'http://localhost:3002';
+            const apiServerUrl = API_CONFIG.API_URL;
             const response = await fetch(`${apiServerUrl}/api/vendors`, {
                 method: 'POST',
                 headers: {

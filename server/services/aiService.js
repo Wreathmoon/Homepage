@@ -19,7 +19,7 @@ class AIService {
             }
           ],
           temperature: 0.7,
-          max_tokens: 2000
+          max_new_tokens: 2000
         },
         {
           headers: {

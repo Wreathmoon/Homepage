@@ -422,10 +422,9 @@ router.get('/download/:id', async (req, res) => {
         }
 
         // 设置响应头 - 修复中文文件名编码问题
-        // 使用Buffer转换确保正确的UTF-8编码
-        const safeFileName = Buffer.from(fileName, 'utf8').toString('utf8');
-        const encodedFileName = encodeURIComponent(safeFileName);
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodedFileName}`);
+        const encodedFileName = encodeURIComponent(fileName);
+        // 只使用编码后的文件名，避免HTTP头中的非ASCII字符
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
         res.setHeader('Content-Type', 'application/octet-stream');
 
         // 发送文件
@@ -486,10 +485,9 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
         }
 
         // 设置响应头 - 修复中文文件名编码问题
-        // 使用Buffer转换确保正确的UTF-8编码
-        const safeFileName = Buffer.from(fileName, 'utf8').toString('utf8');
-        const encodedFileName = encodeURIComponent(safeFileName);
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodedFileName}`);
+        const encodedFileName = encodeURIComponent(fileName);
+        // 只使用编码后的文件名，避免HTTP头中的非ASCII字符
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
         res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
 
         // 发送文件

@@ -398,13 +398,22 @@ router.get('/download/:id', async (req, res) => {
             });
         }
 
-        const filePath = quotation.originalFile.path;
+        let filePath = quotation.originalFile.path;
         const fileName = quotation.originalFile.originalName || quotation.originalFile.filename;
+
+        // 处理相对路径，确保指向正确的目录
+        if (!path.isAbsolute(filePath)) {
+            // 如果是相对路径，基于项目根目录而不是server目录
+            filePath = path.join(__dirname, '../../', filePath);
+        }
+
+        console.log('📁 下载文件路径:', filePath);
 
         // 检查文件是否存在
         try {
             await fs.access(filePath);
         } catch {
+            console.error('❌ 文件不存在:', filePath);
             return res.status(404).json({
                 success: false,
                 message: '文件不存在或已被删除'
@@ -449,13 +458,22 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
             });
         }
 
-        const filePath = attachment.path;
+        let filePath = attachment.path;
         const fileName = attachment.originalName || attachment.name;
+
+        // 处理相对路径，确保指向正确的目录
+        if (!path.isAbsolute(filePath)) {
+            // 如果是相对路径，基于项目根目录而不是server目录
+            filePath = path.join(__dirname, '../../', filePath);
+        }
+
+        console.log('📁 下载附件路径:', filePath);
 
         // 检查文件是否存在
         try {
             await fs.access(filePath);
         } catch {
+            console.error('❌ 附件不存在:', filePath);
             return res.status(404).json({
                 success: false,
                 message: '文件不存在或已被删除'

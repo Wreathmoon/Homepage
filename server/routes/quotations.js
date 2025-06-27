@@ -425,61 +425,15 @@ router.get('/download/:id', async (req, res) => {
             });
         }
 
-        // 设置响应头 - 支持中文文件名
-        console.log('📋 原始文件名:', JSON.stringify(fileName));
-        
-        // 尝试修复可能的编码问题
-        let displayFileName = fileName;
-        try {
-            // 如果文件名看起来是乱码，尝试修复编码
-            if (fileName && fileName.includes('�') || /[^\x20-\x7E\u4e00-\u9fa5]/.test(fileName)) {
-                displayFileName = Buffer.from(fileName, 'latin1').toString('utf8');
-                console.log('📋 修复编码后的文件名:', JSON.stringify(displayFileName));
-            }
-        } catch (error) {
-            console.warn('📋 文件名编码修复失败，使用原文件名');
-        }
-        
-        // 使用URL编码的方式设置中文文件名
-        const encodedFileName = encodeURIComponent(displayFileName);
-        console.log('📋 URL编码后的文件名:', encodedFileName);
-        
-        // 调试：检查字符串的实际内容
-        console.log('🔍 调试编码后的文件名字节:', Buffer.from(encodedFileName));
-        console.log('🔍 调试编码后的文件名长度:', encodedFileName.length);
-        
-        // 使用最简单的方式，完全避免中文
+        // 生成安全的ASCII文件名
         const timestamp = Date.now();
-        const fileExt = path.extname(displayFileName) || '.xlsx';
-        const safeFileName = `quotation_${timestamp}${fileExt}`;
+        const safeFileName = `quotation_${timestamp}.xlsx`;
         
-        console.log('📋 最终使用的安全文件名:', safeFileName);
+        console.log('📋 使用安全文件名:', safeFileName);
+        console.log('🔧 开始下载文件...');
         
-        // 使用res.download()方法，它会自动设置正确的下载头
-        console.log('🔧 使用res.download()方法下载文件...');
-        
-        // 添加响应头监听，看看实际发送了什么
-        const originalSetHeader = res.setHeader.bind(res);
-        res.setHeader = function(name, value) {
-            if (name.toLowerCase() === 'content-disposition') {
-                console.log('📤 实际设置的Content-Disposition:', value);
-            }
-            return originalSetHeader(name, value);
-        };
-        
-        res.download(path.resolve(filePath), safeFileName, (err) => {
-            if (err) {
-                console.error('❌ 文件下载失败:', err);
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        success: false,
-                        message: '文件下载失败'
-                    });
-                }
-            } else {
-                console.log('✅ 文件下载成功');
-            }
-        });
+        // 直接使用res.download()，不做任何额外的头设置
+        res.download(path.resolve(filePath), safeFileName);
 
     } catch (error) {
         console.error('下载文件失败:', error);
@@ -535,41 +489,16 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
             });
         }
 
-        // 设置响应头 - 使用纯ASCII文件名避免编码问题
-        console.log('📋 附件原始文件名:', JSON.stringify(fileName));
-        
-        // 使用纯ASCII文件名
+        // 生成安全的ASCII文件名
         const timestamp = Date.now();
         const fileExt = path.extname(fileName) || '.file';
         const safeFileName = `attachment_${timestamp}${fileExt}`;
         
         console.log('📋 附件安全文件名:', safeFileName);
+        console.log('🔧 开始下载附件...');
         
-        // 使用res.download()方法，它会自动设置正确的下载头
-        console.log('🔧 使用res.download()方法下载附件...');
-        
-        // 添加响应头监听，看看实际发送了什么
-        const originalSetHeader = res.setHeader.bind(res);
-        res.setHeader = function(name, value) {
-            if (name.toLowerCase() === 'content-disposition') {
-                console.log('📤 附件实际设置的Content-Disposition:', value);
-            }
-            return originalSetHeader(name, value);
-        };
-        
-        res.download(path.resolve(filePath), safeFileName, (err) => {
-            if (err) {
-                console.error('❌ 附件下载失败:', err);
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        success: false,
-                        message: '附件下载失败'
-                    });
-                }
-            } else {
-                console.log('✅ 附件下载成功');
-            }
-        });
+        // 直接使用res.download()，不做任何额外的头设置
+        res.download(path.resolve(filePath), safeFileName);
 
     } catch (error) {
         console.error('下载附件失败:', error);

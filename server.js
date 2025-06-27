@@ -92,7 +92,6 @@ class AIDataCleaner {
 ${rawData}
 
 **识别标准：**
-一行一行查看，不要跳过任何一行，不要遗漏任何一行
 行，列对应很重要，寻找description，sku，型号，价格，数量，品牌，技术规格，产品描述，配置信息，等有用信息
 ✅ **有用信息包括：**
 - 产品型号（如CPU型号，内存型号，硬件型号，软件型号，数据库型号，license型号 ）， 注意观察各种英文型号， 如 INTEL，AMD，HPE，DELL，CISCO，VMWARE，MICROSOFT，ORACLE，SAP，MYSQL，SQLSERVER，LINUX，WINDOWS，MACOS，IOS，ANDROID
@@ -127,6 +126,7 @@ ${rawData}
 - 不需要分类
 - 不需要识别无用行
 -格式严格按照示例-只要json格式，不要其他任何内容,不要注释,不要解释
+-绝对不允许任何形式的省略，必须把整个报价单都处理出来，不要遗漏任何信息，输出 必须 是json格式，严格遵守json格式，不要有任何其他内容
 - 行号从1开始计数`;
 
             const aiResponse = await this.callAI(prompt, '第二次AI-识别有用行');
@@ -1061,11 +1061,9 @@ async function callYuanJingAI(prompt, callType = '未知') {
                         content: prompt
                     }
                 ],
-                temperature: 0.5,
-                max_tokens: 10000, // 增加最大token数以处理更多内容
+                temperature: 0.2,
+                max_tokens: 1000000, // 增加最大token数以处理更多内容
                 top_p: 0.9,
-                top_k: 50,
-                repetition_penalty: 1.1,
                 stream: false
             },
             {
@@ -1567,13 +1565,6 @@ const performThreeStepAIAnalysis = async (content, processingInfo, fileName, fil
     
     const basicInfoPrompt = `你是一个专业的报价单分析专家。请仔细分析以下报价文件内容，专注于提取基础信息和价格信息。${ocrPromptAddition}
 
-🔥 重要提示：
-1. 必须返回标准的JSON数组格式，不要包含任何markdown标记或其他文字
-2. 所有字符串值必须用双引号包围
-3. 数字值不要加引号，百分号等符号也不要包含在数字值中
-4. 只分析基础信息和价格信息，不要分析详细配置
-5. 所有属性名必须用双引号包围
-6. 字符串内容中的特殊字符需要转义
 
 ⚠️ JSON格式要求：
 - 属性名必须用双引号："propertyName"
@@ -1639,7 +1630,7 @@ const performThreeStepAIAnalysis = async (content, processingInfo, fileName, fil
 - 单位：台、个、套、件、份、年、月、用户数、许可数
 - 默认为1（如果找不到明确数量）
 
-请严格按照以下JSON格式返回基础信息和价格信息，不要包含任何其他文字：
+请严格按照以下JSON格式返回基础信息和价格信息，不要包含任何其他文字，不要解释：
 
 [
   {
@@ -1658,6 +1649,9 @@ const performThreeStepAIAnalysis = async (content, processingInfo, fileName, fil
     "notes": "备注信息"
   }
 ]
+
+
+绝对不允许任何形式的省略，必须把整个报价单都处理出来，不要遗漏任何信息
 
 **分析数据：**
 ${mergedData.mergedContent}`;

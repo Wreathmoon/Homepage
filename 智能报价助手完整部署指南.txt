@@ -1,0 +1,951 @@
+===============================================================================
+                    智能报价助手系统 - 完整部署指南
+===============================================================================
+
+版本: v2.0.0
+更新时间: 2024-12-13
+项目类型: React + Node.js + MongoDB + AI集成
+部署环境: 联通云服务器 (Ubuntu 20.04)
+
+===============================================================================
+                              项目架构概述
+===============================================================================
+
+🏗️ 系统架构：
+┌─────────────────────────────────────────────────────────────────┐
+│                        联通云服务器                              │
+│                     (IP: 103.77.22.42)                         │
+├─────────────────────────────────────────────────────────────────┤
+│ Nginx (端口80) - 反向代理 + 静态文件服务                         │
+│ ├── 前端静态文件 (React构建文件)                                 │
+│ ├── 代理到AI服务器 (端口3002)                                   │
+│ └── 代理到API服务器 (端口3001)                                  │
+├─────────────────────────────────────────────────────────────────┤
+│ Node.js应用层                                                   │
+│ ├── AI分析服务器 (server.js) - 端口3002                        │
+│ │   ├── 文件上传处理 (Excel/PDF/Word)                          │
+│ │   ├── OCR图像识别 (Tesseract.js)                            │
+│ │   ├── AI数据清洗 (元景70B大模型)                             │
+│ │   └── 智能报价分析                                           │
+│ └── API数据库服务器 (server/app.js) - 端口3001                 │
+│     ├── MongoDB数据库交互                                      │
+│     ├── 报价单CRUD操作                                         │
+│     ├── 供应商管理                                             │
+│     └── 历史记录查询                                           │
+├─────────────────────────────────────────────────────────────────┤
+│ MongoDB数据库 (端口27017)                                       │
+│ ├── quotation_db (AI服务器数据库)                              │
+│ └── quotation_system (API服务器数据库)                         │
+├─────────────────────────────────────────────────────────────────┤
+│ PM2进程管理                                                     │
+│ ├── ai-server (server.js)                                     │
+│ └── api-server (server/app.js)                                │
+└─────────────────────────────────────────────────────────────────┘
+
+🔧 端口分配：
+- 80端口: Nginx (HTTP访问入口)
+- 3001端口: API数据库服务器 (内网)
+- 3002端口: AI分析服务器 (内网)  
+- 27017端口: MongoDB数据库 (内网)
+
+⚠️ **重要端口说明：**
+- AI服务器(server.js)默认端口是8080，但生产环境通过PM2设置为3002
+- API服务器(server/app.js)默认端口是3001，保持不变
+- 两个服务器都通过ecosystem.config.js统一管理端口配置
+
+===============================================================================
+                              第一步：SSH连接服务器
+===============================================================================
+
+💻 PowerShell连接命令：
+```powershell
+# 连接到联通云服务器
+ssh root@103.77.22.42
+
+# 如果需要指定私钥文件
+ssh -i "your-private-key.pem" root@103.77.22.42
+```
+
+🔐 首次连接注意事项：
+- 确保防火墙已开放22端口(SSH)
+- 如果使用密钥认证，确保私钥文件权限正确
+- 连接成功后会看到Ubuntu系统提示符
+
+===============================================================================
+                              第二步：系统环境准备
+===============================================================================
+
+🔄 更新系统：
+```bash
+# 更新软件包列表
+apt update
+
+# 升级已安装的软件包
+apt upgrade -y
+
+# 安装基础工具
+apt install -y curl wget git vim htop unzip build-essential
+```
+
+📁 创建项目目录：
+```bash
+# 创建数据目录
+mkdir -p /data/quotation-app
+
+# 设置目录权限
+chmod 755 /data/quotation-app
+
+# 进入项目目录
+cd /data/quotation-app
+```
+
+===============================================================================
+                              第三步：安装Node.js环境
+===============================================================================
+
+🟢 安装Node.js 18.x (推荐版本)：
+```bash
+# 添加NodeSource仓库
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+
+# 安装Node.js和npm
+apt-get install -y nodejs
+
+# 验证安装
+node --version  # 应该显示 v18.x.x
+npm --version   # 应该显示 9.x.x 或更高
+```
+
+🔧 安装PM2进程管理器：
+```bash
+# 全局安装PM2
+npm install -g pm2
+
+# 验证PM2安装
+pm2 --version
+```
+
+===============================================================================
+                              第四步：安装MongoDB数据库
+===============================================================================
+
+🗄️ 安装MongoDB 6.0：
+```bash
+# 添加MongoDB官方GPG密钥
+wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
+
+# 添加MongoDB仓库
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+
+# 更新包列表
+apt-get update
+
+# 安装MongoDB
+apt-get install -y mongodb-org
+
+# 启动MongoDB服务
+systemctl start mongod
+systemctl enable mongod
+
+# 验证MongoDB状态
+systemctl status mongod
+```
+
+🔒 配置MongoDB安全性（可选但推荐）：
+```bash
+# 进入MongoDB shell
+mongo
+
+# 创建管理员用户
+use admin
+db.createUser({
+  user: "admin",
+  pwd: "your_secure_password_here",
+  roles: ["userAdminAnyDatabase", "dbAdminAnyDatabase", "readWriteAnyDatabase"]
+})
+
+# 创建应用数据库用户
+use quotation_system
+db.createUser({
+  user: "quotation_user",
+  pwd: "your_app_password_here",
+  roles: ["readWrite"]
+})
+
+# 退出MongoDB shell
+exit
+```
+
+===============================================================================
+                              第五步：部署项目代码
+===============================================================================
+
+📥 获取项目代码：
+```bash
+# 进入项目目录
+cd /data/quotation-app
+
+# 克隆项目仓库
+git clone https://github.com/your-username/Homepage.git
+# 或者使用SSH
+# git clone git@github.com:your-username/Homepage.git
+
+# 进入项目目录
+cd Homepage
+```
+
+📦 安装项目依赖：
+```bash
+# 安装主项目依赖
+npm install
+
+# 安装服务器端依赖
+cd server
+npm install
+cd ..
+
+# 构建前端项目
+npm run build
+```
+
+📁 创建必要目录：
+```bash
+# 创建日志目录
+mkdir -p logs
+
+# 创建上传文件目录
+mkdir -p uploads
+chmod 755 uploads
+
+# 创建OCR临时目录
+mkdir -p temp_ocr
+chmod 755 temp_ocr
+```
+
+===============================================================================
+                              第六步：环境变量配置
+===============================================================================
+
+🔧 创建AI服务器环境变量文件：
+```bash
+# 在项目根目录创建.env文件
+vim .env
+```
+
+添加以下内容：
+```env
+# AI服务器配置
+NODE_ENV=production
+# 注意：PORT在ecosystem.config.js中设置为3002，这里不需要设置
+
+# 元景AI配置
+YUANJING_API_KEY=sk-59454f95d79b4d5d9ad8d5d9d6237bc1
+YUANJING_MODEL=yuanjing-70b-chat
+YUANJING_API_ENDPOINT=https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1
+
+# MongoDB配置
+MONGODB_URI=mongodb://localhost:27017/quotation_db
+
+# 文件上传配置
+UPLOAD_LIMIT=50mb
+MAX_FILE_SIZE=52428800
+
+# 日志配置
+LOG_LEVEL=info
+```
+
+🔧 创建API服务器环境变量文件：
+```bash
+# 在server目录创建.env文件
+vim server/.env
+```
+
+添加以下内容：
+```env
+# API服务器配置
+NODE_ENV=production
+# 注意：PORT在ecosystem.config.js中设置为3001，这里不需要设置
+
+# MongoDB配置
+MONGODB_URI=mongodb://localhost:27017/quotation_system
+
+# 跨域配置
+FRONTEND_URL=http://103.77.22.42,https://103.77.22.42
+
+# 安全配置
+JWT_SECRET=your-super-secure-jwt-key-change-this-in-production
+BCRYPT_ROUNDS=12
+
+# 文件上传配置
+MAX_FILE_SIZE=10485760
+UPLOAD_DIR=/data/quotation-app/Homepage/uploads
+
+# 速率限制
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=100
+```
+
+🔒 设置环境变量文件权限：
+```bash
+# 设置安全权限
+chmod 600 .env
+chmod 600 server/.env
+```
+
+===============================================================================
+                              第七步：安装和配置Nginx
+===============================================================================
+
+🌐 安装Nginx：
+```bash
+# 安装Nginx
+apt install -y nginx
+
+# 启动Nginx服务
+systemctl start nginx
+systemctl enable nginx
+```
+
+⚙️ 配置Nginx反向代理：
+```bash
+# 备份默认配置
+cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.backup
+
+# 创建新的站点配置
+vim /etc/nginx/sites-available/quotation-helper
+```
+
+添加以下Nginx配置：
+```nginx
+server {
+    listen 80;
+    server_name 103.77.22.42;
+    
+    # 安全头部
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    
+    # 前端静态文件
+    location / {
+        root /data/quotation-app/Homepage/build;
+        try_files $uri $uri/ /index.html;
+        
+        # 静态文件缓存
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+    
+    # AI分析服务器代理
+    location /api/ {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 文件上传配置
+        client_max_body_size 50M;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+    
+    # API数据库服务器代理 (历史记录、供应商管理)
+    location /api/vendors/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    location /api/quotations/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # 上传文件访问
+    location /uploads/ {
+        alias /data/quotation-app/Homepage/uploads/;
+        expires 1d;
+    }
+    
+    # 健康检查
+    location /health {
+        return 200 'OK';
+        add_header Content-Type text/plain;
+    }
+}
+```
+
+🔗 启用站点配置：
+```bash
+# 移除默认站点
+rm /etc/nginx/sites-enabled/default
+
+# 启用新站点
+ln -s /etc/nginx/sites-available/quotation-helper /etc/nginx/sites-enabled/
+
+# 测试Nginx配置
+nginx -t
+
+# 重新加载Nginx配置
+systemctl reload nginx
+```
+
+===============================================================================
+                              第八步：使用PM2启动应用
+===============================================================================
+
+📋 使用PM2生态系统配置文件：
+```bash
+# 查看已创建的ecosystem.config.js
+cat ecosystem.config.js
+```
+
+⚠️ **重要：端口配置说明**
+```bash
+# ecosystem.config.js中的端口配置：
+# - ai-server (server.js): PORT=3002
+# - api-server (server/app.js): PORT=3001
+# 
+# 这些端口设置会覆盖代码中的默认端口：
+# - server.js默认端口: 8080 → PM2设置为: 3002
+# - server/app.js默认端口: 3001 → PM2设置为: 3001
+```
+
+🚀 启动所有服务：
+```bash
+# 使用生态系统配置启动
+pm2 start ecosystem.config.js
+
+# 查看运行状态
+pm2 status
+
+# 查看实时日志
+pm2 logs
+
+# 保存PM2配置
+pm2 save
+
+# 设置开机自启动
+pm2 startup
+# 按照提示执行返回的命令
+```
+
+🔍 验证服务状态：
+```bash
+# 检查端口监听 - 确保端口配置正确
+netstat -tlnp | grep -E ":(80|3001|3002|27017)"
+
+# 应该看到以下端口监听：
+# :80    - Nginx
+# :3001  - API服务器 (server/app.js)
+# :3002  - AI服务器 (server.js)
+# :27017 - MongoDB
+
+# 检查进程状态
+pm2 status
+
+# 验证端口配置是否正确
+curl http://localhost:3001/api/health  # API服务器健康检查
+curl http://localhost:3002/api/health  # AI服务器健康检查
+
+# 查看服务日志
+pm2 logs ai-server --lines 20
+pm2 logs api-server --lines 20
+```
+
+===============================================================================
+                              第九步：防火墙和安全配置
+===============================================================================
+
+🔥 配置UFW防火墙：
+```bash
+# 安装UFW
+apt install -y ufw
+
+# 设置默认策略
+ufw default deny incoming
+ufw default allow outgoing
+
+# 允许SSH
+ufw allow ssh
+
+# 允许HTTP
+ufw allow 80/tcp
+
+# 允许HTTPS (为将来准备)
+ufw allow 443/tcp
+
+# 启用防火墙
+ufw enable
+
+# 查看防火墙状态
+ufw status
+```
+
+🔒 系统安全加固：
+```bash
+# 更新系统安全补丁
+apt update && apt upgrade -y
+
+# 设置自动安全更新
+apt install -y unattended-upgrades
+dpkg-reconfigure -plow unattended-upgrades
+
+# 配置日志轮转
+cat > /etc/logrotate.d/quotation-helper << EOF
+/data/quotation-app/Homepage/logs/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 644 root root
+}
+EOF
+```
+
+===============================================================================
+                              第十步：测试和验证部署
+===============================================================================
+
+🧪 基础连通性测试：
+```bash
+# 测试HTTP访问
+curl -I http://103.77.22.42
+
+# 测试API健康检查
+curl http://103.77.22.42/api/health
+
+# 测试Nginx状态
+systemctl status nginx
+
+# 测试MongoDB连接
+mongo --eval "db.adminCommand('ismaster')"
+```
+
+🌐 浏览器访问测试：
+1. 打开浏览器访问: http://103.77.22.42
+2. 测试文件上传功能
+3. 测试AI分析功能
+4. 测试历史记录查看
+5. 测试供应商管理
+
+📊 性能监控：
+```bash
+# 系统资源使用
+htop
+
+# 磁盘使用情况
+df -h
+
+# 内存使用情况
+free -h
+
+# PM2进程监控
+pm2 monit
+```
+
+===============================================================================
+                              常用维护命令
+===============================================================================
+
+🔧 日常维护命令：
+
+**PM2进程管理：**
+```bash
+# 查看所有进程状态
+pm2 status
+
+# 重启特定服务
+pm2 restart ai-server
+pm2 restart api-server
+
+# 查看日志
+pm2 logs ai-server --lines 50
+pm2 logs api-server --lines 50
+
+# 停止服务
+pm2 stop ai-server
+pm2 stop api-server
+
+# 删除进程
+pm2 delete ai-server
+pm2 delete api-server
+```
+
+**代码更新：**
+```bash
+# 进入项目目录
+cd /data/quotation-app/Homepage
+
+# 拉取最新代码
+git pull origin main
+
+# 更新依赖
+npm install
+cd server && npm install && cd ..
+
+# 重新构建前端
+npm run build
+
+# 重启服务
+pm2 restart all
+```
+
+**数据库备份：**
+```bash
+# 备份数据库
+mongodump --db quotation_system --out /data/backup/$(date +%Y%m%d)
+mongodump --db quotation_db --out /data/backup/$(date +%Y%m%d)
+
+# 恢复数据库
+mongorestore --db quotation_system /data/backup/20241213/quotation_system
+```
+
+**日志查看：**
+```bash
+# 查看Nginx日志
+tail -f /var/log/nginx/access.log
+tail -f /var/log/nginx/error.log
+
+# 查看系统日志
+journalctl -u nginx -f
+journalctl -u mongod -f
+
+# 查看PM2日志
+pm2 logs --lines 100
+```
+
+===============================================================================
+                              故障排除指南
+===============================================================================
+
+❌ **常见问题及解决方案：**
+
+**1. 端口冲突问题：**
+```bash
+# 查看端口占用
+netstat -tlnp | grep :80
+netstat -tlnp | grep :3001
+netstat -tlnp | grep :3002
+
+# 检查PM2进程和端口配置
+pm2 status
+pm2 env 0  # 查看第一个进程的环境变量
+
+# 如果端口冲突，停止所有PM2进程重新启动
+pm2 stop all
+pm2 start ecosystem.config.js
+
+# 强制杀死占用端口的进程（谨慎使用）
+kill -9 PID号
+
+# 验证端口配置正确性
+echo "检查AI服务器端口(应该是3002):"
+curl -I http://localhost:3002/api/health
+echo "检查API服务器端口(应该是3001):"
+curl -I http://localhost:3001/api/health
+```
+
+**2. Nginx启动失败：**
+```bash
+# 检查配置语法
+nginx -t
+
+# 查看错误日志
+cat /var/log/nginx/error.log
+
+# 重启Nginx
+systemctl restart nginx
+```
+
+**3. MongoDB连接失败：**
+```bash
+# 检查MongoDB状态
+systemctl status mongod
+
+# 重启MongoDB
+systemctl restart mongod
+
+# 查看MongoDB日志
+tail -f /var/log/mongodb/mongod.log
+```
+
+**4. PM2进程异常：**
+```bash
+# 查看进程状态
+pm2 status
+
+# 查看错误日志
+pm2 logs --err
+
+# 重启所有进程
+pm2 restart all
+
+# 重新加载配置
+pm2 reload ecosystem.config.js
+```
+
+**5. 文件上传失败：**
+```bash
+# 检查上传目录权限
+ls -la uploads/
+
+# 修复权限
+chmod 755 uploads/
+chown -R root:root uploads/
+
+# 检查磁盘空间
+df -h
+```
+
+===============================================================================
+                              性能优化建议
+===============================================================================
+
+⚡ **性能优化措施：**
+
+**1. Nginx优化：**
+```bash
+# 编辑Nginx配置
+vim /etc/nginx/nginx.conf
+
+# 添加以下优化配置
+worker_processes auto;
+worker_connections 1024;
+
+# 启用gzip压缩
+gzip on;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+```
+
+**2. MongoDB优化：**
+```bash
+# 创建索引
+mongo quotation_system
+db.quotations.createIndex({"createdAt": -1})
+db.quotations.createIndex({"vendor": 1})
+db.vendors.createIndex({"name": 1})
+```
+
+**3. PM2优化：**
+```bash
+# 设置进程监控
+pm2 install pm2-server-monit
+
+# 配置内存限制
+pm2 start ecosystem.config.js --max-memory-restart 1G
+```
+
+===============================================================================
+                              备份和恢复策略
+===============================================================================
+
+💾 **数据备份策略：**
+
+**1. 自动备份脚本：**
+```bash
+# 创建备份脚本
+vim /data/backup/backup.sh
+```
+
+```bash
+#!/bin/bash
+BACKUP_DIR="/data/backup"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# 创建备份目录
+mkdir -p $BACKUP_DIR/$DATE
+
+# 备份数据库
+mongodump --db quotation_system --out $BACKUP_DIR/$DATE/
+mongodump --db quotation_db --out $BACKUP_DIR/$DATE/
+
+# 备份上传文件
+tar -czf $BACKUP_DIR/$DATE/uploads.tar.gz -C /data/quotation-app/Homepage uploads/
+
+# 备份配置文件
+cp /data/quotation-app/Homepage/.env $BACKUP_DIR/$DATE/
+cp /data/quotation-app/Homepage/server/.env $BACKUP_DIR/$DATE/server.env
+cp /etc/nginx/sites-available/quotation-helper $BACKUP_DIR/$DATE/nginx.conf
+
+# 清理30天前的备份
+find $BACKUP_DIR -type d -mtime +30 -exec rm -rf {} \;
+
+echo "备份完成: $BACKUP_DIR/$DATE"
+```
+
+**2. 设置定时备份：**
+```bash
+# 设置执行权限
+chmod +x /data/backup/backup.sh
+
+# 添加到crontab
+crontab -e
+
+# 每天凌晨2点执行备份
+0 2 * * * /data/backup/backup.sh >> /var/log/backup.log 2>&1
+```
+
+===============================================================================
+                              监控和告警
+===============================================================================
+
+📊 **系统监控设置：**
+
+**1. 系统资源监控：**
+```bash
+# 安装监控工具
+apt install -y htop iotop nethogs
+
+# 创建监控脚本
+vim /data/scripts/monitor.sh
+```
+
+```bash
+#!/bin/bash
+# 系统监控脚本
+echo "=== 系统监控报告 $(date) ==="
+echo "CPU使用率:"
+top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1
+
+echo "内存使用率:"
+free | grep Mem | awk '{printf "%.2f%%\n", $3/$2 * 100.0}'
+
+echo "磁盘使用率:"
+df -h | grep -vE '^Filesystem|tmpfs|cdrom' | awk '{print $5 " " $1}'
+
+echo "PM2进程状态:"
+pm2 jlist | jq -r '.[] | "\(.name): \(.pm2_env.status)"'
+
+echo "数据库连接状态:"
+mongo --quiet --eval "db.adminCommand('ismaster').ismaster"
+```
+
+**2. 日志监控：**
+```bash
+# 创建日志监控脚本
+vim /data/scripts/log_monitor.sh
+```
+
+```bash
+#!/bin/bash
+# 日志监控脚本
+LOG_FILE="/var/log/app_monitor.log"
+
+# 检查错误日志
+ERROR_COUNT=$(grep -c "ERROR\|error\|Error" /data/quotation-app/Homepage/logs/*.log 2>/dev/null || echo 0)
+
+if [ $ERROR_COUNT -gt 10 ]; then
+    echo "$(date): 发现 $ERROR_COUNT 个错误，需要检查！" >> $LOG_FILE
+fi
+
+# 检查磁盘空间
+DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+if [ $DISK_USAGE -gt 80 ]; then
+    echo "$(date): 磁盘使用率达到 $DISK_USAGE%，需要清理！" >> $LOG_FILE
+fi
+```
+
+===============================================================================
+                              部署完成检查清单
+===============================================================================
+
+✅ **部署完成后的检查清单：**
+
+**系统环境：**
+- [ ] Ubuntu系统已更新到最新版本
+- [ ] Node.js 18.x 安装成功
+- [ ] MongoDB 6.0 安装并运行正常
+- [ ] Nginx 安装并配置正确
+- [ ] PM2 进程管理器安装成功
+
+**项目部署：**
+- [ ] 项目代码已克隆到服务器
+- [ ] 前端和后端依赖已安装
+- [ ] 前端项目已构建 (npm run build)
+- [ ] 环境变量文件已正确配置
+- [ ] 文件上传目录权限设置正确
+
+**服务启动：**
+- [ ] AI服务器 (端口3002) 运行正常
+- [ ] API服务器 (端口3001) 运行正常
+- [ ] MongoDB (端口27017) 运行正常
+- [ ] Nginx (端口80) 运行正常
+
+**功能测试：**
+- [ ] 网站首页可以正常访问
+- [ ] 文件上传功能正常
+- [ ] AI分析功能正常
+- [ ] 历史记录查询正常
+- [ ] 供应商管理功能正常
+
+**安全配置：**
+- [ ] 防火墙已配置并启用
+- [ ] 环境变量文件权限已设置
+- [ ] 自动安全更新已启用
+- [ ] 备份策略已设置
+
+
+
+🆘 **紧急处理：**
+如果系统出现严重问题，可以执行以下紧急恢复步骤：
+
+```bash
+# 1. 停止所有服务
+pm2 stop all
+systemctl stop nginx
+
+# 2. 检查系统资源
+htop
+df -h
+
+# 3. 重启核心服务
+systemctl start mongod
+pm2 start ecosystem.config.js
+systemctl start nginx
+
+# 4. 验证服务状态
+pm2 status
+systemctl status nginx mongod
+```
+
+===============================================================================
+                              部署完成
+===============================================================================
+
+🎉 **恭喜！智能报价助手系统部署完成！**
+
+**访问地址：** http://103.77.22.42
+
+**管理命令：**
+- 查看服务状态：`pm2 status`
+- 查看日志：`pm2 logs`
+- 重启服务：`pm2 restart all`
+- 更新代码：`cd /data/quotation-app/Homepage && git pull && npm run build && pm2 restart all`
+
+**系统特性：**
+✅ 智能文件解析 (Excel/PDF/Word)
+✅ OCR图像识别
+✅ AI数据清洗和分析
+✅ 报价单管理
+✅ 供应商管理
+✅ 历史记录查询
+✅ 高可用性部署
+✅ 自动备份和监控
+
+如有问题，请查看相关日志文件或参考故障排除指南。
+
+=============================================================================== 

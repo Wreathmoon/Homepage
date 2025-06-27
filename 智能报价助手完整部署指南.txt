@@ -49,9 +49,11 @@
 - 27017端口: MongoDB数据库 (内网)
 
 ⚠️ **重要端口说明：**
-- AI服务器(server.js)默认端口是8080，但生产环境通过PM2设置为3002
+- AI服务器(server.js)默认端口是8080，生产环境可通过PM2设置为其他端口
 - API服务器(server/app.js)默认端口是3001，保持不变
 - 两个服务器都通过ecosystem.config.js统一管理端口配置
+- **注意：** 如果安全组只开放特定端口(如80、8080)，需要相应调整ecosystem.config.js中的端口配置
+- **CORS配置：** server/app.js中需要添加生产环境域名到跨域白名单
 
 ===============================================================================
                               第一步：SSH连接服务器
@@ -657,6 +659,39 @@ echo "检查API服务器端口(应该是3001):"
 curl -I http://localhost:3001/api/health
 ```
 
+⚠️ **重要：安全组端口配置问题**
+如果遇到502 Bad Gateway错误，通常是因为安全组端口配置问题：
+
+**问题现象：**
+- Nginx错误日志显示：`connect() failed (111: Connection refused) while connecting to upstream`
+- 前端显示CORS错误或网络请求失败
+
+**解决方案：**
+```bash
+# 方案1：修改ecosystem.config.js适配安全组端口
+# 如果安全组只开放80和8080端口，需要修改AI服务器端口为8080
+# 编辑ecosystem.config.js:
+{
+  name: 'ai-server',
+  env: {
+    PORT: 8080  // 改为安全组开放的端口
+  }
+}
+
+# 方案2：修复CORS配置
+# 编辑server/app.js，添加生产环境域名到CORS白名单：
+const allowedOrigins = [
+  'http://localhost:3000', 
+  'http://localhost:8080', 
+  'http://103.77.22.42',      // 生产域名
+  'http://103.77.22.42:8080'  // 生产域名+端口
+];
+
+# 重启服务应用配置
+pm2 stop all
+pm2 start ecosystem.config.js
+```
+
 **2. Nginx启动失败：**
 ```bash
 # 检查配置语法
@@ -935,6 +970,13 @@ systemctl status nginx mongod
 - 查看日志：`pm2 logs`
 - 重启服务：`pm2 restart all`
 - 更新代码：`cd /data/quotation-app/Homepage && git pull && npm run build && pm2 restart all`
+
+**诊断命令：**
+- 检查端口占用：`netstat -tulpn | grep -E ":(80|3001|8080)"`
+- 测试API连接：`curl -s http://localhost:3001/api/vendors | head -c 100`
+- 测试前端服务：`curl -s http://localhost:8080/ | grep -o "<title>.*</title>"`
+- 检查CORS配置：`curl -H "Origin: http://103.77.22.42" -I http://localhost:3001/api/vendors`
+- 查看Nginx错误：`tail -20 /var/log/nginx/error.log`
 
 **系统特性：**
 ✅ 智能文件解析 (Excel/PDF/Word)

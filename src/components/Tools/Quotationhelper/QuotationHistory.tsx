@@ -147,50 +147,39 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
             const a = document.createElement('a');
             a.href = url;
             
-            // 从响应头获取文件名，如果没有则使用默认名称
+            // 从响应头获取文件名，优先使用服务器返回的安全文件名
             const contentDisposition = response.headers.get('Content-Disposition');
-            let fileName = `${record.productName}_原始报价单`;
+            let fileName = `quotation_${Date.now()}.xlsx`; // 默认使用安全的ASCII文件名
             
             if (contentDisposition) {
                 console.log('📋 Content-Disposition:', contentDisposition);
                 
-                // 支持新的 filename*=UTF-8'' 格式
-                const utf8Match = /filename\*=UTF-8''([^;]+)/.exec(contentDisposition);
-                if (utf8Match) {
-                    fileName = decodeURIComponent(utf8Match[1]);
-                } else {
-                    // 回退到旧的 filename= 格式
-                    const regularMatch = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
-                    if (regularMatch && regularMatch[1]) {
-                        fileName = decodeURIComponent(regularMatch[1].replace(/['"]/g, ''));
-                    }
+                // 直接解析 filename= 格式（服务器返回的是安全的ASCII文件名）
+                const regularMatch = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                if (regularMatch && regularMatch[1]) {
+                    fileName = regularMatch[1].replace(/['"]/g, '');
                 }
                 
                 console.log('📁 解析的文件名:', fileName);
             } else {
-                // 如果没有Content-Disposition头，尝试从记录中获取更好的文件名
-                if (record.originalFile?.originalName) {
-                    fileName = record.originalFile.originalName;
-                } else {
-                    // 根据文件扩展名生成合适的文件名
-                    const contentType = response.headers.get('Content-Type');
-                    let extension = '';
-                    
-                    if (contentType) {
-                        const typeMap: Record<string, string> = {
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-                            'application/vnd.ms-excel': 'xls',
-                            'application/pdf': 'pdf',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-                            'application/msword': 'doc',
-                            'text/csv': 'csv',
-                            'text/plain': 'txt'
-                        };
-                        extension = typeMap[contentType] || '';
-                    }
-                    
-                    fileName = extension ? `${record.productName}_原始报价单.${extension}` : `${record.productName}_原始报价单`;
+                // 如果没有Content-Disposition头，使用安全的默认文件名
+                const contentType = response.headers.get('Content-Type');
+                let extension = 'xlsx'; // 默认扩展名
+                
+                if (contentType) {
+                    const typeMap: Record<string, string> = {
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+                        'application/vnd.ms-excel': 'xls',
+                        'application/pdf': 'pdf',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+                        'application/msword': 'doc',
+                        'text/csv': 'csv',
+                        'text/plain': 'txt'
+                    };
+                    extension = typeMap[contentType] || 'xlsx';
                 }
+                
+                fileName = `quotation_${Date.now()}.${extension}`;
             }
             
             a.download = fileName;

@@ -1,9 +1,13 @@
-import { IconMoon, IconSun } from '@douyinfe/semi-icons';
-import { Button, Layout } from '@douyinfe/semi-ui';
+import { IconMoon, IconSun, IconUser, IconExit } from '@douyinfe/semi-icons';
+import { Button, Layout, Dropdown, Avatar, Space, Typography } from '@douyinfe/semi-ui';
 import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+
+const { Text } = Typography;
 
 const Header = () => {
     const [isDark, setIsDark] = useState(false);
+    const { currentUser, logout } = useAuth();
 
     // dark mode switch function
     const switchMode = () => {
@@ -16,6 +20,16 @@ const Header = () => {
             setIsDark(true);
         }
     };
+
+    // 用户菜单选项
+    const userMenuItems = [
+        {
+            node: 'item' as const,
+            name: '退出登录',
+            icon: <IconExit />,
+            onClick: logout
+        }
+    ];
 
     return (
         <Layout.Header style={{ 
@@ -59,14 +73,54 @@ const Header = () => {
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center' }}>
-                <Button
-                    theme="borderless"
-                    icon={isDark ? <IconSun size="large" /> : <IconMoon size="large" />}
-                    onClick={switchMode}
-                    style={{
-                        color: 'var(--semi-color-text-2)',
-                    }}
-                />
+                <Space>
+                    <Button
+                        theme="borderless"
+                        icon={isDark ? <IconSun size="large" /> : <IconMoon size="large" />}
+                        onClick={switchMode}
+                        style={{
+                            color: 'var(--semi-color-text-2)',
+                        }}
+                    />
+                    
+                    <Dropdown 
+                        menu={userMenuItems}
+                        trigger="click"
+                        position="bottomRight"
+                    >
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            cursor: 'pointer',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            transition: 'background-color 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--semi-color-fill-0)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        >
+                            <Avatar 
+                                size="small" 
+                                style={{ 
+                                    backgroundColor: 'var(--semi-color-primary)',
+                                    marginRight: '8px'
+                                }}
+                            >
+                                <IconUser />
+                            </Avatar>
+                            <Text style={{ 
+                                color: 'var(--semi-color-text-0)',
+                                fontSize: '14px'
+                            }}>
+                                {currentUser || '用户'}
+                            </Text>
+                        </div>
+                    </Dropdown>
+                </Space>
             </div>
         </Layout.Header>
     );

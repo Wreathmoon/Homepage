@@ -5,22 +5,30 @@ import './styles/global.css';
 import { Route, BrowserRouter as Router, Routes, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import QuotationHelper from './pages/QuotationHelper';
+import Login from './components/Login';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 const { Content } = Layout;
 
-// 简单的测试组件
-const TestComponent = () => {
+
+
+// 受保护的应用组件
+const ProtectedApp = () => {
+    const { isAuthenticated, login } = useAuth();
+
+    if (!isAuthenticated) {
+        return <Login onLogin={login} />;
+    }
+
     return (
-        <div style={{ 
-            padding: '20px', 
-            fontSize: '24px', 
-            textAlign: 'center',
-            background: '#f0f0f0',
-            minHeight: '100vh'
-        }}>
-            <h1>测试页面加载成功！</h1>
-            <p>如果你能看到这个页面，说明基本设置是正确的。</p>
-        </div>
+        <Layout style={{ height: '100vh' }}>
+            <Content>
+                <Routes>
+                    <Route path="/" element={<QuotationHelper />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </Content>
+        </Layout>
     );
 };
 
@@ -39,16 +47,11 @@ function App() {
     }, []);
 
     return (
-        <Router>
-            <Layout style={{ height: '100vh' }}>
-                <Content>
-                    <Routes>
-                        <Route path="/" element={<QuotationHelper />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                </Content>
-            </Layout>
-        </Router>
+        <AuthProvider>
+            <Router>
+                <ProtectedApp />
+            </Router>
+        </AuthProvider>
     );
 }
 

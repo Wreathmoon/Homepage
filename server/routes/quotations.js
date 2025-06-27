@@ -399,8 +399,25 @@ router.get('/download/:id', async (req, res) => {
         }
 
         let filePath = quotation.originalFile.path;
-        // 优先使用filename，因为originalName可能有编码问题
-        const fileName = quotation.originalFile.filename || quotation.originalFile.originalName;
+        
+        // 获取文件名，优先使用filename
+        let fileName = quotation.originalFile.filename || quotation.originalFile.originalName;
+        
+        // 如果文件名是乱码，尝试从latin1转换为utf8
+        if (fileName && fileName.includes('æ')) {
+            try {
+                const buffer = Buffer.from(fileName, 'latin1');
+                const decodedFileName = buffer.toString('utf8');
+                
+                // 验证解码是否成功（包含中文字符）
+                if (decodedFileName && decodedFileName.match(/[\u4e00-\u9fff]/)) {
+                    fileName = decodedFileName;
+                    console.log('🔧 修复文件名编码:', fileName);
+                }
+            } catch (error) {
+                console.log('⚠️ 文件名编码修复失败，使用原始名称');
+            }
+        }
 
         // 处理相对路径，确保指向正确的目录
         if (!path.isAbsolute(filePath)) {

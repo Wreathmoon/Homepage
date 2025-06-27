@@ -11,8 +11,8 @@ export interface User {
 // 有效用户列表
 export const VALID_USERS: User[] = [
     {
-        username: 'admin',
-        password: '123456',
+        username: 'CHINAUNICOM_ADMIN',
+        password: 'admin_password01!',
         displayName: '管理员',
         role: 'admin'
     },

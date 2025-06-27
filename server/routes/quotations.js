@@ -517,11 +517,20 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
             });
         }
 
-        // 设置响应头 - 修复中文文件名编码问题
-        const encodedFileName = encodeURIComponent(fileName);
-        // 只使用编码后的文件名，避免HTTP头中的非ASCII字符
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
+        // 设置响应头 - 使用纯ASCII文件名避免编码问题
+        console.log('📋 附件原始文件名:', JSON.stringify(fileName));
+        
+        // 使用纯ASCII文件名
+        const timestamp = Date.now();
+        const fileExt = path.extname(fileName) || '.file';
+        const safeFileName = `attachment_${timestamp}${fileExt}`;
+        
+        console.log('📋 附件安全文件名:', safeFileName);
+        
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
         res.setHeader('Content-Type', attachment.mimetype || 'application/octet-stream');
+        
+        console.log('✅ 附件HTTP头设置成功');
 
         // 发送文件
         res.sendFile(path.resolve(filePath));

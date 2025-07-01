@@ -6,8 +6,6 @@ const path = require('path');
 dotenv.config({ path: path.join(__dirname, '../env.example') });
 
 // 导入模型
-const Vendor = require('../models/vendor');
-const Quotation = require('../models/quotation');
 const User = require('../models/user');
 
 // 用户数据
@@ -20,8 +18,6 @@ const usersData = [
         createdBy: 'system'
     },
 ];
-
-// 供应商数据
 
 
 async function seedDatabase() {
@@ -36,17 +32,10 @@ async function seedDatabase() {
         await Vendor.deleteMany({});
         await Quotation.deleteMany({});
 
-        // 插入用户数据
+        // 插入用户数
         console.log('📝 插入用户数据...');
         const users = await User.insertMany(usersData);
         console.log(`✅ 成功插入 ${users.length} 个用户`);
-
-        // 插入供应商数据
-        console.log('📝 插入供应商数据...');
-        const vendors = await Vendor.insertMany(vendorsData);
-        console.log(`✅ 成功插入 ${vendors.length} 个供应商`);
-
-        // 临时注释掉报价数据插入
         // console.log('📝 插入报价数据...');
         // const quotations = await Quotation.insertMany(quotationsData);
         // console.log(`✅ 成功插入 ${quotations.length} 条报价记录`);
@@ -54,10 +43,6 @@ async function seedDatabase() {
         console.log('\n🎉 数据初始化完成！');
         console.log('📊 数据统计:');
         console.log(`   - 用户: ${users.length} 个`);
-        console.log(`   - 供应商: ${vendors.length} 个`);
-        // console.log(`   - 报价记录: ${quotations.length} 条`);
-        console.log(`   - 数据库: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/quotation_system'}`);
-
     } catch (error) {
         console.error('❌ 数据初始化失败:', error);
         process.exit(1);

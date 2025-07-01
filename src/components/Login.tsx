@@ -34,24 +34,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setLoading(true);
         
         try {
-            const response = await fetch('/api/auth/register', {
+            const { request } = await import('../utils/request');
+            const result = await request('/auth/register', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(values)
+                data: values
             });
-
-            const result = await response.json();
             
-            if (result.success) {
+            if (result.data.success) {
                 Toast.success('注册成功！请使用新账号登录');
                 setIsRegisterMode(false);
             } else {
-                Toast.error(result.message || '注册失败，请重试');
+                Toast.error(result.data.message || '注册失败，请重试');
             }
-        } catch (error) {
-            Toast.error('注册失败，请重试');
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.message || '注册失败，请重试';
+            Toast.error(errorMessage);
         } finally {
             setLoading(false);
         }

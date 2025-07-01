@@ -40,6 +40,10 @@ const vendorSchema = new mongoose.Schema({
             trim: true,
             lowercase: true
         },
+        wechat: {
+            type: String,
+            trim: true
+        },
         position: {
             type: String,
             trim: true

@@ -24,6 +24,7 @@ export interface ContactInfo {
     name: string;
     phone: string;
     email: string;
+    wechat?: string;
     position?: string;
     remarks?: string;
     isPrimary?: boolean;

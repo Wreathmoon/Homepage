@@ -1,7 +1,8 @@
-import { IconMoon, IconSun, IconUser, IconExit, IconUserGroup } from '@douyinfe/semi-icons';
+import { IconMoon, IconSun, IconUser, IconExit, IconUserGroup, IconLock } from '@douyinfe/semi-icons';
 import { Button, Layout, Dropdown, Avatar, Space, Typography } from '@douyinfe/semi-ui';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import ChangePassword from './ChangePassword';
 
 const { Text } = Typography;
 
@@ -11,6 +12,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onUserManagement }) => {
     const [isDark, setIsDark] = useState(false);
+    const [showChangePassword, setShowChangePassword] = useState(false);
     const { currentUser, logout, isAdmin } = useAuth();
 
     // dark mode switch function
@@ -33,6 +35,12 @@ const Header: React.FC<HeaderProps> = ({ onUserManagement }) => {
             icon: <IconUserGroup />,
             onClick: onUserManagement
         }] : []),
+        {
+            node: 'item' as const,
+            name: '修改密码',
+            icon: <IconLock />,
+            onClick: () => setShowChangePassword(true)
+        },
         {
             node: 'item' as const,
             name: '退出登录',
@@ -132,6 +140,15 @@ const Header: React.FC<HeaderProps> = ({ onUserManagement }) => {
                     </Dropdown>
                 </Space>
             </div>
+            
+            <ChangePassword
+                visible={showChangePassword}
+                onCancel={() => setShowChangePassword(false)}
+                onSuccess={() => {
+                    setShowChangePassword(false);
+                    // 密码修改成功后可以添加额外的逻辑，比如重新登录
+                }}
+            />
         </Layout.Header>
     );
 };

@@ -54,6 +54,7 @@ interface ContactFormData {
     name: string;
     phone: string;
     email: string;
+    wechat?: string;
     position?: string;
     remarks?: string;
     isPrimary?: boolean;
@@ -347,6 +348,12 @@ const VendorAdd: React.FC = () => {
             title: '邮箱',
             dataIndex: 'email',
             width: 180
+        },
+        {
+            title: '联系微信',
+            dataIndex: 'wechat',
+            width: 120,
+            render: (text) => text || '-'
         },
         {
             title: '主要联系人',
@@ -741,7 +748,7 @@ const VendorAdd: React.FC = () => {
                     </div>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '20px' }}>
-                        <Form.Input
+                    <Form.Input
                             field="account"
                             label="登录账号"
                             placeholder="请输入登录账号"
@@ -790,7 +797,7 @@ const VendorAdd: React.FC = () => {
                     </div>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '20px' }}>
-                        <Form.Input
+                    <Form.Input
                             field="entryPerson"
                             label="录入人"
                             placeholder="当前登录用户"
@@ -821,7 +828,7 @@ const VendorAdd: React.FC = () => {
                     {/* 提交按钮区域 */}
                     <div style={{ textAlign: 'center', marginTop: '32px' }}>
                         <Space spacing={24}>
-                            <Button
+                            <Button 
                                 size="large"
                                 onClick={handleReset}
                             >
@@ -830,7 +837,7 @@ const VendorAdd: React.FC = () => {
                             <Button
                                 type="primary"
                                 size="large"
-                                htmlType="submit"
+                                htmlType="submit" 
                                 loading={loading}
                             >
                                 保存供应商信息
@@ -889,6 +896,12 @@ const VendorAdd: React.FC = () => {
                             { required: true, message: '请填写邮箱地址' },
                             { type: 'email', message: '请输入有效的邮箱地址' }
                         ]}
+                    />
+                    
+                    <Form.Input
+                        field="wechat"
+                        label="联系微信"
+                        placeholder="请输入微信号（可选）"
                     />
                     
                     <Form.Switch
@@ -1066,7 +1079,7 @@ const VendorAdd: React.FC = () => {
                 <div style={{ marginBottom: '16px' }}>
                     <Text type="secondary">
                         请输入自定义的代理资质名称，添加后可在代理资质中选择使用。
-                    </Text>
+                                </Text>
                 </div>
                 <Input
                     placeholder="请输入代理资质名称，如：金牌代理、认证合作伙伴等"
@@ -1113,8 +1126,8 @@ const VendorAdd: React.FC = () => {
                 <div style={{ marginBottom: '16px' }}>
                     <Text type="secondary">
                         请输入自定义的地区名称，添加后可在所在地区中选择使用。
-                    </Text>
-                </div>
+                                </Text>
+                            </div>
                 <Input
                     placeholder="请输入地区名称，如：粤港澳大湾区、长三角等"
                     value={currentCustomRegion}
@@ -1135,7 +1148,7 @@ const VendorAdd: React.FC = () => {
                             </Space>
                         </div>
                     </div>
-                )}
+            )}
             </Modal>
         </div>
     );

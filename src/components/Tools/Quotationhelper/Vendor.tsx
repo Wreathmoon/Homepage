@@ -15,7 +15,7 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment } from '@douyinfe/semi-icons';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
@@ -54,6 +54,9 @@ const Vendor: React.FC = () => {
     const [contactsVisible, setContactsVisible] = useState(false);
     const [currentContacts, setCurrentContacts] = useState<any[]>([]);
     const [currentVendorForContacts, setCurrentVendorForContacts] = useState('');
+    const [contactInfoVisible, setContactInfoVisible] = useState(false);
+    const [currentContactInfo, setCurrentContactInfo] = useState<any>(null);
+    const [currentVendorForContactInfo, setCurrentVendorForContactInfo] = useState('');
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [vendorToDelete, setVendorToDelete] = useState<VendorType | null>(null);
 
@@ -69,6 +72,21 @@ const Vendor: React.FC = () => {
         setCurrentContacts(vendor.contacts || []);
         setCurrentVendorForContacts(vendor.name);
         setContactsVisible(true);
+    };
+
+    // 显示联系方式信息
+    const handleShowContactInfo = (vendor: VendorType) => {
+        // 获取主要联系人信息
+        const primaryContact = vendor.contacts?.find(c => c.isPrimary) || {
+            name: vendor.contact,
+            phone: vendor.phone,
+            email: vendor.email,
+            wechat: undefined
+        };
+        
+        setCurrentContactInfo(primaryContact);
+        setCurrentVendorForContactInfo(vendor.name);
+        setContactInfoVisible(true);
     };
 
     // 删除供应商
@@ -232,15 +250,28 @@ const Vendor: React.FC = () => {
             sorter: true,
             width: 120
         },
-        { 
-            title: '主要联系人', 
-            dataIndex: 'contact',
+        {
+            title: '联系方式',
+            render: (record: VendorType) => {
+                // 获取主要联系人信息
+                const primaryContact = record.contacts?.find(c => c.isPrimary) || {
+                    name: record.contact,
+                    phone: record.phone,
+                    email: record.email
+                };
+                
+                return (
+                    <Button
+                        theme="borderless"
+                        type="primary"
+                        size="small"
+                        onClick={() => handleShowContactInfo(record)}
+                    >
+                        {primaryContact.name}
+                    </Button>
+                );
+            },
             width: 120
-        },
-        { 
-            title: '邮箱', 
-            dataIndex: 'email',
-            width: 180
         },
         {
             title: '所有联系人',
@@ -658,6 +689,12 @@ const Vendor: React.FC = () => {
                                     width: 180
                                 },
                                 {
+                                    title: '联系微信',
+                                    dataIndex: 'wechat',
+                                    width: 120,
+                                    render: (text) => text || '-'
+                                },
+                                {
                                     title: '主要联系人',
                                     dataIndex: 'isPrimary',
                                     width: 100,
@@ -690,6 +727,77 @@ const Vendor: React.FC = () => {
                             color: 'var(--semi-color-text-2)' 
                         }}>
                             该供应商暂无联系人信息
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* 联系方式信息模态框 */}
+            <Modal
+                visible={contactInfoVisible}
+                title={`联系方式 - ${currentVendorForContactInfo}`}
+                onCancel={() => setContactInfoVisible(false)}
+                footer={null}
+                width={450}
+            >
+                <div style={{ padding: '16px' }}>
+                    {currentContactInfo ? (
+                        <div style={{ lineHeight: '1.8' }}>
+                            <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                                <Typography.Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                                    {currentContactInfo.name}
+                                </Typography.Text>
+                                {currentContactInfo.position && (
+                                    <div style={{ color: '#666', fontSize: '14px', marginTop: '4px' }}>
+                                        {currentContactInfo.position}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <IconPhone style={{ color: '#1890ff', fontSize: '16px' }} />
+                                    <Typography.Text copyable={{ content: currentContactInfo.phone }}>
+                                        {currentContactInfo.phone}
+                                    </Typography.Text>
+                                </div>
+                                
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <IconMail style={{ color: '#1890ff', fontSize: '16px' }} />
+                                    <Typography.Text copyable={{ content: currentContactInfo.email }}>
+                                        {currentContactInfo.email}
+                                    </Typography.Text>
+                                </div>
+                                
+                                {currentContactInfo.wechat && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <IconComment style={{ color: '#1890ff', fontSize: '16px' }} />
+                                        <Typography.Text copyable={{ content: currentContactInfo.wechat }}>
+                                            {currentContactInfo.wechat}
+                                        </Typography.Text>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {currentContactInfo.remarks && (
+                                <div style={{ 
+                                    marginTop: '16px', 
+                                    padding: '12px', 
+                                    backgroundColor: 'var(--semi-color-fill-0)', 
+                                    borderRadius: '6px' 
+                                }}>
+                                    <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                                        备注：
+                                    </Typography.Text>
+                                    <div style={{ marginTop: '4px', fontSize: '14px' }}>
+                                        {currentContactInfo.remarks}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div style={{ textAlign: 'center', color: 'var(--semi-color-text-2)' }}>
+                            暂无联系方式信息
                         </div>
                     )}
                 </div>

@@ -55,32 +55,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const login = async (username: string, password: string): Promise<boolean> => {
         try {
             // 首先尝试API登录
-            const response = await fetch('/api/auth/login', {
+            const { request } = await import('../utils/request');
+            const result: any = await request('/auth/login', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password })
+                data: { username, password }
             });
 
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success) {
-                    const userData = result.data;
-                    setIsAuthenticated(true);
-                    setCurrentUser(userData.displayName);
-                    setCurrentUserInfo(userData);
-                    setIsAdmin(userData.role === 'admin');
-                    
-                    // 保存到本地存储
-                    localStorage.setItem(AUTH_CONFIG.authStorageKey, 'true');
-                    localStorage.setItem(AUTH_CONFIG.userStorageKey, userData.displayName);
-                    localStorage.setItem(AUTH_CONFIG.timestampStorageKey, Date.now().toString());
-                    localStorage.setItem('user_role', userData.role);
-                    localStorage.setItem('user_username', userData.username);
-                    
-                    return true;
-                }
+            if (result && result.success) {
+                const userData = result.data;
+                setIsAuthenticated(true);
+                setCurrentUser(userData.displayName);
+                setCurrentUserInfo(userData);
+                setIsAdmin(userData.role === 'admin');
+                
+                // 保存到本地存储
+                localStorage.setItem(AUTH_CONFIG.authStorageKey, 'true');
+                localStorage.setItem(AUTH_CONFIG.userStorageKey, userData.displayName);
+                localStorage.setItem(AUTH_CONFIG.timestampStorageKey, Date.now().toString());
+                localStorage.setItem('user_role', userData.role);
+                localStorage.setItem('user_username', userData.username);
+                
+                return true;
             }
         } catch (error) {
             console.warn('API登录失败，尝试本地验证:', error);

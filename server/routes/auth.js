@@ -277,4 +277,58 @@ router.get('/registration-codes', requireAdmin, async (req, res) => {
     }
 });
 
+// 修改密码
+router.post('/change-password', async (req, res) => {
+    try {
+        const { username, oldPassword, newPassword } = req.body;
+
+        if (!username || !oldPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: '用户名、旧密码和新密码都是必填的'
+            });
+        }
+
+        // 验证新密码强度
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: '新密码至少需要6个字符'
+            });
+        }
+
+        // 查找用户并验证旧密码
+        const user = await User.findOne({ 
+            username: username, 
+            password: oldPassword, // 注意：实际生产环境应该使用加密密码比较
+            isActive: true 
+        });
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: '旧密码错误'
+            });
+        }
+
+        // 更新密码
+        user.password = newPassword; // 注意：实际生产环境应该加密密码
+        user.updatedAt = new Date();
+        await user.save();
+
+        res.json({
+            success: true,
+            message: '密码修改成功'
+        });
+
+    } catch (error) {
+        console.error('修改密码失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '修改密码失败',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router; 

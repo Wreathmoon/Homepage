@@ -67,4 +67,21 @@ export const getRegistrationCodes = async (): Promise<RegistrationCode[]> => {
         }
     });
     return response.data;
+};
+
+// 修改密码
+export const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
+    const username = localStorage.getItem('user_username');
+    if (!username) {
+        throw new Error('用户未登录');
+    }
+
+    await request('/auth/change-password', {
+        method: 'POST',
+        data: {
+            username,
+            oldPassword,
+            newPassword
+        }
+    });
 }; 

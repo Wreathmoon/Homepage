@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Form, Row, Col, Button, Typography, Toast, Select, Switch, Space, DatePicker } from '@douyinfe/semi-ui';
-import { TextArea, Input } from '@douyinfe/semi-ui';
+import { TextArea } from '@douyinfe/semi-ui';
 import { IconCopy } from '@douyinfe/semi-icons';
+import { getVendorList } from '../../../services/vendor';
 
 const { Title, Text } = Typography;
 
@@ -23,9 +24,52 @@ const currencyOptions = [
   'CNY', 'USD', 'EUR', 'GBP', 'JPY', 'HKD', 'AUD', 'CAD', 'SGD', 'CHF', 'RUB', 'INR', 'KRW', 'THB', 'MYR', 'TWD', 'VND', 'IDR', 'BRL', 'ZAR', 'MXN', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'HUF', 'CZK', 'TRY', 'SAR', 'AED', 'ILS'
 ].map(cur => ({ label: cur, value: cur }));
 
+// 简易防抖函数
+function debounce<T extends (...args: any[]) => any>(func: T, wait = 300) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      func(...args);
+    }, wait);
+  };
+}
+
 const Quotation: React.FC = () => {
   const [mailContent, setMailContent] = useState('');
   const mailRef = useRef<HTMLTextAreaElement>(null);
+
+  // 供应商下拉选项
+  const [vendorOptions, setVendorOptions] = useState<{ label: string; value: string }[]>([]);
+
+  // 加载默认供应商列表
+  const loadInitialVendors = useCallback(async () => {
+    try {
+      const res = await getVendorList({ page: 1, pageSize: 20 });
+      const opts = (res.data || []).map((v: any) => ({ label: v.name, value: v.name }));
+      setVendorOptions(opts);
+    } catch (e) {
+      console.error('获取供应商失败', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInitialVendors();
+  }, [loadInitialVendors]);
+
+  // 远程搜索供应商
+  const fetchVendors = useCallback(async (keyword: string) => {
+    try {
+      const res = await getVendorList({ keyword, page: 1, pageSize: 20 });
+      const opts = (res.data || []).map(v => ({ label: v.name, value: v.name }));
+      setVendorOptions(opts);
+    } catch (e) {
+      console.error('获取供应商失败', e);
+    }
+  }, []);
+
+  // 防抖搜索
+  const debouncedFetch = useCallback(debounce(fetchVendors, 300), [fetchVendors]);
 
   const handleGenerate = (values: QuotationFormValues) => {
     const {
@@ -96,11 +140,23 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
       >
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Input
+            <Form.Select
               field="supplier"
               label="供应商名字（必填）"
-              placeholder="请输入供应商名字"
-              rules={[{ required: true, message: '请填写供应商名字' }]}
+              placeholder="请选择或输入供应商名字"
+              filter
+              searchPosition="trigger"
+              style={{ width: '100%' }}
+              optionList={vendorOptions}
+              dropdownClassName="vendor-select-dropdown"
+              onSearch={(value) => {
+                if (value) {
+                  debouncedFetch(value);
+                } else {
+                  loadInitialVendors();
+                }
+              }}
+              rules={[{ required: true, message: '请选择或输入供应商名字' }]}
             />
           </Col>
           <Col span={12}>

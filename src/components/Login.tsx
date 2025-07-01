@@ -35,16 +35,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         
         try {
             const { request } = await import('../utils/request');
-            const result = await request('/auth/register', {
+            const result: any = await request('/auth/register', {
                 method: 'POST',
                 data: values
             });
             
-            if (result.data.success) {
+            if (result.success) {
                 Toast.success('注册成功！请使用新账号登录');
                 setIsRegisterMode(false);
             } else {
-                Toast.error(result.data.message || '注册失败，请重试');
+                Toast.error(result.message || '注册失败，请重试');
             }
         } catch (error: any) {
             const errorMessage = error.response?.data?.message || '注册失败，请重试';

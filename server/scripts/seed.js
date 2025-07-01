@@ -29,8 +29,6 @@ async function seedDatabase() {
         // 清空现有数据 (谨慎操作)
         console.log('🧹 清理现有数据...');
         await User.deleteMany({});
-        await Vendor.deleteMany({});
-        await Quotation.deleteMany({});
 
         // 插入用户数
         console.log('📝 插入用户数据...');

@@ -95,11 +95,39 @@ const UserManagement: React.FC = () => {
 
     // 复制注册码
     const handleCopyCode = (code: string) => {
-        navigator.clipboard.writeText(code).then(() => {
-            Toast.success('注册码已复制到剪贴板');
-        }).catch(() => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(() => {
+                Toast.success('注册码已复制到剪贴板');
+            }).catch(() => {
+                fallbackCopyTextToClipboard(code);
+            });
+        } else {
+            fallbackCopyTextToClipboard(code);
+        }
+    };
+
+    // 回退复制方法
+    const fallbackCopyTextToClipboard = (text: string) => {
+        try {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed'; // 防止滚动跳动
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            if (successful) {
+                Toast.success('注册码已复制到剪贴板');
+            } else {
+                Toast.error('复制失败，请手动复制');
+            }
+        } catch (err) {
             Toast.error('复制失败，请手动复制');
-        });
+        }
     };
 
     const userColumns: ColumnProps<User>[] = [

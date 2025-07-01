@@ -16,12 +16,6 @@ export const VALID_USERS: User[] = [
         displayName: '管理员',
         role: 'admin'
     },
-    {
-        username: 'user',
-        password: '123456',
-        displayName: '普通用户',
-        role: 'user'
-    },
     // 您可以在这里添加更多用户
     // {
     //     username: 'yourname',

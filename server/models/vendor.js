@@ -14,7 +14,8 @@ const vendorSchema = new mongoose.Schema({
     },
     category: [{
         type: String,
-        enum: ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他']
+        trim: true
+        // 移除enum限制，允许自定义产品类别
     }],
     region: {
         type: String,

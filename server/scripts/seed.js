@@ -58,5 +58,3 @@ async function seedDatabase() {
 if (require.main === module) {
     seedDatabase();
 }
-
-module.exports = { seedDatabase, vendorsData, quotationsData }; 

@@ -19,7 +19,8 @@ const vendorSchema = new mongoose.Schema({
     }],
     region: {
         type: String,
-        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
+        trim: true
+        // 移除enum限制，允许自定义地区
     },
     // 多个联系人信息
     contacts: [{
@@ -84,8 +85,9 @@ const vendorSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['HARDWARE', 'SOFTWARE', 'SERVICE', 'DATACENTER'],
-        required: true
+        required: true,
+        trim: true
+        // 移除enum限制，允许自定义供应商类型
     },
     website: {
         type: String,
@@ -95,6 +97,13 @@ const vendorSchema = new mongoose.Schema({
         type: String,
         trim: true
     }],
+    // 新的代理资质字段
+    agentType: {
+        type: String,
+        trim: true
+        // 允许自定义代理资质
+    },
+    // 向后兼容字段
     isGeneralAgent: {
         type: Boolean,
         default: false
@@ -110,6 +119,15 @@ const vendorSchema = new mongoose.Schema({
     password: {
         type: String,
         trim: true
+    },
+    // 录入人和录入时间信息
+    entryPerson: {
+        type: String,
+        trim: true
+    },
+    entryTime: {
+        type: Date,
+        default: Date.now
     }
 }, {
     timestamps: true // 自动添加 createdAt 和 updatedAt

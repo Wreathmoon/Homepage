@@ -53,6 +53,9 @@ export interface Vendor {
     isAgent: boolean;
     account?: string;
     password?: string;
+    // 录入人和录入时间信息
+    entryPerson?: string;
+    entryTime?: string;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -62,10 +65,12 @@ export interface VendorQueryParams {
     category?: ProductCategory;
     region?: VendorRegion;
     status?: 'active' | 'inactive';
-    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER';
+    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
     keyword?: string;
     productCategory?: string;
     productKeyword?: string;
+    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OTHER';
+    // 保持向后兼容
     isGeneralAgent?: boolean;
     isAgent?: boolean;
     page?: number;

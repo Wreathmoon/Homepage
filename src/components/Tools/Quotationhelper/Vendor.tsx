@@ -27,8 +27,8 @@ const { Title } = Typography;
 // 定义筛选条件接口
 interface FilterValues {
     region?: VendorRegion;
-    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER';
-    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'DIRECT';
+    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
+    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OTHER';
     productCategory?: string;
     productKeyword?: string;
     keyword?: string;
@@ -84,7 +84,7 @@ const Vendor: React.FC = () => {
                     isGeneralAgent = false;
                     isAgent = true;
                     break;
-                case 'DIRECT':
+                case 'OTHER':
                     isGeneralAgent = false;
                     isAgent = false;
                     break;
@@ -167,8 +167,7 @@ const Vendor: React.FC = () => {
             productCategory: values.productCategory,
             productKeyword: values.productKeyword,
             keyword: values.keyword,
-            isGeneralAgent: values.agentType === 'GENERAL_AGENT',
-            isAgent: values.agentType === 'AGENT',
+            agentType: values.agentType,
             page: 1,
             pageSize: pagination.pageSize
         };
@@ -192,11 +191,19 @@ const Vendor: React.FC = () => {
         {
             title: '代理类型',
             render: (record: VendorType) => {
+                // 优先显示新的agentType字段
+                if ((record as any).agentType) {
+                    const agentType = (record as any).agentType;
+                    if (agentType === 'GENERAL_AGENT') return '总代理';
+                    if (agentType === 'AGENT') return '经销商';
+                    return agentType; // 显示自定义代理类型
+                }
+                // 回退到旧的布尔字段
                 if (record.isGeneralAgent) return '总代理';
                 if (record.isAgent) return '经销商';
-                return '其他（安装、售后等）';
+                return '其他';
             },
-            width: 100
+            width: 120
         },
         { 
             title: '地区', 
@@ -282,6 +289,40 @@ const Vendor: React.FC = () => {
             width: 200
         },
         {
+            title: '备注/录入人',
+            render: (record: VendorType) => {
+                const entryPerson = (record as any).entryPerson;
+                const remarks = record.remarks;
+                
+                if (!entryPerson && !remarks) {
+                    return <span style={{ color: '#999' }}>-</span>;
+                }
+                
+                return (
+                    <div style={{ fontSize: '12px' }}>
+                        {entryPerson && (
+                            <div style={{ color: '#1890ff', marginBottom: '2px' }}>
+                                录入人：{entryPerson}
+                            </div>
+                        )}
+                        {remarks && (
+                            <div style={{ color: '#666' }}>
+                                {remarks.length > 20 ? 
+                                    <Tooltip content={remarks}>
+                                        <span style={{ cursor: 'pointer' }}>
+                                            {remarks.substring(0, 20)}...
+                                        </span>
+                                    </Tooltip> : 
+                                    remarks
+                                }
+                            </div>
+                        )}
+                    </div>
+                );
+            },
+            width: 150
+        },
+        {
             title: '操作',
             fixed: 'right' as const,
             width: 180,
@@ -306,7 +347,22 @@ const Vendor: React.FC = () => {
                         type="secondary"
                         size="small"
                         onClick={() => {
-                            setCurrentRemarks(record.remarks || '暂无备注信息');
+                            // 组合备注和录入人信息
+                            const entryPerson = (record as any).entryPerson;
+                            const remarks = record.remarks || '';
+                            
+                            let combinedInfo = '';
+                            if (entryPerson) {
+                                combinedInfo += `录入人：${entryPerson}\n`;
+                            }
+                            if (remarks) {
+                                combinedInfo += `备注：${remarks}`;
+                            }
+                            if (!combinedInfo) {
+                                combinedInfo = '暂无备注信息';
+                            }
+                            
+                            setCurrentRemarks(combinedInfo);
                             setRemarksVisible(true);
                         }}
                     >
@@ -341,7 +397,8 @@ const Vendor: React.FC = () => {
                                 { label: '硬件供应商', value: 'HARDWARE' },
                                 { label: '软件供应商', value: 'SOFTWARE' },
                                 { label: '服务供应商', value: 'SERVICE' },
-                                { label: '数据中心', value: 'DATACENTER' }
+                                { label: '数据中心', value: 'DATACENTER' },
+                                { label: '其他', value: 'OTHER' }
                             ]}
                         />
                     </Col>
@@ -375,7 +432,7 @@ const Vendor: React.FC = () => {
                             optionList={[
                                 { label: '总代理', value: 'GENERAL_AGENT' },
                                 { label: '经销商', value: 'AGENT' },
-                                { label: '其他（安装、售后等）', value: 'DIRECT' }
+                                { label: '其他', value: 'OTHER' }
                             ]}
                         />
                     </Col>
@@ -510,7 +567,7 @@ const Vendor: React.FC = () => {
             {/* 备注模态框 */}
             <Modal
                 visible={remarksVisible}
-                title="备注信息"
+                title="备注信息 & 录入人"
                 onCancel={() => setRemarksVisible(false)}
                 footer={null}
                 width={500}

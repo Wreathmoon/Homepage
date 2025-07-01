@@ -21,35 +21,132 @@ router.get('/', async (req, res) => {
         // 构建查询条件
         let query = {};
 
-        if (region) query.region = region;
-        if (type) query.type = type;
+        // 地区筛选（支持自定义）
+        if (region) {
+            if (region === 'OTHER' || region === '其他') {
+                const predefinedRegions = ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'];
+                query.region = { $nin: predefinedRegions };
+            } else {
+                query.region = region;
+            }
+        }
+
+        // 供应商类型筛选（支持自定义）
+        if (type) {
+            if (type === 'OTHER' || type === '其他') {
+                const predefinedTypes = ['HARDWARE', 'SOFTWARE', 'SERVICE', 'DATACENTER'];
+                query.type = { $nin: predefinedTypes };
+            } else {
+                query.type = type;
+            }
+        }
+
         if (status) query.status = status;
 
-        // 代理类型筛选
-        if (isGeneralAgent !== undefined) {
-            query.isGeneralAgent = isGeneralAgent === 'true';
-        }
-        if (isAgent !== undefined) {
-            query.isAgent = isAgent === 'true';
+        // 构建复合查询条件
+        const andConditions = [];
+
+        // 代理类型筛选（支持新的agentType字段和旧的布尔字段）
+        if (req.query.agentType) {
+            const agentType = req.query.agentType;
+            if (agentType === 'OTHER' || agentType === '其他') {
+                // 查找自定义代理类型（不在预设列表中的）
+                const predefinedAgentTypes = ['GENERAL_AGENT', 'AGENT'];
+                andConditions.push({
+                    $or: [
+                        // 新字段中的自定义类型
+                        { 
+                            agentType: { 
+                                $exists: true, 
+                                $nin: predefinedAgentTypes 
+                            } 
+                        },
+                        // 旧布尔字段都为false（表示其他类型）
+                        { 
+                            $and: [
+                                { $or: [{ agentType: { $exists: false } }, { agentType: null }] },
+                                { isGeneralAgent: false },
+                                { isAgent: false }
+                            ]
+                        }
+                    ]
+                });
+            } else if (agentType === 'GENERAL_AGENT') {
+                andConditions.push({
+                    $or: [
+                        { agentType: 'GENERAL_AGENT' },
+                        { isGeneralAgent: true }
+                    ]
+                });
+            } else if (agentType === 'AGENT') {
+                andConditions.push({
+                    $or: [
+                        { agentType: 'AGENT' },
+                        { isAgent: true }
+                    ]
+                });
+            }
+        } else {
+            // 旧的布尔字段筛选（保持向后兼容）
+            if (isGeneralAgent !== undefined) {
+                query.isGeneralAgent = isGeneralAgent === 'true';
+            }
+            if (isAgent !== undefined) {
+                query.isAgent = isAgent === 'true';
+            }
         }
 
         // 产品类别筛选
         if (productCategory) {
-            query.category = { $in: [productCategory] };
+            if (productCategory === '其他') {
+                // 当筛选"其他"类别时，包括：
+                // 1. 明确标记为"其他"的供应商
+                // 2. 使用自定义产品类别的供应商（不在预设类别中）
+                const predefinedCategories = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他'];
+                
+                andConditions.push({
+                    $or: [
+                        // 明确包含"其他"的供应商
+                        { category: { $in: ['其他'] } },
+                        // 包含自定义类别（不在预设列表中）的供应商
+                        { 
+                            category: { 
+                                $elemMatch: { 
+                                    $nin: predefinedCategories 
+                                } 
+                            } 
+                        }
+                    ]
+                });
+            } else {
+                // 其他预设类别的正常筛选
+                andConditions.push({
+                    category: { $in: [productCategory] }
+                });
+            }
         }
 
         // 关键字搜索 (名称、品牌、联系人)
         if (keyword) {
-            query.$or = [
-                { name: { $regex: keyword, $options: 'i' } },
-                { brands: { $elemMatch: { $regex: keyword, $options: 'i' } } },
-                { contact: { $regex: keyword, $options: 'i' } }
-            ];
+            andConditions.push({
+                $or: [
+                    { name: { $regex: keyword, $options: 'i' } },
+                    { brands: { $elemMatch: { $regex: keyword, $options: 'i' } } },
+                    { contact: { $regex: keyword, $options: 'i' } }
+                ]
+            });
         }
 
         // 产品关键字搜索
         if (productKeyword) {
-            query.brands = { $elemMatch: { $regex: productKeyword, $options: 'i' } };
+            andConditions.push({
+                brands: { $elemMatch: { $regex: productKeyword, $options: 'i' } }
+            });
+        }
+
+        // 如果有复合条件，使用$and
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
         }
 
         // 分页参数

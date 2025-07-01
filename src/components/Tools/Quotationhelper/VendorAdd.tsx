@@ -22,6 +22,7 @@ import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory';
 import { API_CONFIG } from '../../../utils/config';
 import type { ContactInfo } from '../../../services/vendor';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 
@@ -64,14 +65,14 @@ const VENDOR_TYPES = [
     { label: '软件供应商', value: 'SOFTWARE' },
     { label: '服务供应商', value: 'SERVICE' },
     { label: '数据中心', value: 'DATACENTER' },
-    { label: '其他', value: 'OTHER' }
+    { label: '添加其他', value: 'ADD_OTHER_TYPE' }
 ];
 
 // 代理资质选项
 const AGENT_TYPE_OPTIONS = [
     { label: '总代理', value: 'GENERAL_AGENT' },
     { label: '经销商', value: 'AGENT' },
-    { label: '其他', value: 'OTHER' }
+    { label: '添加其他', value: 'ADD_OTHER_AGENT' }
 ];
 
 // 状态选项
@@ -81,6 +82,7 @@ const STATUS_OPTIONS = [
 ];
 
 const VendorAdd: React.FC = () => {
+    const { currentUser } = useAuth(); // 获取当前登录用户
     const [loading, setLoading] = useState(false);
     const [savedVendors, setSavedVendors] = useState<any[]>([]);
     const [passwordVisible, setPasswordVisible] = useState(false);
@@ -96,6 +98,21 @@ const VendorAdd: React.FC = () => {
     const [customCategoryModalVisible, setCustomCategoryModalVisible] = useState(false);
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [currentCustomCategory, setCurrentCustomCategory] = useState('');
+    
+    // 自定义供应商类型相关状态
+    const [customTypeModalVisible, setCustomTypeModalVisible] = useState(false);
+    const [customTypes, setCustomTypes] = useState<string[]>([]);
+    const [currentCustomType, setCurrentCustomType] = useState('');
+    
+    // 自定义代理资质相关状态
+    const [customAgentModalVisible, setCustomAgentModalVisible] = useState(false);
+    const [customAgentTypes, setCustomAgentTypes] = useState<string[]>([]);
+    const [currentCustomAgentType, setCurrentCustomAgentType] = useState('');
+    
+    // 自定义地区相关状态
+    const [customRegionModalVisible, setCustomRegionModalVisible] = useState(false);
+    const [customRegions, setCustomRegions] = useState<string[]>([]);
+    const [currentCustomRegion, setCurrentCustomRegion] = useState('');
     
     const formRef = useRef<FormApi<VendorFormData>>();
     const contactFormRef = useRef<FormApi<ContactFormData>>();
@@ -115,6 +132,24 @@ const VendorAdd: React.FC = () => {
             cat === '其他' ? '添加其他' : cat
         );
         return [...baseCategories, ...customCategories];
+    };
+
+    // 获取完整的供应商类型列表（预设+自定义）
+    const getAllVendorTypes = () => {
+        return [...VENDOR_TYPES, ...customTypes.map(type => ({ label: type, value: type }))];
+    };
+
+    // 获取完整的代理资质列表（预设+自定义）
+    const getAllAgentTypes = () => {
+        return [...AGENT_TYPE_OPTIONS, ...customAgentTypes.map(type => ({ label: type, value: type }))];
+    };
+
+    // 获取完整的地区列表（预设+自定义）
+    const getAllRegions = () => {
+        const baseRegions = REGIONS.map(region => 
+            region === '其他' ? '添加其他' : region
+        );
+        return [...baseRegions, ...customRegions];
     };
 
     // 处理产品类别选择变化
@@ -173,6 +208,122 @@ const VendorAdd: React.FC = () => {
         setCustomCategoryModalVisible(false);
         Toast.success('自定义产品类别添加成功');
     };
+
+    // 处理供应商类型选择
+    const handleVendorTypeChange = (value: string | number | any[] | Record<string, any>) => {
+        const stringValue = String(value);
+        if (stringValue === 'ADD_OTHER_TYPE') {
+            setCustomTypeModalVisible(true);
+        } else {
+            formRef.current?.setValue('type', stringValue);
+        }
+    };
+
+    // 保存自定义供应商类型
+    const handleSaveCustomVendorType = () => {
+        if (!currentCustomType.trim()) {
+            Toast.error('请输入供应商类型名称');
+            return;
+        }
+
+        const trimmedType = currentCustomType.trim();
+        
+        // 检查是否已存在
+        const allTypes = getAllVendorTypes();
+        if (allTypes.some(type => type.label === trimmedType || type.value === trimmedType)) {
+            Toast.error('该供应商类型已存在');
+            return;
+        }
+
+        // 添加到自定义类型列表
+        setCustomTypes(prev => [...prev, trimmedType]);
+        
+        // 更新表单中的选择值
+        formRef.current?.setValue('type', trimmedType);
+
+        // 重置和关闭弹窗
+        setCurrentCustomType('');
+        setCustomTypeModalVisible(false);
+        Toast.success('自定义供应商类型添加成功');
+    };
+
+    // 处理代理资质选择
+    const handleAgentQualificationChange = (value: string | number | any[] | Record<string, any>) => {
+        const stringValue = String(value);
+        if (stringValue === 'ADD_OTHER_AGENT') {
+            setCustomAgentModalVisible(true);
+        } else {
+            formRef.current?.setValue('agentType', stringValue);
+        }
+    };
+
+    // 保存自定义代理资质
+    const handleSaveCustomAgent = () => {
+        if (!currentCustomAgentType.trim()) {
+            Toast.error('请输入代理资质名称');
+            return;
+        }
+
+        const trimmedAgentType = currentCustomAgentType.trim();
+        
+        // 检查是否已存在
+        const allAgentTypes = getAllAgentTypes();
+        if (allAgentTypes.some(type => type.label === trimmedAgentType || type.value === trimmedAgentType)) {
+            Toast.error('该代理资质已存在');
+            return;
+        }
+
+        // 添加到自定义代理资质列表
+        setCustomAgentTypes(prev => [...prev, trimmedAgentType]);
+        
+        // 更新表单中的选择值
+        formRef.current?.setValue('agentType', trimmedAgentType);
+
+        // 重置和关闭弹窗
+        setCurrentCustomAgentType('');
+        setCustomAgentModalVisible(false);
+        Toast.success('自定义代理资质添加成功');
+    };
+
+    // 处理地区选择
+    const handleLocationChange = (value: string | number | any[] | Record<string, any>) => {
+        const stringValue = String(value);
+        if (stringValue === '添加其他') {
+            setCustomRegionModalVisible(true);
+        } else {
+            formRef.current?.setValue('region', stringValue);
+        }
+    };
+
+    // 保存自定义地区
+    const handleSaveCustomLocation = () => {
+        if (!currentCustomRegion.trim()) {
+            Toast.error('请输入地区名称');
+            return;
+        }
+
+        const trimmedRegion = currentCustomRegion.trim();
+        
+        // 检查是否已存在
+        const allRegions = getAllRegions();
+        if (allRegions.includes(trimmedRegion)) {
+            Toast.error('该地区已存在');
+            return;
+        }
+
+        // 添加到自定义地区列表
+        setCustomRegions(prev => [...prev, trimmedRegion]);
+        
+        // 更新表单中的选择值
+        formRef.current?.setValue('region', trimmedRegion);
+
+        // 重置和关闭弹窗
+        setCurrentCustomRegion('');
+        setCustomRegionModalVisible(false);
+        Toast.success('自定义地区添加成功');
+    };
+
+
 
     // 联系人表格列定义
     const contactColumns: ColumnProps<ContactInfo>[] = [
@@ -341,7 +492,7 @@ const VendorAdd: React.FC = () => {
                 remarks: values.remarks || '',
                 account: values.account || '',
                 address: values.address || '',
-                entryPerson: values.entryPerson || '',
+                entryPerson: currentUser || '未知用户', // 强制使用当前登录用户
                 entryTime: values.entryTime || new Date().toISOString().split('T')[0]
             };
             
@@ -381,6 +532,11 @@ const VendorAdd: React.FC = () => {
                 setContacts([]);
                 setCurrentPassword('');
                 setCustomCategories([]); // 重置自定义类别
+                
+                // 重置后重新设置录入人字段
+                setTimeout(() => {
+                    formRef.current?.setValue('entryPerson', currentUser || '');
+                }, 100);
             } else {
                 throw new Error(result.message || '保存失败');
             }
@@ -406,6 +562,10 @@ const VendorAdd: React.FC = () => {
         setContacts([]);
         setCurrentPassword('');
         setCustomCategories([]); // 重置自定义类别
+        // 重置后重新设置录入人字段
+        setTimeout(() => {
+            formRef.current?.setValue('entryPerson', currentUser || '');
+        }, 100);
         Toast.info('表单已重置');
     };
 
@@ -449,7 +609,8 @@ const VendorAdd: React.FC = () => {
                             field="type"
                             label="供应商类型"
                             placeholder="请选择供应商类型"
-                            optionList={VENDOR_TYPES}
+                            optionList={getAllVendorTypes()}
+                            onChange={handleVendorTypeChange}
                             rules={[{ required: true, message: '请选择供应商类型' }]}
                         />
                         
@@ -457,7 +618,8 @@ const VendorAdd: React.FC = () => {
                             field="region"
                             label="所在地区"
                             placeholder="请选择所在地区"
-                            optionList={REGIONS.map(region => ({ label: region, value: region }))}
+                            optionList={getAllRegions().map(region => ({ label: region, value: region }))}
+                            onChange={handleLocationChange}
                             rules={[{ required: true, message: '请选择所在地区' }]}
                         />
                         
@@ -486,7 +648,8 @@ const VendorAdd: React.FC = () => {
                             field="agentType"
                             label="代理资质"
                             placeholder="请选择代理资质"
-                            optionList={AGENT_TYPE_OPTIONS}
+                            optionList={getAllAgentTypes()}
+                            onChange={handleAgentQualificationChange}
                         />
                         
                         <Form.Select
@@ -592,9 +755,14 @@ const VendorAdd: React.FC = () => {
                                 disabled
                                 suffix={
                                     <Button
+                                        type="tertiary"
                                         theme="borderless"
                                         size="small"
                                         onClick={() => setPasswordVisible(true)}
+                                        style={{ 
+                                            color: '#1890ff',
+                                            padding: '4px 8px'
+                                        }}
                                     >
                                         设置密码
                                     </Button>
@@ -625,7 +793,13 @@ const VendorAdd: React.FC = () => {
                         <Form.Input
                             field="entryPerson"
                             label="录入人"
-                            placeholder="请输入录入人姓名"
+                            placeholder="当前登录用户"
+                            initValue={currentUser || ''}
+                            disabled
+                            style={{ 
+                                backgroundColor: 'var(--semi-color-fill-0)',
+                                color: 'var(--semi-color-text-1)'
+                            }}
                         />
                         
                         <Form.DatePicker
@@ -815,6 +989,147 @@ const VendorAdd: React.FC = () => {
                                 {customCategories.map((category, index) => (
                                     <Tag key={index} color="blue" type="light">
                                         {category}
+                                    </Tag>
+                                ))}
+                            </Space>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* 自定义供应商类型弹窗 */}
+            <Modal
+                title="添加自定义供应商类型"
+                visible={customTypeModalVisible}
+                onCancel={() => {
+                    setCustomTypeModalVisible(false);
+                    setCurrentCustomType('');
+                }}
+                footer={
+                    <Space>
+                        <Button onClick={() => {
+                            setCustomTypeModalVisible(false);
+                            setCurrentCustomType('');
+                        }}>取消</Button>
+                        <Button type="primary" onClick={handleSaveCustomVendorType}>确定</Button>
+                    </Space>
+                }
+                width={500}
+            >
+                <div style={{ marginBottom: '16px' }}>
+                    <Text type="secondary">
+                        请输入自定义的供应商类型名称，添加后可在供应商类型中选择使用。
+                    </Text>
+                </div>
+                <Input
+                    placeholder="请输入供应商类型名称，如：云服务提供商、系统集成商等"
+                    value={currentCustomType}
+                    onChange={setCurrentCustomType}
+                    autoFocus
+                    maxLength={20}
+                />
+                {customTypes.length > 0 && (
+                    <div style={{ marginTop: '16px' }}>
+                        <Text strong>已添加的自定义类型：</Text>
+                        <div style={{ marginTop: '8px' }}>
+                            <Space wrap>
+                                {customTypes.map((type, index) => (
+                                    <Tag key={index} color="blue" type="light">
+                                        {type}
+                                    </Tag>
+                                ))}
+                            </Space>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* 自定义代理资质弹窗 */}
+            <Modal
+                title="添加自定义代理资质"
+                visible={customAgentModalVisible}
+                onCancel={() => {
+                    setCustomAgentModalVisible(false);
+                    setCurrentCustomAgentType('');
+                }}
+                footer={
+                    <Space>
+                        <Button onClick={() => {
+                            setCustomAgentModalVisible(false);
+                            setCurrentCustomAgentType('');
+                        }}>取消</Button>
+                        <Button type="primary" onClick={handleSaveCustomAgent}>确定</Button>
+                    </Space>
+                }
+                width={500}
+            >
+                <div style={{ marginBottom: '16px' }}>
+                    <Text type="secondary">
+                        请输入自定义的代理资质名称，添加后可在代理资质中选择使用。
+                    </Text>
+                </div>
+                <Input
+                    placeholder="请输入代理资质名称，如：金牌代理、认证合作伙伴等"
+                    value={currentCustomAgentType}
+                    onChange={setCurrentCustomAgentType}
+                    autoFocus
+                    maxLength={20}
+                />
+                {customAgentTypes.length > 0 && (
+                    <div style={{ marginTop: '16px' }}>
+                        <Text strong>已添加的自定义资质：</Text>
+                        <div style={{ marginTop: '8px' }}>
+                            <Space wrap>
+                                {customAgentTypes.map((type, index) => (
+                                    <Tag key={index} color="blue" type="light">
+                                        {type}
+                                    </Tag>
+                                ))}
+                            </Space>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* 自定义地区弹窗 */}
+            <Modal
+                title="添加自定义地区"
+                visible={customRegionModalVisible}
+                onCancel={() => {
+                    setCustomRegionModalVisible(false);
+                    setCurrentCustomRegion('');
+                }}
+                footer={
+                    <Space>
+                        <Button onClick={() => {
+                            setCustomRegionModalVisible(false);
+                            setCurrentCustomRegion('');
+                        }}>取消</Button>
+                        <Button type="primary" onClick={handleSaveCustomLocation}>确定</Button>
+                    </Space>
+                }
+                width={500}
+            >
+                <div style={{ marginBottom: '16px' }}>
+                    <Text type="secondary">
+                        请输入自定义的地区名称，添加后可在所在地区中选择使用。
+                    </Text>
+                </div>
+                <Input
+                    placeholder="请输入地区名称，如：粤港澳大湾区、长三角等"
+                    value={currentCustomRegion}
+                    onChange={setCurrentCustomRegion}
+                    autoFocus
+                    maxLength={20}
+                />
+                {customRegions.length > 0 && (
+                    <div style={{ marginTop: '16px' }}>
+                        <Text strong>已添加的自定义地区：</Text>
+                        <div style={{ marginTop: '8px' }}>
+                            <Space wrap>
+                                {customRegions.map((region, index) => (
+                                    <Tag key={index} color="blue" type="light">
+                                        {region}
                                     </Tag>
                                 ))}
                             </Space>

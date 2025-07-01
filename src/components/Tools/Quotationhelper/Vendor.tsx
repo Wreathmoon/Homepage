@@ -27,7 +27,7 @@ const { Title } = Typography;
 // 定义筛选条件接口
 interface FilterValues {
     region?: VendorRegion;
-    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
+    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER';
     agentType?: 'GENERAL_AGENT' | 'AGENT' | 'DIRECT';
     productCategory?: string;
     productKeyword?: string;
@@ -49,12 +49,22 @@ const Vendor: React.FC = () => {
     const [currentVendorName, setCurrentVendorName] = useState('');
     const [remarksVisible, setRemarksVisible] = useState(false);
     const [currentRemarks, setCurrentRemarks] = useState('');
+    const [contactsVisible, setContactsVisible] = useState(false);
+    const [currentContacts, setCurrentContacts] = useState<any[]>([]);
+    const [currentVendorForContacts, setCurrentVendorForContacts] = useState('');
 
     // 显示密码窗口
     const showPasswordModal = (vendor: VendorType) => {
         setCurrentPassword(vendor.password || '');
         setCurrentVendorName(vendor.name);
         setPasswordVisible(true);
+    };
+
+    // 显示联系人列表
+    const handleShowContacts = (vendor: VendorType) => {
+        setCurrentContacts(vendor.contacts || []);
+        setCurrentVendorForContacts(vendor.name);
+        setContactsVisible(true);
     };
 
     // 获取供应商列表
@@ -195,7 +205,7 @@ const Vendor: React.FC = () => {
             width: 120
         },
         { 
-            title: '联系人', 
+            title: '主要联系人', 
             dataIndex: 'contact',
             width: 120
         },
@@ -203,6 +213,26 @@ const Vendor: React.FC = () => {
             title: '邮箱', 
             dataIndex: 'email',
             width: 180
+        },
+        {
+            title: '所有联系人',
+            render: (record: VendorType) => {
+                const contactCount = record.contacts?.length || 0;
+                if (contactCount === 0) {
+                    return <span style={{ color: '#999' }}>无联系人</span>;
+                }
+                return (
+                    <Button
+                        theme="borderless"
+                        type="primary"
+                        size="small"
+                        onClick={() => handleShowContacts(record)}
+                    >
+                        查看({contactCount}人)
+                    </Button>
+                );
+            },
+            width: 120
         },
         {
             title: '网站',
@@ -310,7 +340,8 @@ const Vendor: React.FC = () => {
                             optionList={[
                                 { label: '硬件供应商', value: 'HARDWARE' },
                                 { label: '软件供应商', value: 'SOFTWARE' },
-                                { label: '服务供应商', value: 'SERVICE' }
+                                { label: '服务供应商', value: 'SERVICE' },
+                                { label: '数据中心', value: 'DATACENTER' }
                             ]}
                         />
                     </Col>
@@ -494,6 +525,80 @@ const Vendor: React.FC = () => {
                     }}>
                         {currentRemarks || '暂无备注'}
                     </div>
+                </div>
+            </Modal>
+
+            {/* 联系人列表模态框 */}
+            <Modal
+                visible={contactsVisible}
+                title={`联系人列表 - ${currentVendorForContacts}`}
+                onCancel={() => setContactsVisible(false)}
+                footer={null}
+                width={800}
+            >
+                <div style={{ padding: '16px' }}>
+                    {currentContacts.length > 0 ? (
+                        <Table
+                            dataSource={currentContacts}
+                            pagination={false}
+                            size="small"
+                            columns={[
+                                {
+                                    title: '姓名',
+                                    dataIndex: 'name',
+                                    width: 120
+                                },
+                                {
+                                    title: '职位',
+                                    dataIndex: 'position',
+                                    width: 100,
+                                    render: (text) => text || '-'
+                                },
+                                {
+                                    title: '电话',
+                                    dataIndex: 'phone',
+                                    width: 140
+                                },
+                                {
+                                    title: '邮箱',
+                                    dataIndex: 'email',
+                                    width: 180
+                                },
+                                {
+                                    title: '主要联系人',
+                                    dataIndex: 'isPrimary',
+                                    width: 100,
+                                    render: (isPrimary: boolean) => (
+                                        <Tag color={isPrimary ? 'blue' : 'grey'} type="light">
+                                            {isPrimary ? '是' : '否'}
+                                        </Tag>
+                                    )
+                                },
+                                {
+                                    title: '备注',
+                                    dataIndex: 'remarks',
+                                    render: (text) => {
+                                        if (!text) return '-';
+                                        return (
+                                            <Tooltip content={text}>
+                                                <span style={{ cursor: 'pointer' }}>
+                                                    {text.length > 15 ? text.substring(0, 15) + '...' : text}
+                                                </span>
+                                            </Tooltip>
+                                        );
+                                    }
+                                }
+                            ]}
+                        />
+                    ) : (
+                        <div style={{ 
+                            textAlign: 'center', 
+                            padding: '40px', 
+                            color: 'var(--semi-color-text-2)' 
+                        }}>
+                            该供应商暂无联系人信息
+                        </div>
+                    )}
                 </div>
             </Modal>
         </div>

@@ -19,6 +19,16 @@ export const VENDOR_REGIONS = [
 export type ProductCategory = typeof PRODUCT_CATEGORIES[number];
 export type VendorRegion = typeof VENDOR_REGIONS[number];
 
+// 联系人信息接口
+export interface ContactInfo {
+    name: string;
+    phone: string;
+    email: string;
+    position?: string;
+    remarks?: string;
+    isPrimary?: boolean;
+}
+
 // 供应商信息接口
 export interface Vendor {
     _id?: string;
@@ -27,13 +37,16 @@ export interface Vendor {
     code: string;
     category: ProductCategory[];
     region: VendorRegion;
+    // 多个联系人信息
+    contacts?: ContactInfo[];
+    // 向后兼容字段
     contact: string;
     phone: string;
     email: string;
     address: string;
     status: 'active' | 'inactive';
     remarks?: string;
-    type: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
+    type: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER';
     website?: string;
     brands: string[];
     isGeneralAgent: boolean;
@@ -49,7 +62,7 @@ export interface VendorQueryParams {
     category?: ProductCategory;
     region?: VendorRegion;
     status?: 'active' | 'inactive';
-    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE';
+    type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER';
     keyword?: string;
     productCategory?: string;
     productKeyword?: string;

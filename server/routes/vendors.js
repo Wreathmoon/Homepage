@@ -115,7 +115,22 @@ router.get('/:id', async (req, res) => {
 // 添加新供应商
 router.post('/', async (req, res) => {
     try {
-        const vendor = new Vendor(req.body);
+        // 🔥 处理联系人数据和向后兼容
+        const vendorData = { ...req.body };
+        
+        // 如果有contacts数组，确保主要联系人信息同步到向后兼容字段
+        if (vendorData.contacts && vendorData.contacts.length > 0) {
+            const primaryContact = vendorData.contacts.find(c => c.isPrimary) || vendorData.contacts[0];
+            if (primaryContact) {
+                vendorData.contact = primaryContact.name;
+                vendorData.phone = primaryContact.phone;
+                vendorData.email = primaryContact.email;
+            }
+        }
+
+        console.log('📝 保存供应商数据:', vendorData);
+        
+        const vendor = new Vendor(vendorData);
         await vendor.save();
 
         res.status(201).json({

@@ -20,6 +20,38 @@ const vendorSchema = new mongoose.Schema({
         type: String,
         enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
     },
+    // 多个联系人信息
+    contacts: [{
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        phone: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        email: {
+            type: String,
+            required: true,
+            trim: true,
+            lowercase: true
+        },
+        position: {
+            type: String,
+            trim: true
+        },
+        remarks: {
+            type: String,
+            trim: true
+        },
+        isPrimary: {
+            type: Boolean,
+            default: false
+        }
+    }],
+    // 向后兼容字段
     contact: {
         type: String,
         required: true,
@@ -51,7 +83,7 @@ const vendorSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['HARDWARE', 'SOFTWARE', 'SERVICE'],
+        enum: ['HARDWARE', 'SOFTWARE', 'SERVICE', 'DATACENTER'],
         required: true
     },
     website: {

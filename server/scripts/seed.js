@@ -8,6 +8,25 @@ dotenv.config({ path: path.join(__dirname, '../env.example') });
 // 导入模型
 const Vendor = require('../models/vendor');
 const Quotation = require('../models/quotation');
+const User = require('../models/user');
+
+// 用户数据
+const usersData = [
+    {
+        username: 'CHINAUNICOM_ADMIN',
+        password: 'admin_password01!',
+        displayName: '管理员',
+        role: 'admin',
+        createdBy: 'system'
+    },
+    {
+        username: 'user',
+        password: '123456',
+        displayName: '普通用户',
+        role: 'user',
+        createdBy: 'system'
+    }
+];
 
 // 供应商数据
 const vendorsData = [
@@ -171,8 +190,14 @@ async function seedDatabase() {
 
         // 清空现有数据 (谨慎操作)
         console.log('🧹 清理现有数据...');
+        await User.deleteMany({});
         await Vendor.deleteMany({});
         await Quotation.deleteMany({});
+
+        // 插入用户数据
+        console.log('📝 插入用户数据...');
+        const users = await User.insertMany(usersData);
+        console.log(`✅ 成功插入 ${users.length} 个用户`);
 
         // 插入供应商数据
         console.log('📝 插入供应商数据...');
@@ -186,6 +211,7 @@ async function seedDatabase() {
 
         console.log('\n🎉 数据初始化完成！');
         console.log('📊 数据统计:');
+        console.log(`   - 用户: ${users.length} 个`);
         console.log(`   - 供应商: ${vendors.length} 个`);
         // console.log(`   - 报价记录: ${quotations.length} 条`);
         console.log(`   - 数据库: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/quotation_system'}`);

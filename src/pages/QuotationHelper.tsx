@@ -7,11 +7,19 @@ import Vendor from '../components/Tools/Quotationhelper/Vendor';
 import VendorAdd from '../components/Tools/Quotationhelper/VendorAdd';
 import QuotationHistory from '../components/Tools/Quotationhelper/QuotationHistory';
 import QuotationImport from '../components/Tools/Quotationhelper/QuotationImport';
+import UserManagement from '../components/UserManagement';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Footer, Sider, Content } = Layout;
 
 const QuotationHelper = () => {
+    const { isAdmin } = useAuth();
     const [selectedPage, setSelectedPage] = useState<string>('Quotation');
+
+    // 处理账号管理
+    const handleUserManagement = () => {
+        setSelectedPage('UserManagement');
+    };
 
     const renderContent = () => {
         switch (selectedPage) {
@@ -25,6 +33,8 @@ const QuotationHelper = () => {
                 return <QuotationHistory />;
             case 'Import':
                 return <QuotationImport />;
+            case 'UserManagement':
+                return <UserManagement />;
             default:
                 return (
                     <div style={{ 
@@ -44,7 +54,7 @@ const QuotationHelper = () => {
 
     return (
         <Layout style={{ height: '100%', border: 'none' }}>
-            <Header />
+            <Header onUserManagement={handleUserManagement} />
             <Layout style={{ height: '100%', marginTop: '60px' }}>
                 <Sider style={{ 
                     backgroundColor: 'var(--semi-color-bg-1)', 

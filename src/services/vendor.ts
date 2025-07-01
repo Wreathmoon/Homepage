@@ -152,8 +152,15 @@ export async function updateVendor(id: string, vendor: Partial<Vendor>): Promise
 // 删除供应商
 export async function deleteVendor(id: string): Promise<void> {
     try {
+        const userRole = localStorage.getItem('user_role');
+        const userName = localStorage.getItem('user_username');
+        
         await request(`/vendors/${id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'x-user-role': userRole || '',
+                'x-user-name': userName || ''
+            }
         });
     } catch (error) {
         console.error('删除供应商失败:', error);

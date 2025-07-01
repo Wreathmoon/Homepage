@@ -15,12 +15,13 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete } from '@douyinfe/semi-icons';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
-import { getVendorList, getVendorProducts, PRODUCT_CATEGORIES, VENDOR_REGIONS } from '../../../services/vendor';
+import { getVendorList, getVendorProducts, deleteVendor, PRODUCT_CATEGORIES, VENDOR_REGIONS } from '../../../services/vendor';
 import type { VendorQueryParams, Vendor as VendorType, VendorRegion } from '../../../services/vendor';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const { Title } = Typography;
 
@@ -35,6 +36,7 @@ interface FilterValues {
 }
 
 const Vendor: React.FC = () => {
+    const { isAdmin } = useAuth();
     const [loading, setLoading] = useState(false);
 
     const [filters, setFilters] = useState<VendorQueryParams>({ page: 1, pageSize: 10 });   
@@ -52,6 +54,8 @@ const Vendor: React.FC = () => {
     const [contactsVisible, setContactsVisible] = useState(false);
     const [currentContacts, setCurrentContacts] = useState<any[]>([]);
     const [currentVendorForContacts, setCurrentVendorForContacts] = useState('');
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [vendorToDelete, setVendorToDelete] = useState<VendorType | null>(null);
 
     // 显示密码窗口
     const showPasswordModal = (vendor: VendorType) => {
@@ -65,6 +69,23 @@ const Vendor: React.FC = () => {
         setCurrentContacts(vendor.contacts || []);
         setCurrentVendorForContacts(vendor.name);
         setContactsVisible(true);
+    };
+
+    // 删除供应商
+    const handleDeleteVendor = async () => {
+        if (!vendorToDelete || !vendorToDelete._id) return;
+
+        try {
+            await deleteVendor(vendorToDelete._id);
+            Toast.success('供应商删除成功');
+            setDeleteModalVisible(false);
+            setVendorToDelete(null);
+            // 重新加载当前页数据
+            fetchSuppliers(filters, pagination.currentPage, pagination.pageSize);
+        } catch (error) {
+            console.error('删除供应商失败:', error);
+            Toast.error('删除供应商失败');
+        }
     };
 
     // 获取供应商列表
@@ -368,6 +389,21 @@ const Vendor: React.FC = () => {
                     >
                         查看备注
                     </Button>
+                    {isAdmin && (
+                        <Button
+                            icon={<IconDelete />}
+                            theme="borderless"
+                            type="danger"
+                            size="small"
+                            onClick={() => {
+                                setVendorToDelete(record);
+                                setDeleteModalVisible(true);
+                            }}
+                            title="删除供应商"
+                        >
+                            删除
+                        </Button>
+                    )}
                 </Space>
             )
         }
@@ -657,6 +693,25 @@ const Vendor: React.FC = () => {
                         </div>
                     )}
                 </div>
+            </Modal>
+
+            {/* 删除供应商确认弹窗 */}
+            <Modal
+                title="删除供应商"
+                visible={deleteModalVisible}
+                onCancel={() => {
+                    setDeleteModalVisible(false);
+                    setVendorToDelete(null);
+                }}
+                onOk={handleDeleteVendor}
+                okText="确认删除"
+                cancelText="取消"
+                type="warning"
+            >
+                <p>确定要删除供应商 <strong>{vendorToDelete?.name}</strong> 吗？</p>
+                <p style={{ color: 'var(--semi-color-warning)', fontSize: '14px' }}>
+                    此操作不可撤销，删除后将无法恢复该供应商的所有信息。
+                </p>
             </Modal>
         </div>
     );

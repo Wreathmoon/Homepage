@@ -1,13 +1,17 @@
-import { IconMoon, IconSun, IconUser, IconExit } from '@douyinfe/semi-icons';
+import { IconMoon, IconSun, IconUser, IconExit, IconUserGroup } from '@douyinfe/semi-icons';
 import { Button, Layout, Dropdown, Avatar, Space, Typography } from '@douyinfe/semi-ui';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 const { Text } = Typography;
 
-const Header = () => {
+interface HeaderProps {
+    onUserManagement?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onUserManagement }) => {
     const [isDark, setIsDark] = useState(false);
-    const { currentUser, logout } = useAuth();
+    const { currentUser, logout, isAdmin } = useAuth();
 
     // dark mode switch function
     const switchMode = () => {
@@ -23,6 +27,12 @@ const Header = () => {
 
     // 用户菜单选项
     const userMenuItems = [
+        ...(isAdmin ? [{
+            node: 'item' as const,
+            name: '账号管理',
+            icon: <IconUserGroup />,
+            onClick: onUserManagement
+        }] : []),
         {
             node: 'item' as const,
             name: '退出登录',

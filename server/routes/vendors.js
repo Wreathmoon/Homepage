@@ -255,6 +255,43 @@ router.post('/', async (req, res) => {
     }
 });
 
+// 删除供应商（管理员专用）
+router.delete('/:id', async (req, res) => {
+    try {
+        const userRole = req.headers['x-user-role'];
+        if (userRole !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: '权限不足，需要管理员权限'
+            });
+        }
+
+        const vendor = await Vendor.findById(req.params.id);
+        
+        if (!vendor) {
+            return res.status(404).json({
+                success: false,
+                message: '供应商不存在'
+            });
+        }
+
+        await Vendor.findByIdAndDelete(req.params.id);
+
+        res.json({
+            success: true,
+            message: '供应商删除成功'
+        });
+
+    } catch (error) {
+        console.error('删除供应商失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '删除供应商失败',
+            error: error.message
+        });
+    }
+});
+
 // 更新供应商信息
 router.put('/:id', async (req, res) => {
     try {

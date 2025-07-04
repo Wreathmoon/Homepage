@@ -15,13 +15,14 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit } from '@douyinfe/semi-icons';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
 import { getVendorList, getVendorProducts, deleteVendor, PRODUCT_CATEGORIES, VENDOR_REGIONS } from '../../../services/vendor';
 import type { VendorQueryParams, Vendor as VendorType, VendorRegion } from '../../../services/vendor';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useVendorEdit } from '../../../contexts/VendorEditContext';
 
 const { Title } = Typography;
 
@@ -63,6 +64,8 @@ const Vendor: React.FC = () => {
     const [currentEnglishName, setCurrentEnglishName] = useState('');
     const [regionsVisible, setRegionsVisible] = useState(false);
     const [currentRegions, setCurrentRegions] = useState<string[]>([]);
+
+    const { startEdit } = useVendorEdit();
 
     // 将 VendorQueryParams 转换为本地筛选类型，解决 region 数组带来的类型差异
     const convertToFilterValues = (query: VendorQueryParams): FilterValues => ({
@@ -115,6 +118,11 @@ const Vendor: React.FC = () => {
         const list = (vendor as any).regions || [(vendor as any).region];
         setCurrentRegions(list);
         setRegionsVisible(true);
+    };
+
+    // 显示编辑弹窗
+    const handleEditVendor = (vendor: VendorType) => {
+        startEdit(vendor);
     };
 
     // 删除供应商
@@ -465,19 +473,23 @@ const Vendor: React.FC = () => {
                     </Button>
                     {isAdmin && (
                         <Button
-                            icon={<IconDelete />}
                             theme="borderless"
-                            type="danger"
+                            type="primary"
                             size="small"
-                            onClick={() => {
-                                setVendorToDelete(record);
-                                setDeleteModalVisible(true);
-                            }}
-                            title="删除供应商"
-                        >
-                            删除
-                        </Button>
+                            icon={<IconEdit />}
+                            onClick={() => handleEditVendor(record)}
+                        />
                     )}
+                    <Button
+                        theme="borderless"
+                        type="danger"
+                        size="small"
+                        icon={<IconDelete />}
+                        onClick={() => {
+                            setVendorToDelete(record);
+                            setDeleteModalVisible(true);
+                        }}
+                    />
                 </Space>
             )
         }

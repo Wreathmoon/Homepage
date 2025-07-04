@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
     Typography, 
     Form, 
@@ -23,6 +23,7 @@ import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory'
 import { API_CONFIG } from '../../../utils/config';
 import type { ContactInfo } from '../../../services/vendor';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useVendorEdit } from '../../../contexts/VendorEditContext';
 
 const { Title, Text } = Typography;
 
@@ -92,13 +93,14 @@ const STATUS_OPTIONS = [
 
 const VendorAdd: React.FC = () => {
     const { currentUser } = useAuth(); // 获取当前登录用户
+    const { editVendor, clearEdit, goToVendorList } = useVendorEdit();
     const [loading, setLoading] = useState(false);
     const [savedVendors, setSavedVendors] = useState<any[]>([]);
     const [passwordVisible, setPasswordVisible] = useState(false);
     const [currentPassword, setCurrentPassword] = useState('');
     
     // 联系人相关状态
-    const [contacts, setContacts] = useState<ContactInfo[]>([]);
+    const [contacts, setContacts] = useState<ContactInfo[]>(editVendor?.contacts || []);
     const [contactModalVisible, setContactModalVisible] = useState(false);
     const [editingContact, setEditingContact] = useState<ContactInfo | null>(null);
     const [editingIndex, setEditingIndex] = useState<number>(-1);
@@ -502,7 +504,13 @@ const VendorAdd: React.FC = () => {
             submitData.type = values.type || 'HARDWARE';
             submitData.status = values.status || 'active';
             submitData.category = (values.category || []).filter((cat: string) => cat !== '添加其他');
-            submitData.brands = values.brands ? [values.brands] : [];
+            if (values.brands) {
+                submitData.brands = values.brands.split(/[,，]/).map((b: string)=>b.trim()).filter((b:string)=>b);
+            } else if (editVendor) {
+                submitData.brands = editVendor.brands;
+            } else {
+                submitData.brands = [];
+            }
             submitData.password = currentPassword || '';
             // 将agentType转换为后端期望的布尔字段
             submitData.isGeneralAgent = values.agentType === 'GENERAL_AGENT';
@@ -527,8 +535,13 @@ const VendorAdd: React.FC = () => {
             console.log('🔄 处理后的数据:', submitData);
             
             const apiServerUrl = API_CONFIG.API_URL;
-            const response = await fetch(`${apiServerUrl}/api/vendors`, {
-                method: 'POST',
+            const url = editVendor ? `${apiServerUrl}/api/vendors/${editVendor._id}` : `${apiServerUrl}/api/vendors`;
+            const method = editVendor ? 'PUT' : 'POST';
+            if (editVendor) {
+                submitData.code = editVendor.code; // 保持原 code
+            }
+            const response = await fetch(url, {
+                method,
                 headers: {
                     'Content-Type': 'application/json'
                 },
@@ -545,7 +558,7 @@ const VendorAdd: React.FC = () => {
             console.log('✅ 供应商保存成功:', result);
             
             if (result.success) {
-                Toast.success(result.message || '供应商信息保存成功');
+                Toast.success(result.message || (editVendor ? '供应商信息更新成功' : '供应商信息保存成功'));
                 setSavedVendors(prev => [...prev, result.data]);
                 
                 // 重置表单和联系人
@@ -553,6 +566,11 @@ const VendorAdd: React.FC = () => {
                 setContacts([]);
                 setCurrentPassword('');
                 setCustomCategories([]); // 重置自定义类别
+                if (editVendor) {
+                    clearEdit();
+                    goToVendorList();
+                    return; // 结束
+                }
                 
                 // 重置后重新设置录入人字段
                 setTimeout(() => {
@@ -589,6 +607,16 @@ const VendorAdd: React.FC = () => {
         }, 100);
         Toast.info('表单已重置');
     };
+
+    // 预填表单值
+    useEffect(() => {
+        if (editVendor && formRef.current) {
+            const initVals: any = { ...editVendor };
+            initVals.regions = (editVendor as any).regions || [editVendor.region];
+            initVals.brands = (editVendor.brands || []).join(',');
+            formRef.current.setValues(initVals);
+        }
+    }, [editVendor]);
 
     return (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -904,8 +932,15 @@ const VendorAdd: React.FC = () => {
                         label="电话"
                         placeholder="请输入联系电话"
                         rules={[
-                            { required: true, message: '请填写联系电话' },
-                            { pattern: /^[\d\s\-\+\(\)]+$/, message: '请输入有效的电话号码' }
+                            {
+                                validator: (_: any, value: string, callback: (error?: string)=>void) => {
+                                    const wechatVal = contactFormRef.current?.getValue('wechat');
+                                    if (!value && !wechatVal) { callback('电话或微信必须填写其中一项'); return false; }
+                                    if (value && !/^[\d\s\-\+\(\)]+$/.test(value)) { callback('请输入有效的电话号码'); return false; }
+                                    callback();
+                                    return true;
+                                }
+                            }
                         ]}
                     />
                     
@@ -923,6 +958,16 @@ const VendorAdd: React.FC = () => {
                         field="wechat"
                         label="联系微信"
                         placeholder="请输入微信号（可选）"
+                        rules={[
+                            {
+                                validator: (_: any, value: string, callback: (error?: string)=>void) => {
+                                    const phoneVal = contactFormRef.current?.getValue('phone');
+                                    if (!value && !phoneVal) { callback('电话或微信必须填写其中一项'); return false; }
+                                    callback();
+                                    return true;
+                                }
+                            }
+                        ]}
                     />
                     
                     <Form.Switch

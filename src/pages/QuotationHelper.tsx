@@ -9,12 +9,18 @@ import QuotationHistory from '../components/Tools/Quotationhelper/QuotationHisto
 import QuotationImport from '../components/Tools/Quotationhelper/QuotationImport';
 import UserManagement from '../components/UserManagement';
 import { useAuth } from '../contexts/AuthContext';
+import { VendorEditProvider } from '../contexts/VendorEditContext';
+import type { Vendor as VendorType } from '../services/vendor';
 
 const { Footer, Sider, Content } = Layout;
 
 const QuotationHelper = () => {
     const { isAdmin } = useAuth();
     const [selectedPage, setSelectedPage] = useState<string>('Quotation');
+    const [editVendor, setEditVendor] = useState<VendorType | null>(null);
+
+    const goToVendorList = () => setSelectedPage('Vendor');
+    const goToVendorAdd = () => setSelectedPage('VendorAdd');
 
     // 处理账号管理
     const handleUserManagement = () => {
@@ -92,7 +98,9 @@ const QuotationHelper = () => {
                         overflowX: 'hidden'
                     }}
                 >
-                    {renderContent()}
+                    <VendorEditProvider goToVendorList={goToVendorList} goToVendorAdd={goToVendorAdd}>
+                        {renderContent()}
+                    </VendorEditProvider>
                 </Content>
             </Layout>
         </Layout>

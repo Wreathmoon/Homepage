@@ -92,18 +92,16 @@ router.post('/quotation', upload.single('quotationFile'), async (req, res) => {
             }];
         }
 
-        // 修复中文文件名编码问题
-        const fixedOriginalName = Buffer.from(originalName, 'latin1').toString('utf8');
-        console.log('📁 原始文件名:', JSON.stringify(originalName));
-        console.log('📁 修复后文件名:', JSON.stringify(fixedOriginalName));
+        // 输出文件名调试
+        console.log('📁 上传文件名:', JSON.stringify(originalName));
 
         // 保存解析的报价数据到数据库
         const savedQuotations = [];
         for (const quotationData of quotations) {
             // 添加文件信息
             quotationData.originalFile = {
-                filename: fixedOriginalName, // 使用修复后的文件名
-                originalName: fixedOriginalName, // 统一使用修复后的文件名
+                filename: originalName,
+                originalName: originalName,
                 path: filePath,
                 uploadedAt: new Date()
             };

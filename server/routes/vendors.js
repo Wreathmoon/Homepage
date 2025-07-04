@@ -27,7 +27,11 @@ router.get('/', async (req, res) => {
                 const predefinedRegions = ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他'];
                 query.region = { $nin: predefinedRegions };
             } else {
-                query.region = region;
+                query.$or = [
+                    { region: region },
+                    { regions: region },
+                    { regions: { $in: [region] } }
+                ];
             }
         }
 
@@ -215,6 +219,21 @@ router.post('/', async (req, res) => {
         // 🔥 处理联系人数据和向后兼容
         const vendorData = { ...req.body };
         
+        // 兼容字段映射
+        if (!vendorData.chineseName && vendorData.name) {
+            vendorData.chineseName = vendorData.name;
+        }
+
+        // 处理地区：支持 regions 数组
+        if (vendorData.regions && Array.isArray(vendorData.regions) && vendorData.regions.length > 0) {
+            // 写入旧region字段以兼容旧代码
+            vendorData.region = vendorData.regions[0];
+        } else if (vendorData.region) {
+            vendorData.regions = [vendorData.region];
+        } else {
+            vendorData.regions = [];
+        }
+
         // 如果有contacts数组，确保主要联系人信息同步到向后兼容字段
         if (vendorData.contacts && vendorData.contacts.length > 0) {
             const primaryContact = vendorData.contacts.find(c => c.isPrimary) || vendorData.contacts[0];
@@ -295,9 +314,21 @@ router.delete('/:id', async (req, res) => {
 // 更新供应商信息
 router.put('/:id', async (req, res) => {
     try {
+        const updateData = { ...req.body };
+
+        if (!updateData.chineseName && updateData.name) {
+            updateData.chineseName = updateData.name;
+        }
+
+        if (updateData.regions && Array.isArray(updateData.regions) && updateData.regions.length > 0) {
+            updateData.region = updateData.regions[0];
+        } else if (updateData.region) {
+            updateData.regions = [updateData.region];
+        }
+
         const vendor = await Vendor.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            updateData,
             { new: true, runValidators: true }
         );
 
@@ -319,33 +350,6 @@ router.put('/:id', async (req, res) => {
         res.status(500).json({
             success: false,
             message: '更新供应商失败',
-            error: error.message
-        });
-    }
-});
-
-// 删除供应商
-router.delete('/:id', async (req, res) => {
-    try {
-        const vendor = await Vendor.findByIdAndDelete(req.params.id);
-
-        if (!vendor) {
-            return res.status(404).json({
-                success: false,
-                message: '供应商不存在'
-            });
-        }
-
-        res.json({
-            success: true,
-            message: '供应商删除成功'
-        });
-
-    } catch (error) {
-        console.error('删除供应商失败:', error);
-        res.status(500).json({
-            success: false,
-            message: '删除供应商失败',
             error: error.message
         });
     }

@@ -28,10 +28,18 @@ const { Title, Text } = Typography;
 
 // 定义供应商信息表单数据接口
 interface VendorFormData {
-    name: string;
+    chineseName: string;
+    englishName?: string;
+    // 向后兼容旧字段
+    name?: string;
+
     code?: string;
     category: string[];
-    region: string;
+
+    // 多地区数组
+    regions: string[];
+    // 向后兼容单地区
+    region?: string;
     // 主要联系人信息（保持向后兼容）
     contact: string;
     phone: string;
@@ -286,14 +294,13 @@ const VendorAdd: React.FC = () => {
         Toast.success('自定义代理资质添加成功');
     };
 
-    // 处理地区选择
-    const handleLocationChange = (value: string | number | any[] | Record<string, any>) => {
-        const stringValue = String(value);
-        if (stringValue === '添加其他') {
+    // 处理多地区选择
+    const handleRegionsChange = (value: string | number | any[] | Record<string, any>) => {
+        const values = Array.isArray(value) ? value as string[] : [];
+        if (values.includes('添加其他')) {
             setCustomRegionModalVisible(true);
-        } else {
-            formRef.current?.setValue('region', stringValue);
         }
+        formRef.current?.setValue('regions', values);
     };
 
     // 保存自定义地区
@@ -316,15 +323,13 @@ const VendorAdd: React.FC = () => {
         setCustomRegions(prev => [...prev, trimmedRegion]);
         
         // 更新表单中的选择值
-        formRef.current?.setValue('region', trimmedRegion);
+        formRef.current?.setValue('regions', trimmedRegion);
 
         // 重置和关闭弹窗
         setCurrentCustomRegion('');
         setCustomRegionModalVisible(false);
         Toast.success('自定义地区添加成功');
     };
-
-
 
     // 联系人表格列定义
     const contactColumns: ColumnProps<ContactInfo>[] = [
@@ -472,36 +477,45 @@ const VendorAdd: React.FC = () => {
         try {
             console.log('🔄 提交供应商信息:', values);
             
-            const submitData = {
+            const submitData: any = {
                 ...values,
-                code: generateVendorCode(values.name),
-                // 多个联系人信息
                 contacts: contacts,
-                // 主要联系人信息（向后兼容）
-                contact: primaryContact.name,
-                phone: primaryContact.phone,
-                email: primaryContact.email,
-                // 确保必填字段有默认值
-                name: values.name || '',
-                type: values.type || 'HARDWARE',
-                region: values.region || '',
-                status: values.status || 'active',
-                category: (values.category || []).filter((cat: string) => cat !== '添加其他'),
-                brands: values.brands ? [values.brands] : [],
-                password: currentPassword || '',
-                // 将agentType转换为后端期望的布尔字段
-                isGeneralAgent: values.agentType === 'GENERAL_AGENT',
-                isAgent: values.agentType === 'AGENT',
-                // 移除前端字段
-                agentType: undefined,
-                // 添加其他字段
-                website: values.website || '',
-                remarks: values.remarks || '',
-                account: values.account || '',
-                address: values.address || '',
-                entryPerson: currentUser || '未知用户', // 强制使用当前登录用户
-                entryTime: values.entryTime || new Date().toISOString().split('T')[0]
             };
+            // 生成code
+            submitData.code = generateVendorCode(values.chineseName);
+
+            // 向后兼容旧字段 name
+            submitData.name = values.chineseName;
+
+            // 处理地区映射
+            if (values.regions && values.regions.length > 0) {
+                submitData.region = values.regions[0];
+            }
+            
+            // 多个联系人信息
+            submitData.contacts = contacts;
+            // 主要联系人信息（向后兼容）
+            submitData.contact = primaryContact.name;
+            submitData.phone = primaryContact.phone;
+            submitData.email = primaryContact.email;
+            // 确保必填字段有默认值
+            submitData.type = values.type || 'HARDWARE';
+            submitData.status = values.status || 'active';
+            submitData.category = (values.category || []).filter((cat: string) => cat !== '添加其他');
+            submitData.brands = values.brands ? [values.brands] : [];
+            submitData.password = currentPassword || '';
+            // 将agentType转换为后端期望的布尔字段
+            submitData.isGeneralAgent = values.agentType === 'GENERAL_AGENT';
+            submitData.isAgent = values.agentType === 'AGENT';
+            // 移除前端字段
+            submitData.agentType = undefined;
+            // 添加其他字段
+            submitData.website = values.website || '';
+            submitData.remarks = values.remarks || '';
+            submitData.account = values.account || '';
+            submitData.address = values.address || '';
+            submitData.entryPerson = currentUser || '未知用户'; // 强制使用当前登录用户
+            submitData.entryTime = values.entryTime || new Date().toISOString().split('T')[0];
             
             // 移除 undefined 字段
             Object.keys(submitData).forEach(key => {
@@ -606,10 +620,16 @@ const VendorAdd: React.FC = () => {
                     
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '20px' }}>
                         <Form.Input
-                            field="name"
-                            label="供应商名称"
-                            placeholder="请输入供应商名称"
-                            rules={[{ required: true, message: '请填写供应商名称' }]}
+                            field="chineseName"
+                            label="供应商名称(中文)"
+                            placeholder="请输入中文名称"
+                            rules={[{ required: true, message: '请填写中文名称' }]}
+                        />
+                        
+                        <Form.Input
+                            field="englishName"
+                            label="供应商名称(英文)"
+                            placeholder="请输入英文名称(可选)"
                         />
                         
                         <Form.Select
@@ -622,11 +642,12 @@ const VendorAdd: React.FC = () => {
                         />
                         
                         <Form.Select
-                            field="region"
+                            field="regions"
                             label="所在地区"
+                            multiple
                             placeholder="请选择所在地区"
                             optionList={getAllRegions().map(region => ({ label: region, value: region }))}
-                            onChange={handleLocationChange}
+                            onChange={handleRegionsChange}
                             rules={[{ required: true, message: '请选择所在地区' }]}
                         />
                         
@@ -674,6 +695,14 @@ const VendorAdd: React.FC = () => {
                         placeholder="请输入公司地址"
                         autosize={{ minRows: 2, maxRows: 4 }}
                         style={{ marginBottom: '20px' }}
+                    />
+
+                    <Form.TextArea
+                        field="remarks"
+                        label="备注信息"
+                        placeholder="请输入备注信息"
+                        autosize={{ minRows: 3, maxRows: 5 }}
+                        style={{ marginBottom: '20px', gridColumn: '1 / span 2' }}
                     />
 
                     <Divider margin="24px" />
@@ -816,14 +845,6 @@ const VendorAdd: React.FC = () => {
                             initValue={new Date()}
                         />
                     </div>
-
-                    <Form.TextArea
-                        field="remarks"
-                        label="备注信息"
-                        placeholder="请输入备注信息"
-                        autosize={{ minRows: 3, maxRows: 6 }}
-                        style={{ marginBottom: '20px' }}
-                    />
 
                     {/* 提交按钮区域 */}
                     <div style={{ textAlign: 'center', marginTop: '32px' }}>

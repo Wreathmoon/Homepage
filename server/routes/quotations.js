@@ -3,6 +3,11 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
 const Quotation = require('../models/quotation');
+const multer = require('multer');
+
+// 标准分类/地区列表（用于"其他"筛选逻辑）
+const STANDARD_CATEGORIES = ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务'];
+const STANDARD_REGIONS = ['英国', '德国', '法国', '荷兰', '瑞典', '芬兰', '瑞士', '以色列'];
 
 // 货币清理函数 - 去除货币符号，只保留货币代码
 function cleanCurrency(currency) {
@@ -93,8 +98,26 @@ router.get('/list', async (req, res) => {
 
         if (supplier) query.supplier = { $regex: supplier, $options: 'i' };
         if (productName) query.productName = { $regex: productName, $options: 'i' };
-        if (category) query.category = category;
-        if (region) query.region = region;
+        if (category) {
+            if (category === '其他') {
+                query.$or = [
+                    { category: '其他' },
+                    { category: { $nin: STANDARD_CATEGORIES } },
+                    { category: { $exists: false } },
+                    { category: null }
+                ];
+            } else {
+                query.category = category;
+            }
+        }
+        if (region) {
+            if (region === '其他') {
+                if (!query.$or) query.$or = [];
+                query.$or.push({ region: '其他' }, { region: { $nin: STANDARD_REGIONS } }, { region: { $exists: false } }, { region: null });
+            } else {
+                query.region = region;
+            }
+        }
         if (currency) query.currency = currency;
         if (status) query.status = status;
 
@@ -170,8 +193,22 @@ router.get('/', async (req, res) => {
 
         if (supplier) query.supplier = { $regex: supplier, $options: 'i' };
         if (productName) query.productName = { $regex: productName, $options: 'i' };
-        if (category) query.category = category;
-        if (region) query.region = region;
+        if (category) {
+            query.$or = [
+                { category: '其他' },
+                { category: { $nin: STANDARD_CATEGORIES } },
+                { category: { $exists: false } },
+                { category: null }
+            ];
+        }
+        if (region) {
+            if (region === '其他') {
+                if (!query.$or) query.$or = [];
+                query.$or.push({ region: '其他' }, { region: { $nin: STANDARD_REGIONS } }, { region: { $exists: false } }, { region: null });
+            } else {
+                query.region = region;
+            }
+        }
         if (currency) query.currency = currency;
         if (status) query.status = status;
 
@@ -425,15 +462,12 @@ router.get('/download/:id', async (req, res) => {
             });
         }
 
-        // 生成安全的ASCII文件名
-        const timestamp = Date.now();
-        const safeFileName = `quotation_${timestamp}.xlsx`;
-        
-        console.log('📋 使用安全文件名:', safeFileName);
+        // 使用原始文件名（支持中文）
+        console.log('📋 使用原始文件名:', fileName);
         console.log('🔧 开始下载文件...');
-        
-        // 直接使用res.download()，不做任何额外的头设置
-        res.download(path.resolve(filePath), safeFileName);
+
+        // 直接通过 res.download 发送，Express 会自动处理 filename*=UTF-8 头，确保中文不乱码
+        res.download(path.resolve(filePath), fileName);
 
     } catch (error) {
         console.error('下载文件失败:', error);
@@ -489,16 +523,12 @@ router.get('/attachment/:quotationId/:attachmentId', async (req, res) => {
             });
         }
 
-        // 生成安全的ASCII文件名
-        const timestamp = Date.now();
-        const fileExt = path.extname(fileName) || '.file';
-        const safeFileName = `attachment_${timestamp}${fileExt}`;
-        
-        console.log('📋 附件安全文件名:', safeFileName);
+        // 使用原始文件名，保留中文
+        console.log('📋 附件原始文件名:', fileName);
         console.log('🔧 开始下载附件...');
         
-        // 直接使用res.download()，不做任何额外的头设置
-        res.download(path.resolve(filePath), safeFileName);
+        // 直接下载
+        res.download(path.resolve(filePath), fileName);
 
     } catch (error) {
         console.error('下载附件失败:', error);
@@ -641,8 +671,8 @@ router.post('/confirm-save', async (req, res) => {
                     quote_unit_price: productData.unitPrice || productData.finalPrice || productData.quote_unit_price,
                     unit_price: productData.unitPrice || productData.unit_price || null,
                     quantity: productData.quantity || 1,
-                    quote_total_price: productData.finalPrice || (productData.unitPrice && productData.quantity ? productData.unitPrice * productData.quantity : productData.quote_total_price),
-                    totalPrice: productData.finalPrice || productData.totalPrice,
+                    quote_total_price: Number(productData.finalPrice)||0,
+                    totalPrice: Number(productData.finalPrice)||0,
                     discountedTotalPrice: productData.finalPrice || productData.discountedTotalPrice,
                     discount_rate: productData.discount ? (productData.discount * 100) : (productData.discount_rate || null),
                     
@@ -726,6 +756,49 @@ router.post('/confirm-save', async (req, res) => {
             error: error.message
         });
     }
+});
+
+// 手动上传文件存储
+const storage = multer.diskStorage({
+    destination: async (req, file, cb) => {
+        const uploadDir = path.join(__dirname, '../uploads');
+        try { await fs.mkdir(uploadDir, { recursive: true }); cb(null, uploadDir);} catch(e){cb(e);} },
+    filename: (req,file,cb)=>{ const unique=Date.now()+ '-' + Math.round(Math.random()*1e9); const ext=path.extname(file.originalname); cb(null, `manual-${unique}${ext}`); }
+});
+const upload = multer({ storage });
+
+// 手动录入接口
+router.post('/manual', upload.single('quotationFile'), async (req, res)=>{
+    try {
+        const fileInfo = req.file ? {
+            filename: req.file.filename,
+            originalName: req.file.originalname,
+            path: req.file.path,
+            size: req.file.size,
+            uploadedAt: new Date()
+        }: null;
+
+        const data = {
+            productName: req.body.productName,
+            name: req.body.productName,
+            supplier: req.body.supplier,
+            category: req.body.category || '其他',
+            region: req.body.region,
+            quote_total_price: Number(String(req.body.finalPrice).replace(/,/g, '')) || 0,
+            totalPrice: Number(String(req.body.finalPrice).replace(/,/g, '')) || 0,
+            currency: req.body.currency || 'CNY',
+            quantity: Number(req.body.quantity) || 1,
+            quote_validity: req.body.quoteValidity || new Date(),
+            list_price: req.body.listPrice ? Number(String(req.body.listPrice).replace(/,/g, '')) : undefined,
+            quote_unit_price: req.body.unitPrice ? Number(String(req.body.unitPrice).replace(/,/g, '')) :
+                              (req.body.finalPrice ? Number(String(req.body.finalPrice).replace(/,/g, '')) / (Number(req.body.quantity) || 1) : undefined),
+            notes: req.body.remark||'',
+            configDetail: req.body.productSpec||'',
+            originalFile: fileInfo
+        };
+        const saved = await Quotation.create(data);
+        res.json({ success:true, message:'手动报价保存成功', data: saved });
+    } catch(err){ console.error(err); res.status(500).json({ success:false, message: err.message}); }
 });
 
 module.exports = router; 

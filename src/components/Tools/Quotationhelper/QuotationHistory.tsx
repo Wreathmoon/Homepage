@@ -13,18 +13,20 @@ import {
     Toast
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-import { IconDownload, IconFile } from '@douyinfe/semi-icons';
+import { IconDownload, IconFile, IconDelete } from '@douyinfe/semi-icons';
 import { 
     getQuotationList, 
     getQuotationDetail, 
     downloadAttachment, 
     PRODUCT_CATEGORIES,
-    REGIONS
+    REGIONS,
+    deleteQuotation
 } from '../../../services/quotationHistory';
 import type { QuotationRecord, QuotationQueryParams } from '../../../services/quotationHistory';
 import { ResizeObserverFix } from '../../../utils/resizeObserver';
 import { request } from '../../../utils/request';
 import { API_CONFIG } from '../../../utils/config';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 
@@ -157,7 +159,12 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
                 // 直接解析 filename= 格式（服务器返回的是安全的ASCII文件名）
                 const regularMatch = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
                 if (regularMatch && regularMatch[1]) {
-                    fileName = regularMatch[1].replace(/['"]/g, '');
+                    let extracted = regularMatch[1].replace(/['"]/g, '');
+                    // 处理 filename*=UTF-8'' 编码格式
+                    if (extracted.toLowerCase().startsWith("utf-8''")) {
+                        extracted = decodeURIComponent(extracted.replace(/^utf-8''/i, ''));
+                    }
+                    fileName = extracted;
                 }
                 
                 console.log('📁 解析的文件名:', fileName);
@@ -382,6 +389,12 @@ const QuotationHistory: React.FC = () => {
     const [currentRemark, setCurrentRemark] = useState<string>('');
     const [currentProductName, setCurrentProductName] = useState<string>('');
 
+    // 删除相关
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [quotationToDelete, setQuotationToDelete] = useState<QuotationRecord | null>(null);
+
+    const { isAdmin } = useAuth();
+
     const fetchData = useCallback(async (page: number, pageSize: number, searchFilters: Partial<QuotationQueryParams>) => {
         setLoading(true);
         try {
@@ -456,6 +469,22 @@ const QuotationHistory: React.FC = () => {
             setCurrentRemark('');
             setCurrentProductName('');
         }, 300);
+    };
+
+    // 删除报价
+    const handleDeleteQuotation = async () => {
+        if (!quotationToDelete || !quotationToDelete.id) return;
+        try {
+            await deleteQuotation(String(quotationToDelete.id));
+            Toast.success('报价删除成功');
+            setDeleteModalVisible(false);
+            setQuotationToDelete(null);
+            // 重新加载
+            fetchData(pagination.currentPage, pagination.pageSize, filters);
+        } catch (error) {
+            console.error('删除报价失败:', error);
+            Toast.error('删除报价失败');
+        }
     };
 
     const columns: ColumnProps<QuotationRecord>[] = [
@@ -551,6 +580,24 @@ const QuotationHistory: React.FC = () => {
             )
         },
         {
+            title: '操作',
+            dataIndex: 'actions',
+            width: 120,
+            render: (_text, record) => (
+                isAdmin ? (
+                    <Button
+                        icon={<IconDelete />}
+                        theme="borderless"
+                        type="danger"
+                        size="small"
+                        onClick={() => { setQuotationToDelete(record); setDeleteModalVisible(true); }}
+                    >
+                        删除
+                    </Button>
+                ) : null
+            )
+        },
+        {
             title: '备注',
             dataIndex: 'remark',
             width: 150,
@@ -635,7 +682,12 @@ const QuotationHistory: React.FC = () => {
                                 // 回退到旧的 filename= 格式
                                 const regularMatch = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
                                 if (regularMatch && regularMatch[1]) {
-                                    fileName = decodeURIComponent(regularMatch[1].replace(/['"]/g, ''));
+                                    let extracted = regularMatch[1].replace(/['"]/g, '');
+                                    // 处理 filename*=UTF-8'' 编码格式
+                                    if (extracted.toLowerCase().startsWith("utf-8''")) {
+                                        extracted = decodeURIComponent(extracted.replace(/^utf-8''/i, ''));
+                                    }
+                                    fileName = extracted;
                                 }
                             }
                             
@@ -821,6 +873,18 @@ const QuotationHistory: React.FC = () => {
                         </Text>
                     )}
                 </div>
+            </Modal>
+
+            {/* 删除确认弹窗 */}
+            <Modal
+                title="删除报价"
+                visible={deleteModalVisible}
+                onOk={handleDeleteQuotation}
+                onCancel={() => setDeleteModalVisible(false)}
+                okText="确认删除"
+                cancelText="取消"
+            >
+                <p>确定要删除报价 <strong>{quotationToDelete?.productName}</strong> 吗？此操作不可撤销。</p>
             </Modal>
         </div>
     );

@@ -1,9 +1,20 @@
 const mongoose = require('mongoose');
 
 const vendorSchema = new mongoose.Schema({
-    name: {
+    // 供应商名称（中文）
+    chineseName: {
         type: String,
         required: true,
+        trim: true
+    },
+    // 供应商名称（英文，可选）
+    englishName: {
+        type: String,
+        trim: true
+    },
+    // 向后兼容旧字段 name（映射到中文名）
+    name: {
+        type: String,
         trim: true
     },
     code: {
@@ -17,10 +28,15 @@ const vendorSchema = new mongoose.Schema({
         trim: true
         // 移除enum限制，允许自定义产品类别
     }],
+    // 多地区支持
+    regions: [{
+        type: String,
+        trim: true
+    }],
+    // 向后兼容单个地区字段
     region: {
         type: String,
         trim: true
-        // 移除enum限制，允许自定义地区
     },
     // 多个联系人信息
     contacts: [{

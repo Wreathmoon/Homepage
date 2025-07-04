@@ -34,10 +34,20 @@ export interface ContactInfo {
 export interface Vendor {
     _id?: string;
     id?: number;
-    name: string;
-    code: string;
+    // 新增字段：中文/英文名称
+    chineseName: string;
+    englishName?: string;
+
+    // 向后兼容旧字段 name（映射到中文名）
+    name?: string;
+
+    code?: string;
     category: ProductCategory[];
-    region: VendorRegion;
+
+    // 支持多地区
+    regions?: string[];
+    // 向后兼容旧字段 region
+    region?: VendorRegion;
     // 多个联系人信息
     contacts?: ContactInfo[];
     // 向后兼容字段
@@ -62,9 +72,13 @@ export interface Vendor {
 }
 
 export interface VendorQueryParams {
+    chineseName?: string;
+    englishName?: string;
+    // 兼容原 name 字段
     name?: string;
     category?: ProductCategory;
-    region?: VendorRegion;
+    // 支持数组形式
+    region?: VendorRegion | VendorRegion[];
     status?: 'active' | 'inactive';
     type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
     keyword?: string;
@@ -90,9 +104,16 @@ export interface VendorResponse {
 // API 函数
 export async function getVendorList(params: VendorQueryParams): Promise<VendorResponse> {
     try {
+        // 若 region 为数组，序列化为多个 region 参数
+        let queryParams: any = { ...params };
+        if (Array.isArray(params.region)) {
+            // backend accepts repeated region params or comma separated; 这里使用逗号分隔
+            queryParams.region = (params.region as string[]).join(',');
+        }
+
         const response: any = await request('/vendors', {
             method: 'GET',
-            params
+            params: queryParams
         });
 
         return {
@@ -125,9 +146,23 @@ export async function getVendorById(id: string): Promise<Vendor> {
 // 添加新供应商
 export async function addVendor(vendor: Omit<Vendor, '_id' | 'id' | 'createdAt' | 'updatedAt'>): Promise<Vendor> {
     try {
+        const payload: any = { ...vendor };
+
+        // 字段映射处理
+        if (!payload.chineseName && payload.name) {
+            payload.chineseName = payload.name;
+        }
+
+        // 处理地区映射
+        if (payload.regions && Array.isArray(payload.regions) && payload.regions.length > 0) {
+            payload.region = payload.regions[0];
+        } else if (payload.region) {
+            payload.regions = [payload.region];
+        }
+
         const response: any = await request('/vendors', {
             method: 'POST',
-            data: vendor
+            data: payload
         });
         return response.data;
     } catch (error) {
@@ -139,9 +174,21 @@ export async function addVendor(vendor: Omit<Vendor, '_id' | 'id' | 'createdAt' 
 // 更新供应商信息
 export async function updateVendor(id: string, vendor: Partial<Vendor>): Promise<Vendor> {
     try {
+        const payload: any = { ...vendor };
+
+        if (!payload.chineseName && payload.name) {
+            payload.chineseName = payload.name;
+        }
+
+        if (payload.regions && Array.isArray(payload.regions) && payload.regions.length > 0) {
+            payload.region = payload.regions[0];
+        } else if (payload.region) {
+            payload.regions = [payload.region];
+        }
+
         const response: any = await request(`/vendors/${id}`, {
             method: 'PUT',
-            data: vendor
+            data: payload
         });
         return response.data;
     } catch (error) {
@@ -222,6 +269,8 @@ export const mockVendors: Vendor[] = [
     {
         id: 1,
         _id: '1',
+        chineseName: '联想（中国）',
+        regions: ['其他'],
         name: '联想（中国）',
         code: 'LENOVO_CN',
         category: ['服务器', '网络设备'],
@@ -241,6 +290,8 @@ export const mockVendors: Vendor[] = [
     {
         id: 2,
         _id: '2',
+        chineseName: 'HPE（美国）',
+        regions: ['其他'],
         name: 'HPE（美国）',
         code: 'HPE_US',
         category: ['服务器', '存储设备'],
@@ -260,6 +311,8 @@ export const mockVendors: Vendor[] = [
     {
         id: 3,
         _id: '3',
+        chineseName: 'Microsoft（美国）',
+        regions: ['其他'],
         name: 'Microsoft（美国）',
         code: 'MSFT_US',
         category: ['软件系统', '云服务'],
@@ -279,6 +332,8 @@ export const mockVendors: Vendor[] = [
     {
         id: 4,
         _id: '4',
+        chineseName: '华为（中国）',
+        regions: ['其他'],
         name: '华为（中国）',
         code: 'HUAWEI_CN',
         category: ['网络设备', '存储设备', '服务器'],

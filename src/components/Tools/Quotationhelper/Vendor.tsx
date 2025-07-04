@@ -15,7 +15,7 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe } from '@douyinfe/semi-icons';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
@@ -27,7 +27,7 @@ const { Title } = Typography;
 
 // 定义筛选条件接口
 interface FilterValues {
-    region?: VendorRegion;
+    region?: VendorRegion | VendorRegion[];
     type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
     agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OTHER';
     productCategory?: string;
@@ -59,18 +59,32 @@ const Vendor: React.FC = () => {
     const [currentVendorForContactInfo, setCurrentVendorForContactInfo] = useState('');
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [vendorToDelete, setVendorToDelete] = useState<VendorType | null>(null);
+    const [englishNameVisible, setEnglishNameVisible] = useState(false);
+    const [currentEnglishName, setCurrentEnglishName] = useState('');
+    const [regionsVisible, setRegionsVisible] = useState(false);
+    const [currentRegions, setCurrentRegions] = useState<string[]>([]);
+
+    // 将 VendorQueryParams 转换为本地筛选类型，解决 region 数组带来的类型差异
+    const convertToFilterValues = (query: VendorQueryParams): FilterValues => ({
+        region: Array.isArray(query.region) ? query.region : query.region,
+        type: query.type as any,
+        agentType: (query as any).agentType,
+        productCategory: query.productCategory,
+        productKeyword: query.productKeyword,
+        keyword: query.keyword
+    });
 
     // 显示密码窗口
     const showPasswordModal = (vendor: VendorType) => {
         setCurrentPassword(vendor.password || '');
-        setCurrentVendorName(vendor.name);
+        setCurrentVendorName(vendor.name || (vendor as any).chineseName || '');
         setPasswordVisible(true);
     };
 
     // 显示联系人列表
     const handleShowContacts = (vendor: VendorType) => {
         setCurrentContacts(vendor.contacts || []);
-        setCurrentVendorForContacts(vendor.name);
+        setCurrentVendorForContacts(vendor.name || (vendor as any).chineseName || '');
         setContactsVisible(true);
     };
 
@@ -85,8 +99,22 @@ const Vendor: React.FC = () => {
         };
         
         setCurrentContactInfo(primaryContact);
-        setCurrentVendorForContactInfo(vendor.name);
+        setCurrentVendorForContactInfo(vendor.name || (vendor as any).chineseName || '');
         setContactInfoVisible(true);
+    };
+
+    // 显示英文名称弹窗
+    const handleShowEnglishName = (vendor: VendorType) => {
+        const enName = (vendor as any).englishName || '暂无英文名';
+        setCurrentEnglishName(enName);
+        setEnglishNameVisible(true);
+    };
+
+    // 显示全部地区弹窗
+    const handleShowRegions = (vendor: VendorType) => {
+        const list = (vendor as any).regions || [(vendor as any).region];
+        setCurrentRegions(list);
+        setRegionsVisible(true);
     };
 
     // 删除供应商
@@ -99,7 +127,7 @@ const Vendor: React.FC = () => {
             setDeleteModalVisible(false);
             setVendorToDelete(null);
             // 重新加载当前页数据
-            fetchSuppliers(filters, pagination.currentPage, pagination.pageSize);
+            fetchSuppliers(convertToFilterValues(filters), pagination.currentPage, pagination.pageSize);
         } catch (error) {
             console.error('删除供应商失败:', error);
             Toast.error('删除供应商失败');
@@ -150,11 +178,12 @@ const Vendor: React.FC = () => {
             let filteredData = response.data;
             if (values.keyword) {
                 const keyword = values.keyword.toLowerCase();
-                filteredData = filteredData.filter(item => 
-                    item.name.toLowerCase().includes(keyword) ||
+                filteredData = filteredData.filter(item => {
+                    const displayName = (item.name || (item as any).chineseName || '').toLowerCase();
+                    return displayName.includes(keyword) ||
                     item.brands.some(brand => brand.toLowerCase().includes(keyword)) ||
                     item.contact.toLowerCase().includes(keyword)
-                );
+                });
             }
             
             setSuppliers(filteredData);
@@ -218,7 +247,11 @@ const Vendor: React.FC = () => {
     const columns: ColumnProps<VendorType>[] = [
         { 
             title: '供应商名称', 
-            dataIndex: 'name', 
+            render: (record: VendorType) => (
+                <Button theme="borderless" onClick={() => handleShowEnglishName(record)}>
+                    {record.name || (record as any).chineseName || '-'}
+                </Button>
+            ),
             sorter: true,
             width: 200
         },
@@ -246,7 +279,17 @@ const Vendor: React.FC = () => {
         },
         { 
             title: '地区', 
-            dataIndex: 'region', 
+            render: (record: VendorType) => {
+                const regionsArr: string[] = (record as any).regions || [record.region];
+                if (regionsArr.length > 1) {
+                    return (
+                        <Button theme="borderless" icon={<IconGlobe />} onClick={() => handleShowRegions(record)}>
+                            查看全部
+                        </Button>
+                    );
+                }
+                return regionsArr[0] || '-';
+            },
             sorter: true,
             width: 120
         },
@@ -473,10 +516,11 @@ const Vendor: React.FC = () => {
                         <Form.Select
                             field="region"
                             label="国家/地区"
+                            multiple
                             style={{ width: '100%' }}
                             placeholder="请选择"
                             showClear
-                            optionList={VENDOR_REGIONS.map(region => ({
+                            optionList={[...VENDOR_REGIONS, '添加其他'].map(region => ({
                                 label: region,
                                 value: region
                             }))}
@@ -559,7 +603,7 @@ const Vendor: React.FC = () => {
                     total: pagination.total,
                     onPageChange: (page) => {
                         setPagination(prev => ({ ...prev, currentPage: page }));
-                        fetchSuppliers(filters, page, pagination.pageSize);
+                        fetchSuppliers(convertToFilterValues(filters), page, pagination.pageSize);
                     }
                 }}
                 loading={loading}
@@ -820,6 +864,34 @@ const Vendor: React.FC = () => {
                 <p style={{ color: 'var(--semi-color-warning)', fontSize: '14px' }}>
                     此操作不可撤销，删除后将无法恢复该供应商的所有信息。
                 </p>
+            </Modal>
+
+            {/* 英文名称弹窗 */}
+            <Modal
+                visible={englishNameVisible}
+                title="供应商英文名称"
+                onCancel={() => setEnglishNameVisible(false)}
+                footer={null}
+            >
+                <div style={{ padding: 16, textAlign: 'center', fontSize: 16 }}>
+                    {currentEnglishName}
+                </div>
+            </Modal>
+
+            {/* 地区列表弹窗 */}
+            <Modal
+                visible={regionsVisible}
+                title="供应商所在地区"
+                onCancel={() => setRegionsVisible(false)}
+                footer={null}
+            >
+                <div style={{ padding: 16 }}>
+                    <Space wrap>
+                        {currentRegions.map((r, idx) => (
+                            <Tag key={idx} color="green" type="light">{r}</Tag>
+                        ))}
+                    </Space>
+                </div>
             </Modal>
         </div>
     );

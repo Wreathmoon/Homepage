@@ -20,7 +20,8 @@ import {
     Tooltip,
     Tag,
     Progress,
-    Switch
+    Switch,
+    Input
 } from '@douyinfe/semi-ui';
 import { IconUpload, IconFile, IconTickCircle, IconClose, IconEdit, IconPlus, IconPlay, IconTick, IconAlertTriangle } from '@douyinfe/semi-icons';
 import type { BeforeUploadProps, BeforeUploadObjectResult } from '@douyinfe/semi-ui/lib/es/upload';
@@ -62,6 +63,7 @@ interface QuotationFormData {
     quotationDate?: string;
     currency?: string;
     remark?: string;
+    quotationFile?: any;
 }
 
 interface UploadedFileInfo {
@@ -100,6 +102,17 @@ const QuotationImport: React.FC = () => {
     const [existingFileInfo, setExistingFileInfo] = useState<any>(null);
     
     const formRef = useRef<FormApi<any>>();
+    const manualFormApi = useRef<FormApi<any>>();
+
+    /* ---------------- 动态"添加其他"相关 ---------------- */
+    const ADD_OTHER_VALUE = '__add_other__';
+    const [categoryOptions, setCategoryOptions] = useState<string[]>(PRODUCT_CATEGORIES.filter(cat => cat !== '其他'));
+    const [regionOptions, setRegionOptions] = useState<string[]>(REGIONS.filter(r => r !== '其他'));
+
+    const [addOtherModalVisible, setAddOtherModalVisible] = useState(false);
+    const [addOtherType, setAddOtherType] = useState<'category' | 'region'>('category');
+    const [customOtherValue, setCustomOtherValue] = useState<string>('');
+    const [targetFormApi, setTargetFormApi] = useState<FormApi<any> | null>(null);
 
     // 监听currentIndex变化，自动填充表单数据
     useEffect(() => {
@@ -550,32 +563,37 @@ const QuotationImport: React.FC = () => {
     const handleManualSubmit = async (values: QuotationFormData) => {
         setLoading(true);
         try {
-            // 转换数据格式以匹配后端接口
-            const quotationData = {
-                name: values.productName,
-                productName: values.productName,
-                supplier: values.vendor,
-                list_price: values.originalPrice || undefined,
-                unit_price: values.unitPrice || undefined,
-                quote_unit_price: values.unitPrice || (values.finalPrice && values.quantity ? Math.round((values.finalPrice / values.quantity) * 100) / 100 : values.finalPrice),
-                quantity: values.quantity || 1,
-                quote_total_price: values.finalPrice,
-                totalPrice: values.originalPrice || values.finalPrice,
-                discountedTotalPrice: values.finalPrice,
-                unitPrice: values.unitPrice,
-                quote_validity: values.quotationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                currency: values.currency || 'CNY',
-                notes: values.remark || '',
-                configDetail: values.productSpec || '',
-                category: values.category || '其他',
-                ...(values.region && ['德国', '法国', '英国', '意大利', '西班牙', '荷兰', '比利时', '瑞士', '奥地利', '瑞典', '挪威', '丹麦', '芬兰', '波兰', '捷克', '匈牙利', '葡萄牙', '爱尔兰', '希腊', '美国', '加拿大', '其他'].includes(values.region) ? { region: values.region } : {}),
-                status: 'active' as const
-            };
-            
-            const response = await addQuotation(quotationData);
-            Toast.success('手动添加成功');
+            const apiServerUrl = API_CONFIG.API_URL;
+            const formData = new FormData();
+            formData.append('productName', values.productName);
+            formData.append('supplier', values.vendor);
+            formData.append('category', values.category);
+            if (values.region) formData.append('region', values.region);
+            formData.append('finalPrice', String(values.finalPrice));
+            formData.append('currency', values.currency || 'CNY');
+            formData.append('quantity', String(values.quantity || 1));
+            if (values.unitPrice) formData.append('unitPrice', String(values.unitPrice));
+            if (values.originalPrice) formData.append('listPrice', String(values.originalPrice));
+            if (values.productSpec) formData.append('productSpec', values.productSpec);
+            if (values.remark) formData.append('remark', values.remark);
+            if (values.quotationDate) formData.append('quoteValidity', values.quotationDate);
+
+            const fileInst = values.quotationFile?.[0]?.fileInstance;
+            if (fileInst) {
+                formData.append('quotationFile', fileInst);
+            }
+
+            const res = await fetch(`${apiServerUrl}/api/quotations/manual`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+            if (!result.success) throw new Error(result.message);
+            Toast.success(result.message || '上传并保存成功');
             formRef.current?.reset();
-            setSavedQuotations(prev => [...prev, response.data]);
+            if (result.data && Array.isArray(result.data)) {
+                setSavedQuotations(prev => [...prev, ...result.data]);
+            }
         } catch (error) {
             Toast.error('添加失败，请重试');
             console.error('手动添加失败:', error);
@@ -1100,30 +1118,23 @@ const QuotationImport: React.FC = () => {
                                         placeholder="请选择产品类别"
                                         rules={[{ required: true, message: '请选择产品类别' }]}
                                         disabled={currentData?.status !== 'editing'}
-                                        optionList={PRODUCT_CATEGORIES.map(cat => ({
-                                            label: cat,
-                                            value: cat
-                                        }))}
+                                        optionList={[...categoryOptions.map(cat => ({ label: cat, value: cat })), { label: '添加其他', value: ADD_OTHER_VALUE }] as any}
+                                        onChange={(value) => handleSelectChange('category', value as string, formRef.current!)}
                                     />
                                     <Form.Select
                                         field="region"
                                         label="地区"
                                         placeholder="请选择地区"
                                         disabled={currentData?.status !== 'editing'}
-                                        optionList={REGIONS.map(region => ({
-                                            label: region,
-                                            value: region
-                                        }))}
+                                        optionList={[...regionOptions.map(r => ({ label: r, value: r })), { label: '添加其他', value: ADD_OTHER_VALUE }] as any}
+                                        onChange={(value) => handleSelectChange('region', value as string, formRef.current!)}
                                     />
                                     <Form.InputNumber
                                         field="originalPrice"
                                         label="List Price"
                                         placeholder="请输入List Price"
                                         disabled={currentData?.status !== 'editing'}
-                                        formatter={value => {
-                                            const currencyCode = currentCurrency || 'CNY';
-                                            return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                                        }}
+                                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                                         parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
                                     <Form.InputNumber
@@ -1131,10 +1142,7 @@ const QuotationImport: React.FC = () => {
                                         label="设备单价（如有）"
                                         placeholder="请输入设备单价"
                                         disabled={currentData?.status !== 'editing'}
-                                        formatter={value => {
-                                            const currencyCode = currentCurrency || 'CNY';
-                                            return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                                        }}
+                                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                                         parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
                                     <Form.InputNumber
@@ -1143,10 +1151,7 @@ const QuotationImport: React.FC = () => {
                                         placeholder="请输入折后总价"
                                         rules={[{ required: true, message: '请输入折后总价' }]}
                                         disabled={currentData?.status !== 'editing'}
-                                        formatter={value => {
-                                            const currencyCode = currentCurrency || 'CNY';
-                                            return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                                        }}
+                                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                                         parser={value => value!.replace(/[^\d.]/g, '')}
                                     />
                                     <Form.InputNumber
@@ -1630,6 +1635,34 @@ const QuotationImport: React.FC = () => {
         );
     };
 
+    // 选择"添加其他"时触发
+    const handleSelectChange = (type: 'category' | 'region', value: string, formApi?: FormApi<any>) => {
+        if (value === ADD_OTHER_VALUE) {
+            setAddOtherType(type);
+            setTargetFormApi(formApi || null);
+            setCustomOtherValue('');
+            setAddOtherModalVisible(true);
+        }
+    };
+
+    const handleAddOtherConfirm = () => {
+        const trimmed = customOtherValue.trim();
+        if (!trimmed) {
+            Toast.warning('请输入内容');
+            return;
+        }
+        if (addOtherType === 'category') {
+            setCategoryOptions(prev => [...prev, trimmed]);
+        } else {
+            setRegionOptions(prev => [...prev, trimmed]);
+        }
+        // 将表单字段设置为新值
+        if (targetFormApi) {
+            targetFormApi.setValue(addOtherType, trimmed);
+        }
+        setAddOtherModalVisible(false);
+    };
+
     return (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
             {/* 重复检测对话框 */}
@@ -1660,6 +1693,7 @@ const QuotationImport: React.FC = () => {
                     onSubmit={handleManualSubmit}
                     layout="horizontal"
                     style={{ marginTop: '20px' }}
+                    getFormApi={(api) => (manualFormApi.current = api)}
                 >
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                         <Form.Input
@@ -1679,38 +1713,28 @@ const QuotationImport: React.FC = () => {
                             label="产品类别"
                             placeholder="请选择产品类别"
                             rules={[{ required: true, message: '请选择产品类别' }]}
-                            optionList={PRODUCT_CATEGORIES.map(cat => ({
-                                label: cat,
-                                value: cat
-                            }))}
+                            optionList={[...categoryOptions.map(cat => ({ label: cat, value: cat })), { label: '添加其他', value: ADD_OTHER_VALUE }] as any}
+                            onChange={(value) => handleSelectChange('category', value as string, manualFormApi.current!)}
                         />
                         <Form.Select
                             field="region"
                             label="地区"
                             placeholder="请选择地区"
-                            optionList={REGIONS.map(region => ({
-                                label: region,
-                                value: region
-                            }))}
+                            optionList={[...regionOptions.map(r => ({ label: r, value: r })), { label: '添加其他', value: ADD_OTHER_VALUE }] as any}
+                            onChange={(value) => handleSelectChange('region', value as string, manualFormApi.current!)}
                         />
                         <Form.InputNumber
                             field="originalPrice"
                             label="List Price"
                             placeholder="请输入List Price"
-                            formatter={value => {
-                                const currencyCode = currentCurrency || 'CNY';
-                                return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                            }}
+                            formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                             parser={value => value!.replace(/[^\d.]/g, '')}
                         />
                         <Form.InputNumber
                             field="unitPrice"
                             label="设备单价（如有）"
                             placeholder="请输入设备单价"
-                            formatter={value => {
-                                const currencyCode = currentCurrency || 'CNY';
-                                return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                            }}
+                            formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                             parser={value => value!.replace(/[^\d.]/g, '')}
                         />
                         <Form.InputNumber
@@ -1718,10 +1742,7 @@ const QuotationImport: React.FC = () => {
                             label="折后总价（到手价）"
                             placeholder="请输入折后总价"
                             rules={[{ required: true, message: '请输入折后总价' }]}
-                            formatter={value => {
-                                const currencyCode = currentCurrency || 'CNY';
-                                return `${currencyCode} ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                            }}
+                            formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                             parser={value => value!.replace(/[^\d.]/g, '')}
                         />
                         <Form.InputNumber
@@ -1768,6 +1789,16 @@ const QuotationImport: React.FC = () => {
                         autosize={{ minRows: 2, maxRows: 4 }}
                     />
                     
+                    <Form.Upload
+                        field="quotationFile"
+                        label="报价单原文件"
+                        limit={1}
+                        accept=".xlsx,.xls,.csv,.pdf,.doc,.docx"
+                        draggable
+                        action="/api/dummy"
+                        beforeUpload={() => false}
+                    />
+                    
                     <div style={{ textAlign: 'center', marginTop: '20px' }}>
                         <Button type="primary" htmlType="submit" loading={loading} size="large">
                             添加到数据库
@@ -1778,6 +1809,20 @@ const QuotationImport: React.FC = () => {
             
             {/* 底部留白 */}
             <div style={{ height: '200px' }}></div>
+
+            {/* 添加其他弹窗 */}
+            <Modal
+                title={`输入新的${addOtherType === 'category' ? '产品类别' : '地区'}`}
+                visible={addOtherModalVisible}
+                onOk={handleAddOtherConfirm}
+                onCancel={() => setAddOtherModalVisible(false)}
+            >
+                <Input
+                    placeholder="请输入内容"
+                    value={customOtherValue}
+                    onChange={(val) => setCustomOtherValue(val)}
+                />
+            </Modal>
         </div>
     );
 };

@@ -129,11 +129,11 @@ const quotationSchema = new mongoose.Schema({
     // 分类和标签
     category: {
         type: String,
-        enum: ['服务器', '存储设备', '网络设备', '安全设备', '软件系统', '云服务', '其他']
+        trim: true
     },
     region: {
         type: String,
-        enum: ['美国', '中国', '韩国', '日本', '芬兰', '瑞典', '荷兰', '德国', '法国', '印度', '以色列', '加拿大', '澳大利亚', '台湾', '英国', '瑞士', '新加坡', '其他']
+        trim: true
     },
     
     // 状态信息

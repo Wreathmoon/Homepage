@@ -129,11 +129,10 @@ const VendorAdd: React.FC = () => {
     const contactFormRef = useRef<FormApi<ContactFormData>>();
 
     // 自动生成供应商代码
-    const generateVendorCode = (name: string) => {
-        if (!name) return '';
+    const generateVendorCode = (enName?: string, cnName?: string) => {
+        const base = enName || cnName || 'VND';
         const timestamp = Date.now().toString().slice(-4);
-        const nameCode = name.length > 0 ? name.substring(0, 3).toUpperCase() : 'VND';
-        return `${nameCode}_${timestamp}`;
+        return `${base.substring(0, 3).toUpperCase()}_${timestamp}`;
     };
 
     // 获取完整的产品类别列表（预设+自定义）
@@ -483,11 +482,15 @@ const VendorAdd: React.FC = () => {
                 ...values,
                 contacts: contacts,
             };
-            // 生成code
-            submitData.code = generateVendorCode(values.chineseName);
+            // 生成code 使用英文名优先
+            submitData.code = generateVendorCode(values.englishName, values.chineseName);
 
+            // 若中文名为空，用英文名补充
+            if (!values.chineseName && values.englishName) {
+                submitData.chineseName = values.englishName;
+            }
             // 向后兼容旧字段 name
-            submitData.name = values.chineseName;
+            submitData.name = submitData.chineseName || values.chineseName || values.englishName;
 
             // 处理地区映射
             if (values.regions && values.regions.length > 0) {
@@ -650,14 +653,14 @@ const VendorAdd: React.FC = () => {
                         <Form.Input
                             field="chineseName"
                             label="供应商名称(中文)"
-                            placeholder="请输入中文名称"
-                            rules={[{ required: true, message: '请填写中文名称' }]}
+                            placeholder="请输入中文名称(可选)"
                         />
                         
                         <Form.Input
                             field="englishName"
                             label="供应商名称(英文)"
-                            placeholder="请输入英文名称(可选)"
+                            placeholder="请输入英文名称"
+                            rules={[{ required: true, message: '请填写英文名称' }]}
                         />
                         
                         <Form.Select

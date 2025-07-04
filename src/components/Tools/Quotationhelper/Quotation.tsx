@@ -11,13 +11,15 @@ interface QuotationFormValues {
   product?: string;
   details?: string;
   endUserName?: string;
-  endUserAddress?: string;
+  addressLine1: string;
+  addressLine2?: string;
   endUserContact?: string;
   endUserContactInfo?: string;
   currency: string;
   isFirst: boolean;
   deliveryDate?: string;
   quoteValidityDate?: string;
+  senderName: string;
 }
 
 const currencyOptions = [
@@ -40,13 +42,13 @@ const Quotation: React.FC = () => {
   const mailRef = useRef<HTMLTextAreaElement>(null);
 
   // 供应商下拉选项
-  const [vendorOptions, setVendorOptions] = useState<{ label: string; value: string }[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<string[]>([]);
 
   // 加载默认供应商列表
   const loadInitialVendors = useCallback(async () => {
     try {
       const res = await getVendorList({ page: 1, pageSize: 20 });
-      const opts = (res.data || []).map((v: any) => ({ label: v.name, value: v.name }));
+      const opts = (res.data || []).map((v: any) => v.name as string);
       setVendorOptions(opts);
     } catch (e) {
       console.error('获取供应商失败', e);
@@ -61,7 +63,7 @@ const Quotation: React.FC = () => {
   const fetchVendors = useCallback(async (keyword: string) => {
     try {
       const res = await getVendorList({ keyword, page: 1, pageSize: 20 });
-      const opts = (res.data || []).map(v => ({ label: v.name, value: v.name }));
+      const opts = (res.data || []).map((v:any) => v.name as string);
       setVendorOptions(opts);
     } catch (e) {
       console.error('获取供应商失败', e);
@@ -73,9 +75,9 @@ const Quotation: React.FC = () => {
 
   const handleGenerate = (values: QuotationFormValues) => {
     const {
-      supplier, product, details, endUserName, endUserAddress,
+      supplier, product, details, endUserName, addressLine1, addressLine2,
       endUserContact, endUserContactInfo, currency, isFirst,
-      deliveryDate, quoteValidityDate
+      deliveryDate, quoteValidityDate, senderName
     } = values;
     
     // 格式化日期
@@ -89,27 +91,32 @@ const Quotation: React.FC = () => {
       });
     };
     
-    let mail = `
-Hi ${supplier},
+    const deliveryAddress = `${addressLine1}${addressLine2 ? ', ' + addressLine2 : ''}`;
+    
+    let mail = `Hi ${supplier},
 
-I hope this email finds you well.
+We are seeking your quotation for the following items and would appreciate your prompt response.
 
-I'm reaching out to inquire about ${product ? product : '[specific service or product]'}.
-We have a demand outlined as follows:
+Product: ${product || '<Product Name>'}
+Specifications / Quantity:\n${details || 'Please specify configuration & quantity'}
 
-- ${details || '需求配置描述+需求数量'}
+Key Information:
+- Currency: ${currency}
+- Incoterms: DDP (destination)${deliveryDate ? `\n- Required Delivery Date: ${formatDate(deliveryDate)}` : ''}
+- Delivery Address: ${deliveryAddress || '[Delivery Address]'}
+- Payment Terms: Invoice 30 days
+${quoteValidityDate ? `- Quote Validity: until ${formatDate(quoteValidityDate)}` : ''}
 
-End-user: ${endUserName || 'xxx'}
-Delivery Address: ${endUserAddress || '[Delivery Address Required]'}
-${endUserContact ? `Contact Person: ${endUserContact}` : ''}${endUserContactInfo ? `, Contact Info: ${endUserContactInfo}` : ''}
+End-user: ${endUserName || 'N/A'}
+Contact: ${endUserContact || ''}${endUserContactInfo ? `, ${endUserContactInfo}` : ''}
 
-Quotation Price Terms: Please provide DDP prices in ${currency}, excluding VAT. 
-ETA: Kindly include the estimated delivery time.${deliveryDate ? ` Our required delivery date is ${formatDate(deliveryDate)}.` : ''}
-Payment Terms: default payment term is invoice 30 days.
-${quoteValidityDate ? `Quote Validity: Please ensure the quotation is valid until ${formatDate(quoteValidityDate)}.` : ''}
+${isFirst ? 'Please note that China Unicom operates through 37 entities worldwide. Our UK entity has served as EU HQ since 2006. Kindly confirm your appropriate contracting entity.' : ''}
 
-${isFirst ? `China Unicom operates through 37 entities globally, with our UK entity serving as the European HQ since 2006. Below, I have listed two relevant entities. Please confirm which one would be most suitable to proceed with for this project. Please kindly provide your contracting entity information as well, thank you.\n\nPO entities` : ''}
-    `.trim();
+Thank you in advance for your prompt support.
+
+Best regards,
+${senderName || '[Your Name]'}
+China Unicom Global (UK) Ltd.`;
     setMailContent(mail);
   };
 
@@ -140,15 +147,13 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
       >
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Select
+            <Form.AutoComplete
               field="supplier"
               label="供应商名字（必填）"
-              placeholder="请选择或输入供应商名字"
-              filter
-              searchPosition="trigger"
+              placeholder="请输入供应商名字"
               style={{ width: '100%' }}
-              optionList={vendorOptions}
-              dropdownClassName="vendor-select-dropdown"
+              data={vendorOptions}
+              position="bottomLeft"
               onSearch={(value) => {
                 if (value) {
                   debouncedFetch(value);
@@ -156,7 +161,7 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
                   loadInitialVendors();
                 }
               }}
-              rules={[{ required: true, message: '请选择或输入供应商名字' }]}
+              rules={[{ required: true, message: '请输入供应商名字' }]}
             />
           </Col>
           <Col span={12}>
@@ -168,19 +173,21 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
           </Col>
         </Row>
         <Row gutter={16}>
-          <Col span={12}>
+          <Col span={24}>
             <Form.Input
-              field="endUserName"
-              label="End-user 客户名"
-              placeholder="请输入客户名"
+              field="addressLine1"
+              label="交付地址 Line 1（必填）"
+              placeholder="请输入地址第一行"
+              rules={[{ required: true, message: '请填写交付地址 Line 1' }]}
             />
           </Col>
-          <Col span={12}>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
             <Form.Input
-              field="endUserAddress"
-              label="End-user 交付地址（必填）"
-              placeholder="请输入交付地址"
-              rules={[{ required: true, message: '请填写交付地址' }]}
+              field="addressLine2"
+              label="交付地址 Line 2"
+              placeholder="请输入地址第二行（可选）"
             />
           </Col>
         </Row>
@@ -197,6 +204,23 @@ ${isFirst ? `China Unicom operates through 37 entities globally, with our UK ent
               field="endUserContactInfo"
               label="End-user 联系人联系方式"
               placeholder="请输入联系人联系方式"
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Input
+              field="senderName"
+              label="发件人姓名（必填）"
+              placeholder="请输入您的姓名"
+              rules={[{ required: true, message: '请填写发件人姓名' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <Form.Input
+              field="endUserName"
+              label="End-user 客户名"
+              placeholder="请输入客户名"
             />
           </Col>
         </Row>

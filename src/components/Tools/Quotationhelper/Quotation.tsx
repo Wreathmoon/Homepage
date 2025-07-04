@@ -39,6 +39,7 @@ function debounce<T extends (...args: any[]) => any>(func: T, wait = 300) {
 
 const Quotation: React.FC = () => {
   const [mailContent, setMailContent] = useState('');
+  const [mailHtml, setMailHtml] = useState('');
   const mailRef = useRef<HTMLTextAreaElement>(null);
 
   // 供应商下拉选项
@@ -97,12 +98,12 @@ const Quotation: React.FC = () => {
 
 We are seeking your quotation for the following items and would appreciate your prompt response.
 
-Product: ${product || '<Product Name>'}
-Specifications / Quantity:\n${details || 'Please specify configuration & quantity'}
+Product: <strong>${product || '&lt;Product Name&gt;'}</strong>
+Specifications:\n${details || 'Please specify configuration & quantity'}
 
-Key Information:
+<strong>Key Information:</strong>
 - Currency: ${currency}
-- Incoterms: DDP (destination)${deliveryDate ? `\n- Required Delivery Date: ${formatDate(deliveryDate)}` : ''}
+- Incoterms: DDP (destination)${deliveryDate ? `\n- Required Quote Response Date: ${formatDate(deliveryDate)}` : ''}
 - Delivery Address: ${deliveryAddress || '[Delivery Address]'}
 - Payment Terms: Invoice 30 days
 ${quoteValidityDate ? `- Quote Validity: until ${formatDate(quoteValidityDate)}` : ''}
@@ -116,8 +117,9 @@ Thank you in advance for your prompt support.
 
 Best regards,
 ${senderName || '[Your Name]'}
-China Unicom Global (UK) Ltd.`;
+China Unicom (Europe) Operations Limited`;
     setMailContent(mail);
+    setMailHtml(mail.replace(/\n/g, '<br/>'));
   };
 
   const handleCopy = () => {
@@ -243,8 +245,8 @@ China Unicom Global (UK) Ltd.`;
           <Col span={12}>
             <Form.DatePicker
               field="deliveryDate"
-              label="需求交付日期（必填）"
-              placeholder="请选择需求交付日期"
+              label="要求报价回复日期（必填）"
+              placeholder="请选择报价回复日期"
               style={{ width: '100%' }}
               format="yyyy-MM-dd"
               rules={[{ required: true, message: '请选择需求交付日期' }]}
@@ -277,16 +279,13 @@ China Unicom Global (UK) Ltd.`;
           </Col>
         </Row>
       </Form>
-      {mailContent && (
+      {mailHtml && (
         <div style={{ margin: '40px auto 0 auto', maxWidth: 900, background: 'var(--semi-color-bg-1)', borderRadius: 8, padding: 32, position: 'relative' }}>
           <Title heading={4} style={{ textAlign: 'center' }}>生成的邮件内容</Title>
-          <TextArea
-            ref={mailRef}
-            value={mailContent}
-            onChange={setMailContent}
-            autosize={{ minRows: 12, maxRows: 24 }}
-            style={{ width: '100%', fontSize: 16, marginTop: 16, paddingRight: 48 }}
-            placeholder="邮件内容将在这里生成，可编辑"
+          <div
+            ref={mailRef as any}
+            dangerouslySetInnerHTML={{ __html: mailHtml }}
+            style={{ fontSize: 16, marginTop: 16, whiteSpace: 'pre-wrap' }}
           />
           <Button
             icon={<IconCopy />}

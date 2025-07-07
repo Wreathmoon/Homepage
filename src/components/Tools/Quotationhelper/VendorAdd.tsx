@@ -51,7 +51,7 @@ interface VendorFormData {
     type: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
     website?: string;
     brands?: string;
-    agentType: 'GENERAL_AGENT' | 'AGENT' | 'OTHER';
+    agentType: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'OTHER';
     account?: string;
     password?: string;
     entryPerson: string;
@@ -82,6 +82,7 @@ const VENDOR_TYPES = [
 const AGENT_TYPE_OPTIONS = [
     { label: '总代理', value: 'GENERAL_AGENT' },
     { label: '经销商', value: 'AGENT' },
+    { label: '原厂', value: 'OEM' },
     { label: '添加其他', value: 'ADD_OTHER_AGENT' }
 ];
 
@@ -515,11 +516,10 @@ const VendorAdd: React.FC = () => {
                 submitData.brands = [];
             }
             submitData.password = currentPassword || '';
-            // 将agentType转换为后端期望的布尔字段
+            // 将agentType转换为后端期望的布尔字段，同时保留agentType本身
             submitData.isGeneralAgent = values.agentType === 'GENERAL_AGENT';
             submitData.isAgent = values.agentType === 'AGENT';
-            // 移除前端字段
-            submitData.agentType = undefined;
+            submitData.agentType = values.agentType;
             // 添加其他字段
             submitData.website = values.website || '';
             submitData.remarks = values.remarks || '';

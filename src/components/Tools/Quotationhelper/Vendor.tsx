@@ -30,7 +30,7 @@ const { Title } = Typography;
 interface FilterValues {
     region?: VendorRegion | VendorRegion[];
     type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
-    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OTHER';
+    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'OTHER';
     productCategory?: string;
     productKeyword?: string;
     keyword?: string;
@@ -150,6 +150,10 @@ const Vendor: React.FC = () => {
                     isGeneralAgent = false;
                     isAgent = true;
                     break;
+                case 'OEM':
+                    isGeneralAgent = false;
+                    isAgent = false;
+                    break;
                 case 'OTHER':
                     isGeneralAgent = false;
                     isAgent = false;
@@ -164,6 +168,7 @@ const Vendor: React.FC = () => {
                 keyword: values.keyword,
                 productCategory: values.productCategory,
                 productKeyword: values.productKeyword,
+                agentType: values.agentType,
                 isGeneralAgent,
                 isAgent,
                 page,
@@ -271,6 +276,7 @@ const Vendor: React.FC = () => {
                     const agentType = (record as any).agentType;
                     if (agentType === 'GENERAL_AGENT') return '总代理';
                     if (agentType === 'AGENT') return '经销商';
+                    if (agentType === 'OEM') return '原厂';
                     return agentType; // 显示自定义代理类型
                 }
                 // 回退到旧的布尔字段
@@ -550,6 +556,7 @@ const Vendor: React.FC = () => {
                             optionList={[
                                 { label: '总代理', value: 'GENERAL_AGENT' },
                                 { label: '经销商', value: 'AGENT' },
+                                { label: '原厂', value: 'OEM' },
                                 { label: '其他', value: 'OTHER' }
                             ]}
                         />

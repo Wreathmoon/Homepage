@@ -604,12 +604,20 @@ const VendorAdd: React.FC = () => {
         setContacts([]);
         setCurrentPassword('');
         setCustomCategories([]); // 重置自定义类别
+        clearEdit(); // 清除编辑状态，避免刷新后仍填充
         // 重置后重新设置录入人字段
         setTimeout(() => {
             formRef.current?.setValue('entryPerson', currentUser || '');
         }, 100);
         Toast.info('表单已重置');
     };
+
+    // 组件卸载时清理编辑状态
+    useEffect(() => {
+        return () => {
+            clearEdit();
+        };
+    }, []);
 
     // 预填表单值
     useEffect(() => {

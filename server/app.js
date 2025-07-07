@@ -44,10 +44,11 @@ mongoose.connect(MONGODB_URI, {
 });
 
 // 导入路由
-const vendorRoutes = require('./routes/vendors');
+const vendorRoutes = require('./routes/vendors');   
 const quotationRoutes = require('./routes/quotations');
 const uploadRoutes = require('./routes/upload');
 const authRoutes = require('./routes/auth');
+const logRoutes = require('./routes/logs');
 
 // 路由配置
 app.use('/api/vendors', vendorRoutes);
@@ -55,6 +56,7 @@ app.use('/api/quotations', quotationRoutes);
 app.use('/api/products', quotationRoutes); // 兼容现有前端API
 app.use('/api/upload', uploadRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/logs', logRoutes);
 
 // 健康检查端点
 app.get('/api/health', (req, res) => {

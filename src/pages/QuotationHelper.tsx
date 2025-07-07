@@ -11,6 +11,7 @@ import UserManagement from '../components/UserManagement';
 import { useAuth } from '../contexts/AuthContext';
 import { VendorEditProvider } from '../contexts/VendorEditContext';
 import type { Vendor as VendorType } from '../services/vendor';
+import Logs from './Logs';
 
 const { Footer, Sider, Content } = Layout;
 
@@ -41,6 +42,8 @@ const QuotationHelper = () => {
                 return <QuotationImport />;
             case 'UserManagement':
                 return <UserManagement />;
+            case 'Logs':
+                return <Logs />;
             default:
                 return (
                     <div style={{ 
@@ -81,6 +84,7 @@ const QuotationHelper = () => {
                             { itemKey: 'VendorAdd', text: '供应商录入', icon: <IconPlus size="large" /> },
                             { itemKey: 'History', text: '历史报价', icon: <IconHistory size="large" /> },
                             { itemKey: 'Import', text: '报价上传', icon: <IconUpload size="large" /> },
+                            ...(isAdmin ? [{ itemKey: 'Logs', text: '系统日志', icon: <IconHistory size="large" /> }] : []),
                         ]}
                         onSelect={data => setSelectedPage(data.itemKey as string)}
                         footer={{

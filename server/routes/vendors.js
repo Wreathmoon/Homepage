@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Vendor = require('../models/vendor');
+const { writeLog } = require('../services/logger');
 
 // 获取供应商列表 (支持筛选和分页)
 router.get('/', async (req, res) => {
@@ -253,6 +254,18 @@ router.post('/', async (req, res) => {
         const vendor = new Vendor(vendorData);
         await vendor.save();
 
+        // 写日志
+        writeLog({
+            action: 'CREATE',
+            collection: 'vendors',
+            itemId: vendor._id,
+            operator: req.headers['x-user'] || 'unknown',
+            payload: {
+                chineseName: vendor.chineseName,
+                englishName: vendor.englishName
+            }
+        });
+
         res.status(201).json({
             success: true,
             message: '供应商添加成功',
@@ -298,7 +311,19 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        await Vendor.findByIdAndDelete(req.params.id);
+        const deleted = await Vendor.findByIdAndDelete(req.params.id);
+        if (deleted) {
+            writeLog({
+                action: 'DELETE',
+                collection: 'vendors',
+                itemId: deleted._id,
+                operator: req.headers['x-user'] || 'unknown',
+                payload: {
+                    chineseName: deleted.chineseName,
+                    englishName: deleted.englishName
+                }
+            });
+        }
 
         res.json({
             success: true,
@@ -330,23 +355,24 @@ router.put('/:id', async (req, res) => {
             updateData.regions = [updateData.region];
         }
 
-        const vendor = await Vendor.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true, runValidators: true }
-        );
-
-        if (!vendor) {
-            return res.status(404).json({
-                success: false,
-                message: '供应商不存在'
+        const updated = await Vendor.findByIdAndUpdate(req.params.id, updateData, { new: true });
+        if (updated) {
+            writeLog({
+                action: 'UPDATE',
+                collection: 'vendors',
+                itemId: updated._id,
+                operator: req.headers['x-user'] || 'unknown',
+                payload: {
+                    chineseName: updated.chineseName,
+                    englishName: updated.englishName
+                }
             });
         }
 
         res.json({
             success: true,
             message: '供应商更新成功',
-            data: vendor
+            data: updated
         });
 
     } catch (error) {

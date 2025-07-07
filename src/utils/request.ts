@@ -28,6 +28,15 @@ request.interceptors.request.use(
             delete config.headers['Content-Type'];
         }
         
+        const uname = localStorage.getItem('user_username');
+        const role = localStorage.getItem('user_role');
+        if (uname && config.headers) {
+            config.headers['x-user'] = uname;
+        }
+        if (role && config.headers) {
+            config.headers['x-role'] = role;
+        }
+        
         return config;
     },
     (error: AxiosError) => {

@@ -3,17 +3,17 @@
   "name": "询价小程序 - 智能报价助手系统",
   "icons": [
     {
-      "src": "logo矢量.png",
+      "src": "中国联通-copy.png",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/png"
     },
     {
-      "src": "logo矢量.png",
+      "src": "中国联通-copy.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo矢量.png",
+      "src": "中国联通-copy.png",
       "type": "image/png",
       "sizes": "512x512"
     }

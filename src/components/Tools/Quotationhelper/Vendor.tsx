@@ -481,16 +481,18 @@ const Vendor: React.FC = () => {
                             onClick={() => handleEditVendor(record)}
                         />
                     )}
-                    <Button
-                        theme="borderless"
-                        type="danger"
-                        size="small"
-                        icon={<IconDelete />}
-                        onClick={() => {
-                            setVendorToDelete(record);
-                            setDeleteModalVisible(true);
-                        }}
-                    />
+                    {isAdmin && (
+                        <Button
+                            theme="borderless"
+                            type="danger"
+                            size="small"
+                            icon={<IconDelete />}
+                            onClick={() => {
+                                setVendorToDelete(record);
+                                setDeleteModalVisible(true);
+                            }}
+                        />
+                    )}
                 </Space>
             )
         }

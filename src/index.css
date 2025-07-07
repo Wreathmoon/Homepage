@@ -1,5 +1,21 @@
-body {
-  margin: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ---- 恢复纯白背景 ---- */
+html {
+  background: #ffffff !important;
+}
+
+body, #root {
+  background-color: #ffffff !important;
+}
+
+[class^="semi-layout"], [class*=" semi-layout"],
+.semi-layout-sider,
+.semi-navigation,
+.semi-layout-content,
+.semi-layout-header,
+.semi-card,
+.semi-card .semi-card-body,
+.semi-table,
+.semi-table-cell {
+  background-color: #ffffff !important;
+  box-shadow: initial !important;
 }

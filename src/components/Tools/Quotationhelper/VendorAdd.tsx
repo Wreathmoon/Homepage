@@ -651,16 +651,16 @@ const VendorAdd: React.FC = () => {
                     
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '20px' }}>
                         <Form.Input
-                            field="chineseName"
-                            label="供应商名称(中文)"
-                            placeholder="请输入中文名称(可选)"
-                        />
-                        
-                        <Form.Input
                             field="englishName"
                             label="供应商名称(英文)"
                             placeholder="请输入英文名称"
                             rules={[{ required: true, message: '请填写英文名称' }]}
+                        />
+
+                        <Form.Input
+                            field="chineseName"
+                            label="供应商名称(中文)"
+                            placeholder="请输入中文名称(可选)"
                         />
                         
                         <Form.Select

@@ -130,10 +130,12 @@ router.get('/', async (req, res) => {
             }
         }
 
-        // 关键字搜索 (名称、品牌、联系人)
+        // 关键字搜索 (中文名、英文名、旧name、品牌、联系人)
         if (keyword) {
             andConditions.push({
                 $or: [
+                    { chineseName: { $regex: keyword, $options: 'i' } },
+                    { englishName: { $regex: keyword, $options: 'i' } },
                     { name: { $regex: keyword, $options: 'i' } },
                     { brands: { $elemMatch: { $regex: keyword, $options: 'i' } } },
                     { contact: { $regex: keyword, $options: 'i' } }

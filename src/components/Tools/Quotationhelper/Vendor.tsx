@@ -60,8 +60,8 @@ const Vendor: React.FC = () => {
     const [currentVendorForContactInfo, setCurrentVendorForContactInfo] = useState('');
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [vendorToDelete, setVendorToDelete] = useState<VendorType | null>(null);
-    const [englishNameVisible, setEnglishNameVisible] = useState(false);
-    const [currentEnglishName, setCurrentEnglishName] = useState('');
+    const [chineseNameVisible, setChineseNameVisible] = useState(false);
+    const [currentChineseName, setCurrentChineseName] = useState('');
     const [regionsVisible, setRegionsVisible] = useState(false);
     const [currentRegions, setCurrentRegions] = useState<string[]>([]);
 
@@ -106,11 +106,11 @@ const Vendor: React.FC = () => {
         setContactInfoVisible(true);
     };
 
-    // 显示英文名称弹窗
-    const handleShowEnglishName = (vendor: VendorType) => {
-        const enName = (vendor as any).englishName || '暂无英文名';
-        setCurrentEnglishName(enName);
-        setEnglishNameVisible(true);
+    // 显示中文名称弹窗
+    const handleShowChineseName = (vendor: VendorType) => {
+        const cnName = (vendor as any).chineseName || vendor.name || '暂无中文名';
+        setCurrentChineseName(cnName);
+        setChineseNameVisible(true);
     };
 
     // 显示全部地区弹窗
@@ -187,8 +187,10 @@ const Vendor: React.FC = () => {
             if (values.keyword) {
                 const keyword = values.keyword.toLowerCase();
                 filteredData = filteredData.filter(item => {
-                    const displayName = (item.name || (item as any).chineseName || '').toLowerCase();
-                    return displayName.includes(keyword) ||
+                    const chineseName = ((item as any).chineseName || item.name || '').toLowerCase();
+                    const englishName = ((item as any).englishName || '').toLowerCase();
+                    return chineseName.includes(keyword) ||
+                    englishName.includes(keyword) ||
                     item.brands.some(brand => brand.toLowerCase().includes(keyword)) ||
                     item.contact.toLowerCase().includes(keyword)
                 });
@@ -254,10 +256,10 @@ const Vendor: React.FC = () => {
     // 表格列定义
     const columns: ColumnProps<VendorType>[] = [
         { 
-            title: '供应商名称', 
+            title: '供应商名称(英文)', 
             render: (record: VendorType) => (
-                <Button theme="borderless" onClick={() => handleShowEnglishName(record)}>
-                    {record.name || (record as any).chineseName || '-'}
+                <Button theme="borderless" onClick={() => handleShowChineseName(record)}>
+                    {(record as any).englishName || record.name || (record as any).chineseName || '-'}
                 </Button>
             ),
             sorter: true,
@@ -532,7 +534,7 @@ const Vendor: React.FC = () => {
                             style={{ width: '100%' }}
                             placeholder="请选择"
                             showClear
-                            optionList={[...VENDOR_REGIONS, '添加其他'].map(region => ({
+                            optionList={[...VENDOR_REGIONS].map(region => ({
                                 label: region,
                                 value: region
                             }))}
@@ -878,15 +880,15 @@ const Vendor: React.FC = () => {
                 </p>
             </Modal>
 
-            {/* 英文名称弹窗 */}
+            {/* 中文名称弹窗 */}
             <Modal
-                visible={englishNameVisible}
-                title="供应商英文名称"
-                onCancel={() => setEnglishNameVisible(false)}
+                visible={chineseNameVisible}
+                title="供应商中文名称"
+                onCancel={() => setChineseNameVisible(false)}
                 footer={null}
             >
                 <div style={{ padding: 16, textAlign: 'center', fontSize: 16 }}>
-                    {currentEnglishName}
+                    {currentChineseName}
                 </div>
             </Modal>
 

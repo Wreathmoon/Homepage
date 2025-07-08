@@ -47,7 +47,6 @@ const vendorSchema = new mongoose.Schema({
         },
         phone: {
             type: String,
-            required: true,
             trim: true
         },
         email: {
@@ -81,7 +80,6 @@ const vendorSchema = new mongoose.Schema({
     },
     phone: {
         type: String,
-        required: true,
         trim: true
     },
     email: {

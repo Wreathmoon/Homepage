@@ -143,6 +143,11 @@ const vendorSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    // 最后修改人
+    modifiedBy: {
+        type: String,
+        trim: true
+    },
     entryTime: {
         type: Date,
         default: Date.now

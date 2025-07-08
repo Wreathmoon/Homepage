@@ -201,13 +201,13 @@ export async function updateVendor(id: string, vendor: Partial<Vendor>): Promise
 export async function deleteVendor(id: string): Promise<void> {
     try {
         const userRole = localStorage.getItem('user_role');
-        const userName = localStorage.getItem('user_username');
-        
+        const displayName = localStorage.getItem('quotation_user');
+
         await request(`/vendors/${id}`, {
             method: 'DELETE',
             headers: {
                 'x-user-role': userRole || '',
-                'x-user-name': userName || ''
+                'x-user': displayName ? encodeURIComponent(displayName) : ''
             }
         });
     } catch (error) {

@@ -1,6 +1,7 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 import { Toast } from '@douyinfe/semi-ui';
 import { API_CONFIG } from './config';
+import { AUTH_CONFIG } from '../config/auth';
 
 // API基础URL配置
 const API_BASE_URL = API_CONFIG.API_URL + '/api';
@@ -28,13 +29,14 @@ request.interceptors.request.use(
             delete config.headers['Content-Type'];
         }
         
-        const uname = localStorage.getItem('user_username');
+        // 统一日志所需的用户信息
+        const displayName = localStorage.getItem(AUTH_CONFIG.userStorageKey);
         const role = localStorage.getItem('user_role');
-        if (uname && config.headers) {
-            config.headers['x-user'] = uname;
+        if (displayName && config.headers) {
+            config.headers['x-user'] = encodeURIComponent(displayName);
         }
         if (role && config.headers) {
-            config.headers['x-role'] = role;
+            config.headers['x-user-role'] = role;
         }
         
         return config;

@@ -212,6 +212,15 @@ const Vendor: React.FC = () => {
         fetchSuppliers({}, 1, 10);
     }, [fetchSuppliers]);
 
+    // 编辑后返回列表时刷新数据
+    useEffect(() => {
+        if (sessionStorage.getItem('vendors_need_refresh') === 'true') {
+            sessionStorage.removeItem('vendors_need_refresh');
+            // 重新拉取当前页
+            fetchSuppliers(convertToFilterValues(filters), pagination.currentPage, pagination.pageSize);
+        }
+    }, []);
+
     // 获取供应商产品
     const fetchVendorProducts = useCallback(async (vendorId: string | number) => {
         setProductsLoading(true);
@@ -393,15 +402,16 @@ const Vendor: React.FC = () => {
             width: 200
         },
         {
-            title: '备注/录入人',
+            title: '备注/录入/修改人',
             render: (record: VendorType) => {
                 const entryPerson = (record as any).entryPerson;
+                const modifiedBy = (record as any).modifiedBy;
                 const remarks = record.remarks;
-                
-                if (!entryPerson && !remarks) {
+
+                if (!entryPerson && !modifiedBy && !remarks) {
                     return <span style={{ color: '#999' }}>-</span>;
                 }
-                
+
                 return (
                     <div style={{ fontSize: '12px' }}>
                         {entryPerson && (
@@ -409,16 +419,20 @@ const Vendor: React.FC = () => {
                                 录入人：{entryPerson}
                             </div>
                         )}
+                        {modifiedBy && (
+                            <div style={{ color: '#fa8c16', marginBottom: '2px' }}>
+                                修改人：{modifiedBy}
+                            </div>
+                        )}
                         {remarks && (
                             <div style={{ color: '#666' }}>
-                                {remarks.length > 20 ? 
+                                {remarks.length > 20 ? (
                                     <Tooltip content={remarks}>
-                                        <span style={{ cursor: 'pointer' }}>
-                                            {remarks.substring(0, 20)}...
-                                        </span>
-                                    </Tooltip> : 
+                                        <span style={{ cursor: 'pointer' }}>{remarks.substring(0, 20)}...</span>
+                                    </Tooltip>
+                                ) : (
                                     remarks
-                                }
+                                )}
                             </div>
                         )}
                     </div>

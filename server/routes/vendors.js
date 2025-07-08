@@ -259,7 +259,7 @@ router.post('/', async (req, res) => {
             action: 'CREATE',
             collection: 'vendors',
             itemId: vendor._id,
-            operator: req.headers['x-user'] || 'unknown',
+            operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
             payload: {
                 chineseName: vendor.chineseName,
                 englishName: vendor.englishName
@@ -317,7 +317,7 @@ router.delete('/:id', async (req, res) => {
                 action: 'DELETE',
                 collection: 'vendors',
                 itemId: deleted._id,
-                operator: req.headers['x-user'] || 'unknown',
+                operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
                 payload: {
                     chineseName: deleted.chineseName,
                     englishName: deleted.englishName
@@ -355,13 +355,20 @@ router.put('/:id', async (req, res) => {
             updateData.regions = [updateData.region];
         }
 
+        // 不允许覆盖首次录入信息
+        delete updateData.entryPerson;
+        delete updateData.entryTime;
+
+        // 记录最后修改人
+        updateData.modifiedBy = req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown';
+
         const updated = await Vendor.findByIdAndUpdate(req.params.id, updateData, { new: true });
         if (updated) {
             writeLog({
-                action: 'UPDATE',
+                action: 'CHANGE',
                 collection: 'vendors',
                 itemId: updated._id,
-                operator: req.headers['x-user'] || 'unknown',
+                operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
                 payload: {
                     chineseName: updated.chineseName,
                     englishName: updated.englishName

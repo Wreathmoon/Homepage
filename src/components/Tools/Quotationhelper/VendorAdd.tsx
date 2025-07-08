@@ -93,7 +93,7 @@ const STATUS_OPTIONS = [
 ];
 
 const VendorAdd: React.FC = () => {
-    const { currentUser } = useAuth(); // 获取当前登录用户
+    const { currentUser, isAdmin } = useAuth(); // 获取当前登录用户和角色
     const { editVendor, clearEdit, goToVendorList } = useVendorEdit();
     const [loading, setLoading] = useState(false);
     const [savedVendors, setSavedVendors] = useState<any[]>([]);
@@ -483,9 +483,6 @@ const VendorAdd: React.FC = () => {
                 ...values,
                 contacts: contacts,
             };
-            // 生成code 使用英文名优先
-            submitData.code = generateVendorCode(values.englishName, values.chineseName);
-
             // 若中文名为空，用英文名补充
             if (!values.chineseName && values.englishName) {
                 submitData.chineseName = values.englishName;
@@ -525,8 +522,24 @@ const VendorAdd: React.FC = () => {
             submitData.remarks = values.remarks || '';
             submitData.account = values.account || '';
             submitData.address = values.address || '';
-            submitData.entryPerson = currentUser || '未知用户'; // 强制使用当前登录用户
-            submitData.entryTime = values.entryTime || new Date().toISOString().split('T')[0];
+
+            // 处理 code
+            if (editVendor) {
+                const origCode = editVendor.code || (sessionStorage.getItem('edit_vendor') ? JSON.parse(sessionStorage.getItem('edit_vendor') as string).code : undefined);
+                if (origCode) submitData.code = origCode;
+            } else {
+                // 新增时生成code
+                submitData.code = generateVendorCode(values.englishName, values.chineseName);
+            }
+
+            if (editVendor) {
+                // 更新操作：保留原录入人，记录最后修改人
+                submitData.modifiedBy = currentUser || '未知用户';
+            } else {
+                // 新增操作：记录录入人和录入时间
+                submitData.entryPerson = currentUser || '未知用户';
+                submitData.entryTime = values.entryTime || new Date().toISOString().split('T')[0];
+            }
             
             // 移除 undefined 字段
             Object.keys(submitData).forEach(key => {
@@ -538,15 +551,18 @@ const VendorAdd: React.FC = () => {
             console.log('🔄 处理后的数据:', submitData);
             
             const apiServerUrl = API_CONFIG.API_URL;
-            const url = editVendor ? `${apiServerUrl}/api/vendors/${editVendor._id}` : `${apiServerUrl}/api/vendors`;
-            const method = editVendor ? 'PUT' : 'POST';
-            if (editVendor) {
-                submitData.code = editVendor.code; // 保持原 code
-            }
+            const editId = editVendor?._id || sessionStorage.getItem('edit_vendor_id');
+            const isEdit = Boolean(editId);
+
+            const url = isEdit ? `${apiServerUrl}/api/vendors/${editId}` : `${apiServerUrl}/api/vendors`;
+            const method = isEdit ? 'PUT' : 'POST';
+
             const response = await fetch(url, {
                 method,
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-user': encodeURIComponent(currentUser || ''),
+                    'x-user-role': isAdmin ? 'admin' : 'user'
                 },
                 body: JSON.stringify(submitData)
             });
@@ -570,6 +586,8 @@ const VendorAdd: React.FC = () => {
                 setCurrentPassword('');
                 setCustomCategories([]); // 重置自定义类别
                 if (editVendor) {
+                    sessionStorage.setItem('vendors_need_refresh', 'true');
+                    sessionStorage.removeItem('edit_vendor_id');
                     clearEdit();
                     goToVendorList();
                     return; // 结束
@@ -612,13 +630,6 @@ const VendorAdd: React.FC = () => {
         Toast.info('表单已重置');
     };
 
-    // 组件卸载时清理编辑状态
-    useEffect(() => {
-        return () => {
-            clearEdit();
-        };
-    }, []);
-
     // 预填表单值
     useEffect(() => {
         if (editVendor && formRef.current) {
@@ -627,6 +638,10 @@ const VendorAdd: React.FC = () => {
             initVals.brands = (editVendor.brands || []).join(',');
             formRef.current.setValues(initVals);
         }
+    }, [editVendor]);
+
+    useEffect(() => {
+        console.log('💾 editVendor on mount', editVendor);
     }, [editVendor]);
 
     return (

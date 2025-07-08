@@ -19,7 +19,9 @@ interface QuotationFormValues {
   isFirst: boolean;
   deliveryDate?: string;
   quoteValidityDate?: string;
+  etaDate?: string;
   senderName: string;
+  language?: 'EN' | 'CN';
 }
 
 const currencyOptions = [
@@ -78,25 +80,24 @@ const Quotation: React.FC = () => {
     const {
       supplier, product, details, endUserName, addressLine1, addressLine2,
       endUserContact, endUserContactInfo, currency, isFirst,
-      deliveryDate, quoteValidityDate, senderName
+      deliveryDate, quoteValidityDate, etaDate, senderName, language = 'EN'
     } = values;
     
-    // 格式化日期
     const formatDate = (dateString?: string) => {
-      if (!dateString) return null;
+      if (!dateString) return '';
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     };
     
-    const deliveryAddress = `${addressLine1}${addressLine2 ? ', ' + addressLine2 : ''}`;
-    
-    let mail = `Hi ${supplier},
+    let mail = '';
 
-We are seeking your quotation for the following items and would appreciate your prompt response.
+    if (language === 'EN') {
+      mail = `Dear ${supplier || '[Supplier Name]'},
+
+We would appreciate your best quotation for the following:
 
 Product: <strong>${product || '&lt;Product Name&gt;'}</strong>
 Specifications:\n${details || 'Please specify configuration & quantity'}
@@ -104,9 +105,10 @@ Specifications:\n${details || 'Please specify configuration & quantity'}
 <strong>Key Information:</strong>
 - Currency: ${currency}
 - Incoterms: DDP (destination)${deliveryDate ? `\n- Required Quote Response Date: ${formatDate(deliveryDate)}` : ''}
-- Delivery Address: ${deliveryAddress || '[Delivery Address]'}
+- Delivery Address: ${addressLine1}${addressLine2 ? `, ${addressLine2}` : ''}
 - Payment Terms: Invoice 30 days
 ${quoteValidityDate ? `- Quote Validity: until ${formatDate(quoteValidityDate)}` : ''}
+${etaDate ? `- Expected Arrival (ETA): ${formatDate(etaDate)}` : ''}
 
 End-user: ${endUserName || 'N/A'}
 Contact: ${endUserContact || ''}${endUserContactInfo ? `, ${endUserContactInfo}` : ''}
@@ -118,6 +120,33 @@ Thank you in advance for your prompt support.
 Best regards,
 ${senderName || '[Your Name]'}
 China Unicom (Europe) Operations Limited`;
+    } else {
+      mail = `${supplier || '[供应商名称]'} 您好：
+
+烦请协助报价以下产品：
+
+产品：<strong>${product || '【产品名称】'}</strong>
+规格需求：\n${details || '请补充配置、数量等详细信息'}
+
+<strong>关键信息：</strong>
+- 报价币种：${currency}
+- 贸易条款：DDP（目的地）${deliveryDate ? `\n- 期望收到报价时间：${formatDate(deliveryDate)}` : ''}
+- 交付地址：${addressLine1}${addressLine2 ? `，${addressLine2}` : ''}
+- 付款条件：月结 30 天
+${quoteValidityDate ? `- 报价有效期：至 ${formatDate(quoteValidityDate)}` : ''}
+${etaDate ? `- 预计到货日期（ETA）：${formatDate(etaDate)}` : ''}
+
+最终用户：${endUserName || 'N/A'}
+联系人：${endUserContact || ''}${endUserContactInfo ? `，${endUserContactInfo}` : ''}
+
+${isFirst ? '中国联通在全球拥有 37 家实体，英国公司自 2006 年起作为欧盟总部运营。如与您合作，请确认贵方可签约的对应实体。' : ''}
+
+感谢您的支持，期待尽快收到报价！
+
+祝好！
+${senderName || '【您的姓名】'}
+中国联通(欧洲)运营有限公司`;
+    }
     setMailContent(mail);
     setMailHtml(mail.replace(/\n/g, '<br/>'));
   };
@@ -257,6 +286,29 @@ China Unicom (Europe) Operations Limited`;
               field="quoteValidityDate"
               label="报价有效期"
               placeholder="请选择报价有效期"
+              style={{ width: '100%' }}
+              format="yyyy-MM-dd"
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Select
+              field="language"
+              label="邮件语言"
+              placeholder="请选择语言"
+              initValue="EN"
+              optionList={[
+                { label: 'English', value: 'EN' },
+                { label: '中文', value: 'CN' }
+              ]}
+            />
+          </Col>
+          <Col span={12}>
+            <Form.DatePicker
+              field="etaDate"
+              label="ETA（预计到货日期）"
+              placeholder="请选择 ETA"
               style={{ width: '100%' }}
               format="yyyy-MM-dd"
             />

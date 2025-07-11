@@ -9,7 +9,8 @@ import {
     Tag,
     Descriptions,
     Input,
-    Card
+    Card,
+    Switch
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { IconUser, IconDelete, IconPlus, IconRefresh, IconCopy, IconDownload } from '@douyinfe/semi-icons';
@@ -23,6 +24,7 @@ import {
     type User,
     type RegistrationCode
 } from '../services/auth';
+import { API_CONFIG } from '../utils/config';
 
 const { Title, Text } = Typography;
 
@@ -219,6 +221,43 @@ const UserManagement: React.FC = () => {
             dataIndex: 'createdAt',
             width: 180,
             render: (text: string) => new Date(text).toLocaleString()
+        },
+        {
+            title: '供应商编辑权限',
+            dataIndex: 'vendorEditable',
+            width: 160,
+            render: (ve: any, record: any) => {
+                const userRole = localStorage.getItem('user_role');
+                if (userRole !== 'admin') return ve?.enabled ? '已授权' : '未授权';
+                return (
+                    <Switch
+                        checked={ve?.enabled && new Date(ve.expiresAt) > new Date()}
+                        size="small"
+                        onChange={async (checked) => {
+                            try {
+                                const res = await fetch(`${API_CONFIG.API_URL}/api/users/${record._id}/vendor-edit`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'x-user': encodeURIComponent(localStorage.getItem('user_username') || ''),
+                                        'x-user-role': 'admin'
+                                    },
+                                    body: JSON.stringify({ enable: checked, hours: 5 })
+                                });
+                                const json = await res.json();
+                                if (json.success) {
+                                    Toast.success('操作成功');
+                                    fetchUsers();
+                                } else {
+                                    Toast.error(json.message || '操作失败');
+                                }
+                            } catch (err) {
+                                Toast.error('操作失败');
+                            }
+                        }}
+                    />
+                );
+            }
         },
         {
             title: '操作',

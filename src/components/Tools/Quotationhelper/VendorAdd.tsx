@@ -95,7 +95,7 @@ const STATUS_OPTIONS = [
 ];
 
 const VendorAdd: React.FC = () => {
-    const { currentUser, isAdmin } = useAuth(); // 获取当前登录用户和角色
+    const { currentUser, isAdmin, currentUserInfo } = useAuth(); // 获取当前登录用户和角色
     const { editVendor, clearEdit, goToVendorList } = useVendorEdit();
     const [loading, setLoading] = useState(false);
     const [savedVendors, setSavedVendors] = useState<any[]>([]);
@@ -541,7 +541,7 @@ const VendorAdd: React.FC = () => {
                 submitData.modifiedBy = currentUser || '未知用户';
             } else {
                 // 新增操作：记录录入人和录入时间
-                submitData.entryPerson = currentUser || '未知用户';
+                submitData.entryPerson = (currentUserInfo as any)?.username || currentUser || '未知用户';
                 submitData.entryTime = values.entryTime || new Date().toISOString().split('T')[0];
             }
             
@@ -558,14 +558,28 @@ const VendorAdd: React.FC = () => {
             const editId = editVendor?._id || sessionStorage.getItem('edit_vendor_id');
             const isEdit = Boolean(editId);
 
-            const url = isEdit ? `${apiServerUrl}/api/vendors/${editId}` : `${apiServerUrl}/api/vendors`;
-            const method = isEdit ? 'PUT' : 'POST';
+            let url: string;
+            let method: 'POST' | 'PUT';
+            if (isEdit) {
+                // 管理员使用全局接口，普通用户使用自编辑接口
+                if (isAdmin) {
+                    url = `${apiServerUrl}/api/vendors/${editId}`;
+                } else if (currentUserInfo?.vendorEditable?.enabled && currentUserInfo.vendorEditable.expiresAt && new Date(currentUserInfo.vendorEditable.expiresAt as string | number | Date) > new Date()) {
+                    url = `${apiServerUrl}/api/vendors/${editId}`;
+                } else {
+                    url = `${apiServerUrl}/api/vendors/${editId}/self`;
+                }
+                method = 'PUT';
+            } else {
+                url = `${apiServerUrl}/api/vendors`;
+                method = 'POST';
+            }
 
             const response = await fetch(url, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-user': encodeURIComponent(currentUser || ''),
+                    'x-user': encodeURIComponent(localStorage.getItem('user_username') || ''),
                     'x-user-role': isAdmin ? 'admin' : 'user'
                 },
                 body: JSON.stringify(submitData)

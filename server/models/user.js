@@ -23,6 +23,17 @@ const userSchema = new mongoose.Schema({
         enum: ['admin', 'user'],
         default: 'user'
     },
+    // 供应商编辑临时权限
+    vendorEditable: {
+        enabled: {
+            type: Boolean,
+            default: false
+        },
+        expiresAt: {
+            type: Date,
+            default: null
+        }
+    },
     isActive: {
         type: Boolean,
         default: true

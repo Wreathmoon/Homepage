@@ -5,6 +5,8 @@ const { writeLog } = require('../services/logger');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const auth = require('../middleware/auth');
+const checkVendorEdit = require('../middleware/checkVendorEdit');
 
 // 供应商附件上传存储配置
 const storage = multer.diskStorage({
@@ -365,7 +367,16 @@ router.delete('/:id', async (req, res) => {
 });
 
 // 更新供应商信息
-router.put('/:id', async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
+    // 管理员可修改全部；普通用户需有 vendorEditable 授权
+    if (req.user.role !== 'admin') {
+        const user = await require('../models/user').findOne({ username: req.user.username }).lean();
+        const ve = user?.vendorEditable;
+        const now = new Date();
+        if (!(ve?.enabled && ve.expiresAt && ve.expiresAt > now)) {
+            return res.status(403).json({ success: false, message: '没有修改全部供应商的权限' });
+        }
+    }
     try {
         const updateData = { ...req.body };
 
@@ -413,6 +424,38 @@ router.put('/:id', async (req, res) => {
             message: '更新供应商失败',
             error: error.message
         });
+    }
+});
+
+// 用户自编辑供应商（需权限）
+router.put('/:id/self', auth, async (req, res) => {
+    try {
+        const vendorId = req.params.id;
+        const vendor = await Vendor.findById(vendorId);
+        if (!vendor) {
+            return res.status(404).json({ success: false, message: '供应商不存在' });
+        }
+
+        // 只能修改自己录入的供应商（兼容早期记录的 displayName）
+        const UserModel = require('../models/user');
+        const currentUser = await UserModel.findOne({ username: req.user.username }).lean();
+        const displayName = currentUser?.displayName;
+
+        if (
+            vendor.entryPerson &&
+            vendor.entryPerson !== req.user.username &&
+            vendor.entryPerson !== displayName
+        ) {
+            return res.status(403).json({ success: false, message: '只能修改自己录入的供应商' });
+        }
+
+        Object.assign(vendor, req.body, { modifiedBy: req.user.username });
+        await vendor.save();
+
+        res.json({ success: true, data: vendor });
+    } catch (err) {
+        console.error('用户自编辑供应商失败', err);
+        res.status(500).json({ success: false, message: '内部错误' });
     }
 });
 

@@ -39,7 +39,7 @@ interface FilterValues {
 }
 
 const Vendor: React.FC = () => {
-    const { isAdmin } = useAuth();
+    const { isAdmin, currentUserInfo, currentUser } = useAuth();
     const [loading, setLoading] = useState(false);
 
     const [filters, setFilters] = useState<VendorQueryParams>({ page: 1, pageSize: 10 });   
@@ -628,7 +628,7 @@ const Vendor: React.FC = () => {
                     >
                         附件
                     </Button>
-                    {isAdmin && (
+                    {(isAdmin || record.entryPerson === currentUser || record.entryPerson === currentUserInfo?.username || (currentUserInfo && currentUserInfo.vendorEditable?.enabled && currentUserInfo.vendorEditable.expiresAt && new Date(currentUserInfo.vendorEditable.expiresAt as string | number | Date) > new Date())) && (
                         <Button
                             theme="borderless"
                             type="primary"

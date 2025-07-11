@@ -51,9 +51,11 @@ router.post('/login', async (req, res) => {
             success: true,
             message: '登录成功',
             data: {
+                _id: user._id,
                 username: user.username,
                 displayName: user.displayName,
-                role: user.role
+                role: user.role,
+                vendorEditable: user.vendorEditable || { enabled: false, expiresAt: null }
             }
         });
 

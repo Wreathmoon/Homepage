@@ -6,6 +6,10 @@ export interface User {
     password: string;
     displayName: string;
     role?: string;
+    vendorEditable?: {
+        enabled: boolean;
+        expiresAt: string | Date | null;
+    };
 }
 
 // 有效用户列表

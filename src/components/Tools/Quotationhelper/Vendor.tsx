@@ -212,6 +212,12 @@ const Vendor: React.FC = () => {
                 });
             }
             
+            // 默认按照中文名排序
+            filteredData.sort((a,b)=>{
+                const cnA = ((a as any).chineseName || a.name || '').toString();
+                const cnB = ((b as any).chineseName || b.name || '').toString();
+                return cnA.localeCompare(cnB, 'zh-CN');
+            });
             setSuppliers(filteredData);
             setPagination(prev => ({ 
                 ...prev, 
@@ -368,24 +374,39 @@ const Vendor: React.FC = () => {
     const columns: ColumnProps<VendorType>[] = [
         {
             title: '英文名称',
-            render: (record: VendorType) => ((record as any).englishName || '-'),
-            sorter: true,
+            dataIndex: 'englishName',
+            render: (text: any, record: VendorType) => ((record as any).englishName || '-'),
+            sorter: (a: any, b: any) => {
+                const nameA = ((a as any).englishName || '').toLowerCase();
+                const nameB = ((b as any).englishName || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+            },
             width: 160
         },
         {
             title: '中文名称',
-            render: (record: VendorType) => ((record as any).chineseName || record.name || '-'),
-            sorter: true,
+            dataIndex: 'chineseName',
+            render: (text: any, record: VendorType) => ((record as any).chineseName || record.name || '-'),
+            sorter: (a: any, b: any) => {
+                const cnA = ((a as any).chineseName || a.name || '').toString();
+                const cnB = ((b as any).chineseName || b.name || '').toString();
+                // 使用本地化比较，优先中文规则
+                return cnA.localeCompare(cnB, 'zh-CN');
+            },
             width: 160
         },
         { 
             title: '供应商类型', 
             dataIndex: 'type',
+            sorter: (a: any, b: any) => {
+                return (a.type || '').localeCompare(b.type || '');
+            },
             width: 120
         },
         {
             title: '代理类型',
-            render: (record: VendorType) => {
+            dataIndex: 'agentType',
+            render: (text: any, record: VendorType) => {
                 // 优先显示新的agentType字段
                 if ((record as any).agentType) {
                     const agentType = (record as any).agentType;
@@ -399,11 +420,26 @@ const Vendor: React.FC = () => {
                 if (record.isAgent) return '经销商';
                 return '其他';
             },
+            sorter: (a: any, b: any) => {
+                const getAgent = (rec: any) => {
+                    if (rec.agentType) {
+                        if (rec.agentType === 'GENERAL_AGENT') return '总代理';
+                        if (rec.agentType === 'AGENT') return '经销商';
+                        if (rec.agentType === 'OEM') return '原厂';
+                        return rec.agentType;
+                    }
+                    if (rec.isGeneralAgent) return '总代理';
+                    if (rec.isAgent) return '经销商';
+                    return '其他';
+                };
+                return getAgent(a).localeCompare(getAgent(b), 'zh-CN');
+            },
             width: 120
         },
         { 
             title: '地区', 
-            render: (record: VendorType) => {
+            dataIndex: 'region',
+            render: (text: any, record: VendorType) => {
                 const regionsArr: string[] = (record as any).regions || [record.region];
                 if (regionsArr.length > 1) {
                     return (
@@ -414,7 +450,11 @@ const Vendor: React.FC = () => {
                 }
                 return regionsArr[0] || '-';
             },
-            sorter: true,
+            sorter: (a: any, b: any) => {
+                const ra = ((a as any).regions || [a.region])[0] || '';
+                const rb = ((b as any).regions || [b.region])[0] || '';
+                return ra.localeCompare(rb, 'zh-CN');
+            },
             width: 120
         },
         {
@@ -627,6 +667,8 @@ const Vendor: React.FC = () => {
         }
     ];
 
+    // 取消自定义排序处理，使用 Table 内建排序
+
     return (
         <div style={{ padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -747,6 +789,7 @@ const Vendor: React.FC = () => {
             <Table<VendorType>
                 columns={columns}
                 dataSource={suppliers}
+                // 使用内建排序，无需 onChange
                 pagination={{
                     currentPage: pagination.currentPage,
                     pageSize: pagination.pageSize,

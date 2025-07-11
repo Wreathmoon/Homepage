@@ -178,7 +178,7 @@ router.get('/', async (req, res) => {
         }
 
         // 排序参数
-        const { sortField = 'chineseName', sortOrder = 'asc' } = req.query;
+        const { sortField = 'englishName', sortOrder = 'asc' } = req.query;
         const sortOption = { [sortField]: sortOrder === 'asc' ? 1 : -1 };
 
         // 分页参数

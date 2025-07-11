@@ -71,7 +71,7 @@ const Vendor: React.FC = () => {
     const [currentVendorIdForAttachments, setCurrentVendorIdForAttachments] = useState<string>('');
 
     // 排序状态
-    const [sorterState, setSorterState] = useState<{field?:string;order?:'asc'|'desc'}>({});
+    const [sorterState, setSorterState] = useState<{field:string;order:'asc'|'desc'}>({field:'englishName',order:'asc'});
 
     const { startEdit } = useVendorEdit();
 
@@ -221,12 +221,12 @@ const Vendor: React.FC = () => {
                 });
             }
             
-            // 若未显式指定排序字段，则按中文名 ASC 做前端兜底排序
+            // 若未显式指定排序字段，前端按英文名 ASC 做兜底排序（与默认一致）
             if (!localSorter?.field) {
                 filteredData.sort((a, b) => {
-                    const cnA = ((a as any).chineseName || a.name || '').toString();
-                    const cnB = ((b as any).chineseName || b.name || '').toString();
-                    return cnA.localeCompare(cnB, 'zh-CN');
+                    const enA = ((a as any).englishName || '').toString();
+                    const enB = ((b as any).englishName || '').toString();
+                    return enA.localeCompare(enB, 'en-US');
                 });
             }
             setSuppliers(filteredData);

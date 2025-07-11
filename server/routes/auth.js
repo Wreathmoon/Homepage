@@ -277,6 +277,36 @@ router.get('/registration-codes', requireAdmin, async (req, res) => {
     }
 });
 
+// 删除注册码（管理员专用）
+router.delete('/registration-codes/:codeId', requireAdmin, async (req, res) => {
+    try {
+        const { codeId } = req.params;
+
+        const code = await RegistrationCode.findById(codeId);
+        if (!code) {
+            return res.status(404).json({
+                success: false,
+                message: '注册码不存在'
+            });
+        }
+
+        await code.deleteOne();
+
+        res.json({
+            success: true,
+            message: '注册码删除成功'
+        });
+
+    } catch (error) {
+        console.error('删除注册码失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '删除注册码失败',
+            error: error.message
+        });
+    }
+});
+
 // 修改密码
 router.post('/change-password', async (req, res) => {
     try {

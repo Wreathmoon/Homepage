@@ -39,6 +39,7 @@ export interface QuotationRecord {
     region?: string;                  // 区域
     status?: 'active' | 'expired' | 'pending' | 'cancelled';
     isValid?: boolean;                // 向后兼容
+    wonBid?: boolean;
     
     // 新增字段以修复TypeScript错误
     totalPrice?: number;              // 总价
@@ -93,6 +94,7 @@ export interface QuotationQueryParams {
     startDate?: string;
     endDate?: string;
     keyword?: string;
+    wonBid?: boolean;
 }
 
 // 响应接口
@@ -145,6 +147,7 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
         if (params.keyword || params.productKeyword) {
             apiParams.keyword = params.keyword || params.productKeyword;
         }
+        if (params.wonBid !== undefined) apiParams.wonBid = params.wonBid;
 
         // 连接到API服务器获取数据
         const apiServerUrl = API_CONFIG.API_URL;

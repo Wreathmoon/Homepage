@@ -12,12 +12,14 @@ import {
     Card
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-import { IconUser, IconDelete, IconPlus, IconRefresh, IconCopy } from '@douyinfe/semi-icons';
+import { IconUser, IconDelete, IconPlus, IconRefresh, IconCopy, IconDownload } from '@douyinfe/semi-icons';
+import * as XLSX from 'xlsx';
 import { 
     getAllUsers, 
     deleteUser, 
     generateRegistrationCode,
     getRegistrationCodes,
+    deleteRegistrationCode,
     type User,
     type RegistrationCode
 } from '../services/auth';
@@ -32,6 +34,8 @@ const UserManagement: React.FC = () => {
     const [codeModalVisible, setCodeModalVisible] = useState(false);
     const [userToDelete, setUserToDelete] = useState<User | null>(null);
     const [newCode, setNewCode] = useState<{ code: string; expiresAt: string } | null>(null);
+    const [deleteCodeModalVisible, setDeleteCodeModalVisible] = useState(false);
+    const [codeToDelete, setCodeToDelete] = useState<RegistrationCode | null>(null);
 
     // 获取用户列表
     const fetchUsers = useCallback(async () => {
@@ -128,6 +132,59 @@ const UserManagement: React.FC = () => {
         } catch (err) {
             Toast.error('复制失败，请手动复制');
         }
+    };
+
+    // 删除注册码
+    const handleDeleteCode = async () => {
+        if (!codeToDelete) return;
+        try {
+            await deleteRegistrationCode(codeToDelete._id);
+            Toast.success('注册码删除成功');
+            setDeleteCodeModalVisible(false);
+            setCodeToDelete(null);
+            fetchRegistrationCodes();
+        } catch (error) {
+            console.error('删除注册码失败:', error);
+            Toast.error('删除注册码失败');
+        }
+    };
+
+    // 导出用户名单
+    const handleExportUsers = () => {
+        const data = users.map(u => ({
+            用户名: u.username,
+            显示名称: u.displayName,
+            角色: u.role === 'admin' ? '管理员' : '普通用户',
+            创建者: u.createdBy || '系统',
+            创建时间: new Date(u.createdAt).toLocaleString()
+        }));
+        if (data.length === 0) {
+            Toast.info('暂无数据可导出');
+            return;
+        }
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Users');
+        XLSX.writeFile(wb, `users_${Date.now()}.xlsx`);
+    };
+
+    // 导出注册码列表
+    const handleExportCodes = () => {
+        const data = registrationCodes.map(c => ({
+            注册码: c.code,
+            状态: c.isUsed ? '已使用' : '未使用',
+            使用者: c.usedBy || '',
+            过期时间: new Date(c.expiresAt).toLocaleString(),
+            创建时间: new Date(c.createdAt).toLocaleString()
+        }));
+        if (data.length === 0) {
+            Toast.info('暂无数据可导出');
+            return;
+        }
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Codes');
+        XLSX.writeFile(wb, `codes_${Date.now()}.xlsx`);
     };
 
     const userColumns: ColumnProps<User>[] = [
@@ -237,6 +294,25 @@ const UserManagement: React.FC = () => {
             dataIndex: 'createdAt',
             width: 180,
             render: (text: string) => new Date(text).toLocaleString()
+        },
+        {
+            title: '操作',
+            key: 'codeActions',
+            width: 100,
+            render: (_, record: RegistrationCode) => (
+                <Button
+                    icon={<IconDelete />}
+                    type="danger"
+                    theme="borderless"
+                    size="small"
+                    onClick={() => {
+                        setCodeToDelete(record);
+                        setDeleteCodeModalVisible(true);
+                    }}
+                >
+                    删除
+                </Button>
+            )
         }
     ];
 
@@ -253,6 +329,12 @@ const UserManagement: React.FC = () => {
                         }}
                     >
                         刷新
+                    </Button>
+                    <Button icon={<IconDownload />} onClick={handleExportUsers}>
+                        导出用户名单
+                    </Button>
+                    <Button icon={<IconDownload />} onClick={handleExportCodes}>
+                        导出注册码
                     </Button>
                     <Button
                         icon={<IconPlus />}
@@ -356,6 +438,22 @@ const UserManagement: React.FC = () => {
                         </p>
                     </div>
                 )}
+            </Modal>
+
+            {/* 删除注册码确认弹窗 */}
+            <Modal
+                title="删除注册码"
+                visible={deleteCodeModalVisible}
+                onCancel={() => {
+                    setDeleteCodeModalVisible(false);
+                    setCodeToDelete(null);
+                }}
+                onOk={handleDeleteCode}
+                okText="确认删除"
+                cancelText="取消"
+                type="warning"
+            >
+                <p>确定要删除注册码 <strong>{codeToDelete?.code}</strong> 吗？</p>
             </Modal>
         </div>
     );

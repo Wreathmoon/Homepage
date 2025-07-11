@@ -143,6 +143,12 @@ const quotationSchema = new mongoose.Schema({
         default: 'active'
     },
     
+    // 是否中标
+    wonBid: {
+        type: Boolean,
+        default: false
+    },
+    
     // 原始文件信息
     originalFile: {
         filename: String,

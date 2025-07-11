@@ -63,6 +63,7 @@ interface QuotationFormData {
     quotationDate?: string;
     currency?: string;
     remark?: string;
+    wonBid?: boolean; // 是否中标
     quotationFile?: any;
 }
 
@@ -576,6 +577,7 @@ const QuotationImport: React.FC = () => {
             if (values.originalPrice) formData.append('listPrice', String(values.originalPrice));
             if (values.productSpec) formData.append('productSpec', values.productSpec);
             if (values.remark) formData.append('remark', values.remark);
+            if (values.wonBid !== undefined) formData.append('wonBid', String(values.wonBid));
             if (values.quotationDate) formData.append('quoteValidity', values.quotationDate);
 
             const fileInst = values.quotationFile?.[0]?.fileInstance;
@@ -1170,6 +1172,15 @@ const QuotationImport: React.FC = () => {
                                         max={100}
                                         min={0}
                                     />
+                                    <Form.Select
+                                        field="wonBid"
+                                        label="是否中标"
+                                        placeholder="请选择"
+                                        optionList={[
+                                            { label: '已中标', value: true },
+                                            { label: '未中标', value: false }
+                                        ] as any}
+                                    />
                                     <Form.DatePicker
                                         field="quotationDate"
                                         label="报价日期"
@@ -1758,6 +1769,15 @@ const QuotationImport: React.FC = () => {
                             parser={value => value!.replace('%', '')}
                             max={100}
                             min={0}
+                        />
+                        <Form.Select
+                            field="wonBid"
+                            label="是否中标"
+                            placeholder="请选择"
+                            optionList={[
+                                { label: '已中标', value: true },
+                                { label: '未中标', value: false }
+                            ] as any}
                         />
                         <Form.DatePicker
                             field="quotationDate"

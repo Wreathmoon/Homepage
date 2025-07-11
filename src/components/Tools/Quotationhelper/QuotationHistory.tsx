@@ -10,7 +10,9 @@ import {
     Modal,
     Descriptions,
     Tag,
-    Toast
+    Toast,
+    Row,
+    Col
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 import { IconDownload, IconFile, IconDelete } from '@douyinfe/semi-icons';
@@ -427,7 +429,8 @@ const QuotationHistory: React.FC = () => {
             vendor: values.vendor,
             category: values.category,
             region: values.region,
-            productKeyword: values.productKeyword
+            productKeyword: values.productKeyword,
+            wonBid: values.wonBid
         };
         setFilters(newFilters);
         setPagination(prev => ({ ...prev, currentPage: 1 }));
@@ -577,6 +580,14 @@ const QuotationHistory: React.FC = () => {
                 <Tag color={value ? 'green' : 'red'} type="light">
                     {value ? '有效' : '已过期'}
                 </Tag>
+            )
+        },
+        {
+            title: '是否中标',
+            dataIndex: 'wonBid',
+            width: 100,
+            render: (v: boolean) => (
+                <Tag color={v ? 'green' : 'grey'} type="light">{v ? '已中标' : '未中标'}</Tag>
             )
         },
         {

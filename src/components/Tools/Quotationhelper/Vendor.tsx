@@ -15,7 +15,8 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit, IconDownload } from '@douyinfe/semi-icons';
+import * as XLSX from 'xlsx';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
@@ -256,6 +257,68 @@ const Vendor: React.FC = () => {
         };
         setFilters(params);
         fetchSuppliers(values, 1, pagination.pageSize);
+    };
+
+    // 导出供应商列表
+    const handleExportSuppliers = () => {
+        if (suppliers.length === 0) {
+            Toast.info('暂无数据可导出');
+            return;
+        }
+        const data = suppliers.map(s => {
+            // 处理代理类型文本
+            let agentTypeText = '';
+            if ((s as any).agentType) {
+                const at = (s as any).agentType;
+                if (at === 'GENERAL_AGENT') agentTypeText = '总代理';
+                else if (at === 'AGENT') agentTypeText = '经销商';
+                else if (at === 'OEM') agentTypeText = '原厂';
+                else agentTypeText = at; // 自定义类型
+            } else {
+                agentTypeText = s.isGeneralAgent ? '总代理' : s.isAgent ? '经销商' : '其他';
+            }
+
+            // 基础信息
+            const row: Record<string, any> = {
+                供应商编码: (s as any).code || '',
+                中文名称: (s as any).chineseName || s.name || '',
+                英文名称: (s as any).englishName || '',
+                供应商类型: s.type || '',
+                代理类型: agentTypeText,
+                国家地区: ((s as any).regions || [(s as any).region]).join(','),
+                产品类别: Array.isArray((s as any).category) ? (s as any).category.join(',') : '',
+                代理品牌: (s.brands || []).join(','),
+                网站: s.website || '',
+                地址: s.address || '',
+                账号: s.account || '',
+                录入人: (s as any).entryPerson || '',
+                修改人: (s as any).modifiedBy || '',
+                备注: (s as any).remarks || ''
+            };
+
+            // 如果没有 contacts 字段，使用旧的单联系人信息构造 contacts 数组
+            const contacts = Array.isArray(s.contacts) && s.contacts.length > 0 ? s.contacts : [{
+                name: s.contact,
+                phone: s.phone,
+                email: s.email,
+                wechat: undefined
+            }];
+
+            // 将所有联系人信息展开
+            contacts.forEach((c, idx) => {
+                const no = idx + 1;
+                row[`联系人${no}姓名`] = c.name || '';
+                row[`联系人${no}电话`] = c.phone || '';
+                row[`联系人${no}邮箱`] = c.email || '';
+                row[`联系人${no}微信`] = (c as any).wechat || '';
+            });
+
+            return row;
+        });
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Suppliers');
+        XLSX.writeFile(wb, `vendors_${Date.now()}.xlsx`);
     };
 
     // 表格列定义
@@ -514,7 +577,12 @@ const Vendor: React.FC = () => {
 
     return (
         <div style={{ padding: '20px' }}>
-            <Title heading={2}>供应商查询</Title>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Title heading={2}>供应商查询</Title>
+                <Button icon={<IconDownload />} onClick={handleExportSuppliers}>
+                    导出 Excel
+                </Button>
+            </div>
             
             {/* 筛选条件区域 */}
             <Form<FilterValues>

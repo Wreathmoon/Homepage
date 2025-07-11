@@ -20,8 +20,7 @@ const registrationCodeSchema = new mongoose.Schema({
     },
     expiresAt: {
         type: Date,
-        required: true,
-        index: { expireAfterSeconds: 0 } // MongoDB自动删除过期文档
+        required: true
     },
     createdBy: {
         type: String,

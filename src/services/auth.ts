@@ -69,6 +69,17 @@ export const getRegistrationCodes = async (): Promise<RegistrationCode[]> => {
     return response.data;
 };
 
+// 删除注册码（管理员专用）
+export const deleteRegistrationCode = async (codeId: string): Promise<void> => {
+    await request(`/auth/registration-codes/${codeId}`, {
+        method: 'DELETE',
+        headers: {
+            'x-user-role': localStorage.getItem('user_role') || '',
+            'x-user-name': localStorage.getItem('user_username') || ''
+        }
+    });
+};
+
 // 修改密码
 export const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
     const username = localStorage.getItem('user_username');

@@ -71,7 +71,7 @@ const Vendor: React.FC = () => {
     const [currentVendorIdForAttachments, setCurrentVendorIdForAttachments] = useState<string>('');
 
     // 排序状态
-    const [sorterState, setSorterState] = useState<{field:string;order:'asc'|'desc'}>({field:'chineseName',order:'asc'});
+    const [sorterState, setSorterState] = useState<{field?:string;order?:'asc'|'desc'}>({});
 
     const { startEdit } = useVendorEdit();
 
@@ -195,10 +195,14 @@ const Vendor: React.FC = () => {
                 isGeneralAgent,
                 isAgent,
                 page,
-                pageSize,
-                sortField: localSorter.field,
-                sortOrder: localSorter.order
+                pageSize
             };
+
+            // 仅当显式指定排序字段时才附带后端排序参数
+            if (localSorter?.field) {
+                params.sortField = localSorter.field;
+                params.sortOrder = localSorter.order;
+            }
 
             const response = await getVendorList(params);
 
@@ -217,12 +221,14 @@ const Vendor: React.FC = () => {
                 });
             }
             
-            // 默认按照中文名排序
-            filteredData.sort((a,b)=>{
-                const cnA = ((a as any).chineseName || a.name || '').toString();
-                const cnB = ((b as any).chineseName || b.name || '').toString();
-                return cnA.localeCompare(cnB, 'zh-CN');
-            });
+            // 若未显式指定排序字段，则按中文名 ASC 做前端兜底排序
+            if (!localSorter?.field) {
+                filteredData.sort((a, b) => {
+                    const cnA = ((a as any).chineseName || a.name || '').toString();
+                    const cnB = ((b as any).chineseName || b.name || '').toString();
+                    return cnA.localeCompare(cnB, 'zh-CN');
+                });
+            }
             setSuppliers(filteredData);
             setPagination(prev => ({ 
                 ...prev, 
@@ -379,37 +385,29 @@ const Vendor: React.FC = () => {
     const columns: ColumnProps<VendorType>[] = [
         {
             title: '英文名称',
+            key: 'englishName',
             dataIndex: 'englishName',
-            render: (text: any, record: VendorType) => ((record as any).englishName || '-'),
-            sorter: (a: any, b: any) => {
-                const nameA = ((a as any).englishName || '').toLowerCase();
-                const nameB = ((b as any).englishName || '').toLowerCase();
-                return nameA.localeCompare(nameB);
-            },
+            render: (text: any, record: VendorType) => (text || '-'),
+            sorter: true,
             width: 160
         },
         {
             title: '中文名称',
+            key: 'chineseName',
             dataIndex: 'chineseName',
-            render: (text: any, record: VendorType) => ((record as any).chineseName || record.name || '-'),
-            sorter: (a: any, b: any) => {
-                const cnA = ((a as any).chineseName || a.name || '').toString();
-                const cnB = ((b as any).chineseName || b.name || '').toString();
-                // 使用本地化比较，优先中文规则
-                return cnA.localeCompare(cnB, 'zh-CN');
-            },
+            render: (text: any, record: VendorType) => (text || record.name || '-'),
+            sorter: true,
             width: 160
         },
-        { 
-            title: '供应商类型', 
+        {
+            title: '供应商类型',
             dataIndex: 'type',
-            sorter: (a: any, b: any) => {
-                return (a.type || '').localeCompare(b.type || '');
-            },
+            sorter: true, // 仅标记可排序，交由 onChange 远程处理
             width: 120
         },
         {
             title: '代理类型',
+            key: 'agentType',
             dataIndex: 'agentType',
             render: (text: any, record: VendorType) => {
                 // 优先显示新的agentType字段
@@ -425,24 +423,12 @@ const Vendor: React.FC = () => {
                 if (record.isAgent) return '经销商';
                 return '其他';
             },
-            sorter: (a: any, b: any) => {
-                const getAgent = (rec: any) => {
-                    if (rec.agentType) {
-                        if (rec.agentType === 'GENERAL_AGENT') return '总代理';
-                        if (rec.agentType === 'AGENT') return '经销商';
-                        if (rec.agentType === 'OEM') return '原厂';
-                        return rec.agentType;
-                    }
-                    if (rec.isGeneralAgent) return '总代理';
-                    if (rec.isAgent) return '经销商';
-                    return '其他';
-                };
-                return getAgent(a).localeCompare(getAgent(b), 'zh-CN');
-            },
+            sorter: true,
             width: 120
         },
         { 
             title: '地区', 
+            key: 'region',
             dataIndex: 'region',
             render: (text: any, record: VendorType) => {
                 const regionsArr: string[] = (record as any).regions || [record.region];
@@ -455,11 +441,7 @@ const Vendor: React.FC = () => {
                 }
                 return regionsArr[0] || '-';
             },
-            sorter: (a: any, b: any) => {
-                const ra = ((a as any).regions || [a.region])[0] || '';
-                const rb = ((b as any).regions || [b.region])[0] || '';
-                return ra.localeCompare(rb, 'zh-CN');
-            },
+            sorter: true,
             width: 120
         },
         {
@@ -674,14 +656,56 @@ const Vendor: React.FC = () => {
 
     // 取消自定义排序处理，使用 Table 内建排序
 
-    const handleTableChange = (_pagination:any,_filters:any,sorter:any)=>{
-        if(Array.isArray(sorter) || !sorter?.order) return;
-        const field = sorter.columnKey || sorter.field || 'chineseName';
-        const order = sorter.order==='ascend'?'asc':'desc';
-        setSorterState({field,order});
-        // 重新拉取第一页
-        fetchSuppliers(convertToFilterValues(filters),1,pagination.pageSize,{field,order});
-        setPagination(prev=>({...prev,currentPage:1}));
+    /**
+     * Semi UI v2.x 的 Table.onChange 仅接收一个 ChangeInfo 对象，
+     *  而不是 (pagination, filters, sorter) 三个参数（Ant Design 旧签名）。
+     *  这里兼容新的签名，正确提取 sorter 信息并触发后端排序。
+     */
+    const handleTableChange = (changeInfo: any) => {
+        const { sorter, pagination: pager } = changeInfo || {};
+
+        // 1) 检查排序是否真正发生变化
+        let nextSortField = sorterState.field;
+        let nextSortOrder = sorterState.order;
+        let sorterChanged = false;
+
+        if (sorter) {
+            const singleSorter = Array.isArray(sorter) ? sorter[0] : sorter;
+            const rawOrder = singleSorter?.sortOrder || singleSorter?.order;
+
+            if (rawOrder) {
+                const candidateField = singleSorter.dataIndex || singleSorter.field || singleSorter.columnKey || singleSorter.column?.dataIndex || 'chineseName';
+                const candidateOrder: 'asc' | 'desc' = rawOrder === 'ascend' ? 'asc' : 'desc';
+
+                if (candidateField !== sorterState.field || candidateOrder !== sorterState.order) {
+                    nextSortField = candidateField;
+                    nextSortOrder = candidateOrder;
+                    sorterChanged = true;
+                    setSorterState({ field: nextSortField, order: nextSortOrder });
+                    // 调试日志已移除
+                }
+            }
+        }
+
+        // 2) 解析分页信息
+        let newPage = pager?.currentPage ?? pagination.currentPage;
+        const newPageSize = pager?.pageSize ?? pagination.pageSize;
+
+        // 如果排序发生变化，自动跳转到第一页
+        if (sorterChanged) {
+            newPage = 1;
+        }
+
+        // 3) 触发数据拉取
+        fetchSuppliers(
+            convertToFilterValues(filters),
+            newPage,
+            newPageSize,
+            nextSortField ? { field: nextSortField, order: nextSortOrder } : undefined
+        );
+
+        // 4) 更新分页状态
+        setPagination(prev => ({ ...prev, currentPage: newPage, pageSize: newPageSize }));
     };
 
     return (
@@ -808,11 +832,7 @@ const Vendor: React.FC = () => {
                 pagination={{
                     currentPage: pagination.currentPage,
                     pageSize: pagination.pageSize,
-                    total: pagination.total,
-                    onPageChange: (page) => {
-                        setPagination(prev => ({ ...prev, currentPage: page }));
-                        fetchSuppliers(convertToFilterValues(filters), page, pagination.pageSize);
-                    }
+                    total: pagination.total
                 }}
                 loading={loading}
                 scroll={{ x: 1600 }}

@@ -259,13 +259,37 @@ const Vendor: React.FC = () => {
         fetchSuppliers(values, 1, pagination.pageSize);
     };
 
-    // 导出供应商列表
-    const handleExportSuppliers = () => {
-        if (suppliers.length === 0) {
+    // 导出供应商列表（获取全部数据再导出）
+    const handleExportSuppliers = async () => {
+        // 如果当前总数为 0，直接提示
+        if (pagination.total === 0) {
             Toast.info('暂无数据可导出');
             return;
         }
-        const data = suppliers.map(s => {
+
+        // 重新拉取符合当前筛选条件的全部供应商
+        let allSuppliers: VendorType[] = [];
+        try {
+            const exportParams: VendorQueryParams = {
+                ...filters,
+                page: 1,
+                pageSize: pagination.total || 10000 // 一次性取完
+            };
+
+            const resp = await getVendorList(exportParams);
+            allSuppliers = resp.data || [];
+        } catch (err) {
+            console.error('导出供应商时获取数据失败', err);
+            Toast.error('获取供应商数据失败，无法导出');
+            return;
+        }
+
+        if (allSuppliers.length === 0) {
+            Toast.info('暂无数据可导出');
+            return;
+        }
+
+        const data = allSuppliers.map(s => {
             // 处理代理类型文本
             let agentTypeText = '';
             if ((s as any).agentType) {

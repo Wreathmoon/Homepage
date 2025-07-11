@@ -770,13 +770,19 @@ const upload = multer({ storage });
 // 手动录入接口
 router.post('/manual', upload.single('quotationFile'), async (req, res)=>{
     try {
-        const fileInfo = req.file ? {
-            filename: req.file.filename,
-            originalName: req.file.originalname,
-            path: req.file.path,
-            size: req.file.size,
-            uploadedAt: new Date()
-        }: null;
+        const fileInfo = req.file ? (() => {
+            let originalName = req.file.originalname;
+            try {
+                originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+            } catch {}
+            return {
+                filename: req.file.filename,
+                originalName,
+                path: req.file.path,
+                size: req.file.size,
+                uploadedAt: new Date()
+            };
+        })() : null;
 
         const data = {
             productName: req.body.productName,

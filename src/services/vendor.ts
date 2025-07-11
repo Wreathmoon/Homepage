@@ -1,4 +1,7 @@
 import { request } from '../utils/request';
+import { API_CONFIG } from '../utils/config';
+
+const API_BASE = API_CONFIG.API_URL + '/api';
 
 // 产品类型
 export const PRODUCT_CATEGORIES = [
@@ -350,4 +353,32 @@ export const mockVendors: Vendor[] = [
         isAgent: false,
         createdAt: '2023-04-05'
     }
-]; 
+];
+
+export async function uploadVendorAttachments(id: string, files: File[]): Promise<any> {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    const displayName = localStorage.getItem('quotation_user');
+    const userRole = localStorage.getItem('user_role');
+    return request(`/vendors/${id}/attachments`, {
+        method: 'POST',
+        data: formData,
+        headers: {
+            'Content-Type': 'multipart/form-data',
+            'x-user': displayName ? encodeURIComponent(displayName) : '',
+            'x-user-role': userRole || ''
+        }
+    });
+}
+
+export async function getVendorAttachments(id: string): Promise<any[]> {
+    const res: any = await request(`/vendors/${id}/attachments`, {
+        method: 'GET'
+    });
+    return res.data || [];
+}
+
+// 获取附件下载 URL
+export function getVendorAttachmentDownloadUrl(id: string, filename: string): string {
+    return `${API_BASE}/vendors/${id}/attachments/${filename}`;
+} 

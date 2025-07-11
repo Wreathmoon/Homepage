@@ -14,7 +14,8 @@ import {
     DatePicker,
     Table,
     Popconfirm,
-    Tag
+    Tag,
+    Upload
 } from '@douyinfe/semi-ui';
 import { IconPlus, IconDelete, IconEdit } from '@douyinfe/semi-icons';
 import type { FormApi } from '@douyinfe/semi-ui/lib/es/form';
@@ -24,6 +25,7 @@ import { API_CONFIG } from '../../../utils/config';
 import type { ContactInfo } from '../../../services/vendor';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useVendorEdit } from '../../../contexts/VendorEditContext';
+import { uploadVendorAttachments } from '../../../services/vendor';
 
 const { Title, Text } = Typography;
 
@@ -99,6 +101,8 @@ const VendorAdd: React.FC = () => {
     const [savedVendors, setSavedVendors] = useState<any[]>([]);
     const [passwordVisible, setPasswordVisible] = useState(false);
     const [currentPassword, setCurrentPassword] = useState('');
+    // 附件文件列表
+    const [attachments, setAttachments] = useState<File[]>([]);
     
     // 联系人相关状态
     const [contacts, setContacts] = useState<ContactInfo[]>(editVendor?.contacts || []);
@@ -577,6 +581,19 @@ const VendorAdd: React.FC = () => {
             console.log('✅ 供应商保存成功:', result);
             
             if (result.success) {
+                // 若有附件，上传
+                if (attachments.length > 0) {
+                    const vid = isEdit ? (editId as string) : result.data._id;
+                    try {
+                        await uploadVendorAttachments(vid, attachments);
+                    } catch (err) {
+                        console.error('附件上传失败', err);
+                        Toast.warning('供应商保存成功，但附件上传失败');
+                    }
+                }
+
+                // 清理附件
+                setAttachments([]);
                 Toast.success(result.message || (editVendor ? '供应商信息更新成功' : '供应商信息保存成功'));
                 setSavedVendors(prev => [...prev, result.data]);
                 
@@ -898,6 +915,28 @@ const VendorAdd: React.FC = () => {
                             style={{ width: '100%' }}
                             initValue={new Date()}
                         />
+                    </div>
+
+                    {/* 附件上传 */}
+                    <div style={{ marginBottom: '24px' }}>
+                        <Upload
+                            multiple
+                            limit={20}
+                            listType="list"
+                            beforeUpload={(file) => {
+                                // 阻止自动上传，统一提交
+                                return false;
+                            }}
+                            onChange={({ fileList }) => {
+                                // fileList 为 UploadFileInfo[]
+                                const raws: File[] = fileList
+                                    .map((item: any) => item.fileInstance || item.originFileObj)
+                                    .filter(Boolean);
+                                setAttachments(raws);
+                            }}
+                        >
+                            <Button icon={<IconPlus />}>选择附件</Button>
+                        </Upload>
                     </div>
 
                     {/* 提交按钮区域 */}

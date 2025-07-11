@@ -2,6 +2,25 @@ const express = require('express');
 const router = express.Router();
 const Vendor = require('../models/vendor');
 const { writeLog } = require('../services/logger');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// 供应商附件上传存储配置
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const vendorId = req.params.id;
+        const dir = path.join(__dirname, '..', 'uploads', 'vendors', vendorId);
+        fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage });
 
 // 获取供应商列表 (支持筛选和分页)
 router.get('/', async (req, res) => {
@@ -452,6 +471,79 @@ router.post('/batch-import', async (req, res) => {
             message: '批量导入供应商失败',
             error: error.message
         });
+    }
+});
+
+/* ======================= 供应商附件相关接口 ======================= */
+
+// 上传附件（支持多文件）
+router.post('/:id/attachments', upload.array('files', 20), async (req, res) => {
+    try {
+        const vendor = await Vendor.findById(req.params.id);
+        if (!vendor) {
+            return res.status(404).json({ success: false, message: '供应商不存在' });
+        }
+
+        const operator = req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown';
+
+        const newFiles = req.files.map(file => {
+            // 将 originalname 由 latin1 解码为 utf8，以解决中文文件名乱码
+            let originalName = file.originalname;
+            try {
+                originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+            } catch (e) {
+                // fallback 原值
+            }
+            return {
+                filename: file.filename,
+                originalName,
+                mimeType: file.mimetype,
+                size: file.size,
+                uploadedAt: new Date(),
+                uploadedBy: operator
+            };
+        });
+
+        vendor.attachments = [...(vendor.attachments || []), ...newFiles];
+        await vendor.save();
+
+        res.json({ success: true, message: '附件上传成功', data: vendor.attachments });
+    } catch (error) {
+        console.error('上传附件失败:', error);
+        res.status(500).json({ success: false, message: '上传附件失败', error: error.message });
+    }
+});
+
+// 获取附件列表
+router.get('/:id/attachments', async (req, res) => {
+    try {
+        const vendor = await Vendor.findById(req.params.id).lean();
+        if (!vendor) {
+            return res.status(404).json({ success: false, message: '供应商不存在' });
+        }
+        res.json({ success: true, data: vendor.attachments || [] });
+    } catch (error) {
+        console.error('获取附件列表失败:', error);
+        res.status(500).json({ success: false, message: '获取附件列表失败', error: error.message });
+    }
+});
+
+// 下载附件
+router.get('/:id/attachments/:filename', async (req, res) => {
+    try {
+        const { id, filename } = req.params;
+        const vendor = await Vendor.findById(id).lean();
+        const attachment = vendor?.attachments?.find(a => a.filename === filename);
+        const originalName = attachment?.originalName || filename;
+
+        const filePath = path.join(__dirname, '..', 'uploads', 'vendors', id, filename);
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, message: '文件不存在' });
+        }
+        res.download(filePath, originalName);
+    } catch (error) {
+        console.error('下载附件失败:', error);
+        res.status(500).json({ success: false, message: '下载附件失败', error: error.message });
     }
 });
 

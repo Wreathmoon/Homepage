@@ -15,7 +15,7 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit, IconDownload } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit, IconDownload, IconPaperclip } from '@douyinfe/semi-icons';
 import * as XLSX from 'xlsx';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
@@ -24,6 +24,7 @@ import { getVendorList, getVendorProducts, deleteVendor, PRODUCT_CATEGORIES, VEN
 import type { VendorQueryParams, Vendor as VendorType, VendorRegion } from '../../../services/vendor';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useVendorEdit } from '../../../contexts/VendorEditContext';
+import { getVendorAttachments, getVendorAttachmentDownloadUrl } from '../../../services/vendor';
 
 const { Title } = Typography;
 
@@ -63,6 +64,11 @@ const Vendor: React.FC = () => {
     const [vendorToDelete, setVendorToDelete] = useState<VendorType | null>(null);
     const [regionsVisible, setRegionsVisible] = useState(false);
     const [currentRegions, setCurrentRegions] = useState<string[]>([]);
+    // 附件相关
+    const [attachmentsVisible, setAttachmentsVisible] = useState(false);
+    const [currentAttachments, setCurrentAttachments] = useState<any[]>([]);
+    const [currentVendorForAttachments, setCurrentVendorForAttachments] = useState('');
+    const [currentVendorIdForAttachments, setCurrentVendorIdForAttachments] = useState<string>('');
 
     const { startEdit } = useVendorEdit();
 
@@ -110,6 +116,19 @@ const Vendor: React.FC = () => {
         const list = (vendor as any).regions || [(vendor as any).region];
         setCurrentRegions(list);
         setRegionsVisible(true);
+    };
+
+    // 显示附件列表
+    const handleShowAttachments = async (vendor: VendorType) => {
+        try {
+            const list = await getVendorAttachments(vendor._id as string);
+            setCurrentAttachments(list);
+            setCurrentVendorForAttachments(((vendor as any).chineseName || vendor.name) as string);
+            setCurrentVendorIdForAttachments(vendor._id as string);
+            setAttachmentsVisible(true);
+        } catch (err) {
+            Toast.error('获取附件列表失败');
+        }
     };
 
     // 显示编辑弹窗
@@ -530,7 +549,7 @@ const Vendor: React.FC = () => {
         {
             title: '操作',
             fixed: 'right' as const,
-            width: 180,
+            width: 220,
             render: (_: any, record: VendorType) => (
                 <Space>
                     <Button
@@ -572,6 +591,15 @@ const Vendor: React.FC = () => {
                         }}
                     >
                         查看备注
+                    </Button>
+                    <Button
+                        theme="borderless"
+                        type="secondary"
+                        size="small"
+                        icon={<IconPaperclip />}
+                        onClick={() => handleShowAttachments(record)}
+                    >
+                        附件
                     </Button>
                     {isAdmin && (
                         <Button
@@ -1001,6 +1029,38 @@ const Vendor: React.FC = () => {
                             <Tag key={idx} color="green" type="light">{r}</Tag>
                         ))}
                     </Space>
+                </div>
+            </Modal>
+
+            {/* 附件列表弹窗 */}
+            <Modal
+                visible={attachmentsVisible}
+                title={`附件列表 - ${currentVendorForAttachments}`}
+                onCancel={() => setAttachmentsVisible(false)}
+                footer={null}
+                width={800}
+            >
+                <div style={{ padding: 16, maxHeight: '60vh', overflowY: 'auto' }}>
+                    {currentAttachments.length > 0 ? (
+                        <Table
+                            dataSource={currentAttachments}
+                            pagination={false}
+                            size="small"
+                            columns={[
+                                { title: '文件名', dataIndex: 'originalName' },
+                                { title: '大小(KB)', dataIndex: 'size', render: (s:any)=> (s/1024).toFixed(1) },
+                                { title: '上传时间', dataIndex: 'uploadedAt', render: (t:any)=> new Date(t).toLocaleString() },
+                                {
+                                    title: '操作',
+                                    render: (text: any, record: any) => (
+                                        <a href={getVendorAttachmentDownloadUrl(currentVendorIdForAttachments, record.filename)} target="_blank" rel="noopener noreferrer">下载</a>
+                                    )
+                                }
+                            ]}
+                        />
+                    ) : (
+                        <div style={{ textAlign: 'center', color: 'var(--semi-color-text-2)' }}>暂无附件</div>
+                    )}
                 </div>
             </Modal>
         </div>

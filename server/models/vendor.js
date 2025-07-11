@@ -138,6 +138,29 @@ const vendorSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    // 附件信息
+    attachments: [{
+        filename: {
+            type: String,
+            required: true
+        },
+        originalName: {
+            type: String
+        },
+        mimeType: {
+            type: String
+        },
+        size: {
+            type: Number
+        },
+        uploadedAt: {
+            type: Date,
+            default: Date.now
+        },
+        uploadedBy: {
+            type: String
+        }
+    }],
     // 录入人和录入时间信息
     entryPerson: {
         type: String,

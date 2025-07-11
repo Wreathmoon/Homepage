@@ -70,6 +70,9 @@ const Vendor: React.FC = () => {
     const [currentVendorForAttachments, setCurrentVendorForAttachments] = useState('');
     const [currentVendorIdForAttachments, setCurrentVendorIdForAttachments] = useState<string>('');
 
+    // 排序状态
+    const [sorterState, setSorterState] = useState<{field:string;order:'asc'|'desc'}>({field:'chineseName',order:'asc'});
+
     const { startEdit } = useVendorEdit();
 
     // 将 VendorQueryParams 转换为本地筛选类型，解决 region 数组带来的类型差异
@@ -154,7 +157,7 @@ const Vendor: React.FC = () => {
     };
 
     // 获取供应商列表
-    const fetchSuppliers = useCallback(async (values: FilterValues, page: number, pageSize: number) => {
+    const fetchSuppliers = useCallback(async (values: FilterValues, page: number, pageSize: number, localSorter = sorterState) => {
         setLoading(true);
         try {
             // 处理代理类型
@@ -182,7 +185,7 @@ const Vendor: React.FC = () => {
                     break;
             }
 
-            const params: VendorQueryParams = {
+            const params: any = {
                 region: values.region,
                 type: values.type,
                 keyword: values.keyword,
@@ -192,7 +195,9 @@ const Vendor: React.FC = () => {
                 isGeneralAgent,
                 isAgent,
                 page,
-                pageSize
+                pageSize,
+                sortField: localSorter.field,
+                sortOrder: localSorter.order
             };
 
             const response = await getVendorList(params);
@@ -231,7 +236,7 @@ const Vendor: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [sorterState]);
 
     // 初始加载数据
     useEffect(() => {
@@ -669,6 +674,16 @@ const Vendor: React.FC = () => {
 
     // 取消自定义排序处理，使用 Table 内建排序
 
+    const handleTableChange = (_pagination:any,_filters:any,sorter:any)=>{
+        if(Array.isArray(sorter) || !sorter?.order) return;
+        const field = sorter.columnKey || sorter.field || 'chineseName';
+        const order = sorter.order==='ascend'?'asc':'desc';
+        setSorterState({field,order});
+        // 重新拉取第一页
+        fetchSuppliers(convertToFilterValues(filters),1,pagination.pageSize,{field,order});
+        setPagination(prev=>({...prev,currentPage:1}));
+    };
+
     return (
         <div style={{ padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -789,7 +804,7 @@ const Vendor: React.FC = () => {
             <Table<VendorType>
                 columns={columns}
                 dataSource={suppliers}
-                // 使用内建排序，无需 onChange
+                onChange={handleTableChange as any}
                 pagination={{
                     currentPage: pagination.currentPage,
                     pageSize: pagination.pageSize,

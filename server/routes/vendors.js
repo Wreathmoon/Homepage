@@ -177,6 +177,10 @@ router.get('/', async (req, res) => {
             query.$and = andConditions;
         }
 
+        // 排序参数
+        const { sortField = 'chineseName', sortOrder = 'asc' } = req.query;
+        const sortOption = { [sortField]: sortOrder === 'asc' ? 1 : -1 };
+
         // 分页参数
         const skip = (parseInt(page) - 1) * parseInt(pageSize);
         const limit = parseInt(pageSize);
@@ -184,7 +188,8 @@ router.get('/', async (req, res) => {
         // 执行查询
         const [vendors, total] = await Promise.all([
             Vendor.find(query)
-                .sort({ createdAt: -1 })
+                .collation({ locale: 'zh' })
+                .sort(sortOption)
                 .skip(skip)
                 .limit(limit)
                 .lean(),

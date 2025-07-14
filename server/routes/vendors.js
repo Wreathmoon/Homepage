@@ -400,7 +400,7 @@ router.put('/:id', auth, async (req, res) => {
         const updated = await Vendor.findByIdAndUpdate(req.params.id, updateData, { new: true });
         if (updated) {
             writeLog({
-                action: 'CHANGE',
+                action: 'UPDATE',
                 collection: 'vendors',
                 itemId: updated._id,
                 operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
@@ -451,6 +451,18 @@ router.put('/:id/self', auth, async (req, res) => {
 
         Object.assign(vendor, req.body, { modifiedBy: req.user.username });
         await vendor.save();
+
+        // 写日志（个人自编辑）
+        writeLog({
+            action: 'UPDATE',
+            collection: 'vendors',
+            itemId: vendor._id,
+            operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : req.user.username,
+            payload: {
+                chineseName: vendor.chineseName,
+                englishName: vendor.englishName
+            }
+        });
 
         res.json({ success: true, data: vendor });
     } catch (err) {

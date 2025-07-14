@@ -29,4 +29,43 @@ router.get('/', isAdmin, async (req, res) => {
   }
 });
 
+router.get('/export', isAdmin, async (req, res) => {
+  try {
+    const { start, end, format = 'csv' } = req.query;
+    const query = {};
+    if (start) query.createdAt = { ...query.createdAt, $gte: new Date(start) };
+    if (end) query.createdAt = { ...query.createdAt, $lte: new Date(end) };
+
+    const logs = await Log.find(query).sort({ createdAt: -1 }).lean();
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="logs_${Date.now()}.json"`);
+      return res.send(JSON.stringify(logs));
+    }
+
+    // 默认CSV
+    const headers = ['createdAt', 'action', 'collection', 'operator', 'itemId', 'payload'];
+    const csvLines = [headers.join(',')];
+    for (const l of logs) {
+      const row = [
+        new Date(l.createdAt).toISOString(),
+        l.action,
+        l.collection,
+        decodeURIComponent(l.operator || ''),
+        l.itemId || '',
+        JSON.stringify(l.payload || {}).replace(/"/g, '""')
+      ];
+      csvLines.push(row.map(v => `"${v}"`).join(','));
+    }
+    const csvContent = '\uFEFF' + csvLines.join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="logs_${Date.now()}.csv"`);
+    res.send(csvContent);
+  } catch (e) {
+    console.error('导出日志失败', e);
+    res.status(500).json({ success: false, message: '导出日志失败', error: e.message });
+  }
+});
+
 module.exports = router; 

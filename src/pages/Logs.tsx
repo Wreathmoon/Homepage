@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Typography, Spin } from '@douyinfe/semi-ui';
+import { Table, Typography, Spin, Button, Space, Toast } from '@douyinfe/semi-ui';
+import { IconDownload } from '@douyinfe/semi-icons';
 import { getLogs, LogItem } from '../services/log';
+import { API_CONFIG } from '../utils/config';
 
 const { Title } = Typography;
 
@@ -39,9 +41,40 @@ const Logs: React.FC = () => {
     }
   ];
 
+  // 导出日志
+  const handleExportLogs = async () => {
+    try {
+      const resp = await fetch(`${API_CONFIG.API_URL}/api/logs/export?format=csv`, {
+        headers: {
+          'x-user': encodeURIComponent(localStorage.getItem('user_username') || ''),
+          'x-user-role': 'admin'
+        }
+      });
+      if (!resp.ok) throw new Error('导出失败');
+      const blob = await resp.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `logs_${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      Toast.success('日志导出成功');
+    } catch (err) {
+      console.error('导出日志失败', err);
+      Toast.error('导出日志失败');
+    }
+  };
+
   return (
     <div>
-      <Title heading={3}>系统日志</Title>
+      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
+        <Title heading={3} style={{ margin: 0 }}>系统日志</Title>
+        <Button icon={<IconDownload />} onClick={handleExportLogs}>
+          导出日志
+        </Button>
+      </Space>
       <Spin spinning={loading}>
         <Table
           columns={columns}

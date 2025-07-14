@@ -19,3 +19,21 @@ body, #root {
   background-color: #ffffff !important;
   box-shadow: initial !important;
 }
+
+/* ==== Dark mode override to恢复黑暗背景 ==== */
+body[theme-mode="dark"],
+#root[theme-mode="dark"],
+body[theme-mode="dark"] #root,
+body[theme-mode="dark"] [class^="semi-layout"],
+body[theme-mode="dark"] [class*=" semi-layout"],
+body[theme-mode="dark"] .semi-layout-sider,
+body[theme-mode="dark"] .semi-navigation,
+body[theme-mode="dark"] .semi-layout-content,
+body[theme-mode="dark"] .semi-layout-header,
+body[theme-mode="dark"] .semi-card,
+body[theme-mode="dark"] .semi-card .semi-card-body,
+body[theme-mode="dark"] .semi-table,
+body[theme-mode="dark"] .semi-table-cell {
+  background-color: var(--semi-color-bg-1) !important;
+  color: var(--semi-color-text-0) !important;
+}

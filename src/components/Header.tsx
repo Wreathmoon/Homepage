@@ -18,13 +18,16 @@ const Header: React.FC<HeaderProps> = ({ onUserManagement }) => {
     // dark mode switch function
     const switchMode = () => {
         const body = document.body;
-        if (body.hasAttribute('theme-mode')) {
-            body.removeAttribute('theme-mode');
-            setIsDark(false);
-        } else {
+        const html = document.documentElement;
+        const enableDark = !body.hasAttribute('theme-mode');
+        if (enableDark) {
             body.setAttribute('theme-mode', 'dark');
-            setIsDark(true);
+            html.setAttribute('theme-mode', 'dark');
+        } else {
+            body.removeAttribute('theme-mode');
+            html.removeAttribute('theme-mode');
         }
+        setIsDark(enableDark);
     };
 
     // 用户菜单选项

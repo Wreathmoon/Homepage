@@ -51,6 +51,7 @@ const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/logs');
 const userRoutes = require('./routes/users');
 const maintenanceRoutes = require('./routes/maintenance');
+const announcementRoutes = require('./routes/announcement');
 const { get: getMaintenance } = require('./services/maintenance');
 
 // 路由配置
@@ -62,6 +63,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/announcement', announcementRoutes);
 
 // 写请求维护期阻断
 app.use((req, res, next) => {

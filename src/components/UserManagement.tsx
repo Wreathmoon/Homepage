@@ -8,10 +8,11 @@ import {
     Space,
     Tag,
     Card,
-    Switch
+    Switch,
+    
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-import { IconDelete, IconPlus, IconCopy, IconDownload, IconAlertTriangle, IconTick } from '@douyinfe/semi-icons';
+import { IconDelete, IconPlus, IconCopy, IconDownload, IconAlertTriangle, IconTick, IconSend } from '@douyinfe/semi-icons';
 import * as XLSX from 'xlsx';
 import { 
     getAllUsers, 
@@ -37,6 +38,9 @@ const UserManagement: React.FC = () => {
     const [newCode, setNewCode] = useState<{ code: string; expiresAt: string } | null>(null);
     const [deleteCodeModalVisible, setDeleteCodeModalVisible] = useState(false);
     const [codeToDelete, setCodeToDelete] = useState<RegistrationCode | null>(null);
+    // 公告
+    const [announceModalVisible, setAnnounceModalVisible] = useState(false);
+    const [announceText, setAnnounceText] = useState('');
 
     // 获取用户列表
     const fetchUsers = useCallback(async () => {
@@ -380,6 +384,7 @@ const UserManagement: React.FC = () => {
                     <Button icon={<IconPlus />} onClick={handleGenerateCode}>生成注册码</Button>
                     <Button icon={<IconDownload />} onClick={handleExportUsers}>导出用户</Button>
                     <Button icon={<IconDownload />} onClick={handleExportCodes}>导出注册码</Button>
+                    <Button icon={<IconSend />} theme="solid" onClick={() => setAnnounceModalVisible(true)}>发布公告</Button>
                     <Button icon={<IconAlertTriangle />} theme="solid" type="warning" onClick={handleSchedule}>发送维护预告</Button>
                     <Button icon={<IconTick />} theme="solid" onClick={handleStopMaintain}>维护结束</Button>
                 </Space>
@@ -493,6 +498,30 @@ const UserManagement: React.FC = () => {
                 type="warning"
             >
                 <p>确定要删除注册码 <strong>{codeToDelete?.code}</strong> 吗？</p>
+            </Modal>
+
+            {/* 发布公告弹窗 */}
+            <Modal
+                title="发布公告"
+                visible={announceModalVisible}
+                onCancel={() => setAnnounceModalVisible(false)}
+                onOk={async () => {
+                    if (!announceText.trim()) { Toast.warning('公告内容不能为空'); return; }
+                    try { await (await import('../services/announcement')).postAnnouncement(announceText.trim());
+                        Toast.success('公告已发布');
+                        setAnnounceModalVisible(false);
+                        setAnnounceText('');
+                    } catch { Toast.error('发布失败'); }
+                }}
+                okText="发布"
+                cancelText="取消"
+            >
+                <textarea
+                    style={{ width: '100%', height: 120 }}
+                    value={announceText}
+                    onChange={e => setAnnounceText(e.target.value)}
+                    placeholder="请输入公告内容"
+                />
             </Modal>
         </div>
     );

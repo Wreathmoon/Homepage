@@ -11,6 +11,8 @@ import { MaintenanceProvider } from './contexts/MaintenanceContext';
 import MaintenancePopup from './components/MaintenancePopup';
 import MaintenanceCountdown from './components/MaintenanceCountdown';
 import MaintenanceEndPopup from './components/MaintenanceEndPopup';
+import { AnnouncementProvider } from './contexts/AnnouncementContext';
+import AnnouncementPopup from './components/AnnouncementPopup';
 
 const { Content } = Layout;
 
@@ -51,6 +53,7 @@ function App() {
     }, []);
 
     return (
+        <AnnouncementProvider>
         <MaintenanceProvider>
             <AuthProvider>
                 <Router>
@@ -60,8 +63,10 @@ function App() {
                 <MaintenancePopup />
                 <MaintenanceCountdown />
                 <MaintenanceEndPopup />
+                <AnnouncementPopup />
             </AuthProvider>
         </MaintenanceProvider>
+        </AnnouncementProvider>
     );
 }
 

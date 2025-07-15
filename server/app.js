@@ -127,6 +127,9 @@ app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
     console.log(`🌍 允许的跨域源: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
     console.log(`📁 上传文件目录: ${path.join(__dirname, 'uploads')}`);
+
+    // 启动定时日志归档任务
+    require('./tasks/logArchive');
 });
 
 module.exports = app; 

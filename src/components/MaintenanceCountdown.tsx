@@ -13,10 +13,11 @@ const MaintenanceCountdown: React.FC = () => {
 
     if (!isAuthenticated) return null;
 
-    if (status !== 'scheduled') return null;
+    if (status === 'normal') return null;
 
     const minutes = Math.floor(remaining / 60);
     const seconds = remaining % 60;
+    const text = status === 'scheduled' && remaining > 0 ? `维护倒计时 ${pad(minutes)}:${pad(seconds)}` : '维护中，请勿进行录入';
 
     return (
         <div style={{
@@ -30,7 +31,7 @@ const MaintenanceCountdown: React.FC = () => {
             boxShadow: '0 0 6px rgba(0,0,0,0.2)',
             zIndex: 2000
         }}>
-            <Text strong style={{ color: '#fff' }}>维护倒计时 {pad(minutes)}:{pad(seconds)}</Text>
+            <Text strong style={{ color: '#fff' }}>{text}</Text>
         </div>
     );
 };

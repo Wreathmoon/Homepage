@@ -11,16 +11,17 @@ const MaintenancePopup: React.FC = () => {
 
     const [dismissed, setDismissed] = useState(false);
 
-    if (!isAuthenticated) return null;
-
-    // 当状态变化时重置 dismissed
+    // 当状态变化时重置 dismissed（需无条件调用，以满足 hook 规则）
     useEffect(() => {
         if (status !== 'scheduled') {
             setDismissed(false);
         }
     }, [status]);
 
-    const visible = status === 'scheduled' && !dismissed;
+    // 仅登录且未被关闭时显示
+    const visible = isAuthenticated && status === 'scheduled' && !dismissed;
+
+    if (!visible) return null;
 
     return (
         <Modal

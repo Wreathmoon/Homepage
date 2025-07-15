@@ -7,6 +7,10 @@ import { useEffect } from 'react';
 import QuotationHelper from './pages/QuotationHelper';
 import Login from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { MaintenanceProvider } from './contexts/MaintenanceContext';
+import MaintenancePopup from './components/MaintenancePopup';
+import MaintenanceCountdown from './components/MaintenanceCountdown';
+import MaintenanceEndPopup from './components/MaintenanceEndPopup';
 
 const { Content } = Layout;
 
@@ -47,11 +51,17 @@ function App() {
     }, []);
 
     return (
-        <AuthProvider>
-            <Router>
-                <ProtectedApp />
-            </Router>
-        </AuthProvider>
+        <MaintenanceProvider>
+            <AuthProvider>
+                <Router>
+                    <ProtectedApp />
+                </Router>
+                {/* 全局维护弹窗 / 倒计时 */}
+                <MaintenancePopup />
+                <MaintenanceCountdown />
+                <MaintenanceEndPopup />
+            </AuthProvider>
+        </MaintenanceProvider>
     );
 }
 

@@ -7,13 +7,11 @@ import {
     Toast,
     Space,
     Tag,
-    Descriptions,
-    Input,
     Card,
     Switch
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-import { IconUser, IconDelete, IconPlus, IconRefresh, IconCopy, IconDownload } from '@douyinfe/semi-icons';
+import { IconDelete, IconPlus, IconCopy, IconDownload, IconAlertTriangle, IconTick } from '@douyinfe/semi-icons';
 import * as XLSX from 'xlsx';
 import { 
     getAllUsers, 
@@ -25,6 +23,7 @@ import {
     type RegistrationCode
 } from '../services/auth';
 import { API_CONFIG } from '../utils/config';
+import { scheduleMaintenance, stopMaintenance } from '../services/maintenance';
 
 const { Title, Text } = Typography;
 
@@ -355,33 +354,34 @@ const UserManagement: React.FC = () => {
         }
     ];
 
+    const handleSchedule = async () => {
+        try {
+            await scheduleMaintenance(180, '服务器将在三分钟后重启并部署更新，请停止供应商录入，正在录入的请尽快保存');
+            Toast.success('维护通知已发送');
+        } catch (e) {
+            Toast.error('操作失败');
+        }
+    };
+
+    const handleStopMaintain = async () => {
+        try {
+            await stopMaintenance();
+            Toast.success('已退出维护模式');
+        } catch (e) {
+            Toast.error('操作失败');
+        }
+    };
+
     return (
         <div style={{ padding: '20px' }}>
             <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Title heading={3}>账号管理</Title>
-                <Space>
-                    <Button
-                        icon={<IconRefresh />}
-                        onClick={() => {
-                            fetchUsers();
-                            fetchRegistrationCodes();
-                        }}
-                    >
-                        刷新
-                    </Button>
-                    <Button icon={<IconDownload />} onClick={handleExportUsers}>
-                        导出用户名单
-                    </Button>
-                    <Button icon={<IconDownload />} onClick={handleExportCodes}>
-                        导出注册码
-                    </Button>
-                    <Button
-                        icon={<IconPlus />}
-                        type="primary"
-                        onClick={handleGenerateCode}
-                    >
-                        生成注册码
-                    </Button>
+                <Space style={{ marginBottom: 16 }}>
+                    <Button icon={<IconPlus />} onClick={handleGenerateCode}>生成注册码</Button>
+                    <Button icon={<IconDownload />} onClick={handleExportUsers}>导出用户</Button>
+                    <Button icon={<IconDownload />} onClick={handleExportCodes}>导出注册码</Button>
+                    <Button icon={<IconAlertTriangle />} theme="solid" type="warning" onClick={handleSchedule}>发送维护预告</Button>
+                    <Button icon={<IconTick />} theme="solid" onClick={handleStopMaintain}>维护结束</Button>
                 </Space>
             </div>
 

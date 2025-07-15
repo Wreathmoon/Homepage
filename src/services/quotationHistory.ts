@@ -95,6 +95,8 @@ export interface QuotationQueryParams {
     endDate?: string;
     keyword?: string;
     wonBid?: boolean;
+    sortField?: string;
+    sortOrder?: 'asc' | 'desc';
 }
 
 // 响应接口
@@ -148,6 +150,12 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
             apiParams.keyword = params.keyword || params.productKeyword;
         }
         if (params.wonBid !== undefined) apiParams.wonBid = params.wonBid;
+
+        // 排序字段
+        if (params.sortField) {
+            apiParams.sortField = params.sortField === 'vendor' ? 'supplier' : params.sortField;
+        }
+        if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
 
         // 连接到API服务器获取数据
         const apiServerUrl = API_CONFIG.API_URL;

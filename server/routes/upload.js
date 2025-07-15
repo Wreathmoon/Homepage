@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const XLSX = require('xlsx');
 const router = express.Router();
 const Quotation = require('../models/quotation');
+const { writeLog } = require('../services/logger');
 
 // 配置文件存储
 const storage = multer.diskStorage({
@@ -97,6 +98,7 @@ router.post('/quotation', upload.single('quotationFile'), async (req, res) => {
 
         // 保存解析的报价数据到数据库
         const savedQuotations = [];
+        const logsToInsert = [];
         for (const quotationData of quotations) {
             // 添加文件信息
             quotationData.originalFile = {
@@ -108,7 +110,45 @@ router.post('/quotation', upload.single('quotationFile'), async (req, res) => {
 
             const quotation = new Quotation(quotationData);
             const saved = await quotation.save();
+
+            console.log('准备写入系统日志 CREATE for quotation', saved._id.toString());
+
+            // 收集日志，稍后批量写入
+            logsToInsert.push({
+                action: 'CREATE',
+                collection: 'quotations',
+                itemId: saved._id,
+                operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+                payload: {
+                    productName: saved.productName,
+                    supplier: saved.supplier
+                },
+                createdAt: new Date()
+            });
+
+            // 立即写日志（双保险）
+            writeLog({
+                action: 'CREATE',
+                collection: 'quotations',
+                itemId: saved._id,
+                operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+                payload: {
+                    productName: saved.productName,
+                    supplier: saved.supplier
+                }
+            });
+
             savedQuotations.push(saved);
+        }
+
+        // 批量写日志
+        if (logsToInsert.length) {
+            try {
+                const Log = require('../models/log');
+                await Log.insertMany(logsToInsert);
+            } catch (logErr) {
+                console.error('批量写日志失败', logErr);
+            }
         }
 
         res.json({

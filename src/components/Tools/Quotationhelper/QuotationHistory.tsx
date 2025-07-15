@@ -28,6 +28,7 @@ import type { QuotationRecord, QuotationQueryParams } from '../../../services/qu
 import { ResizeObserverFix } from '../../../utils/resizeObserver';
 import { request } from '../../../utils/request';
 import { API_CONFIG } from '../../../utils/config';
+import type { SortOrder } from '@douyinfe/semi-ui/lib/es/table';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const { Title, Text } = Typography;
@@ -375,6 +376,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ visible, onClose, record }) =
 };
 
 const QuotationHistory: React.FC = () => {
+    // 排序状态
+    const [sorter, setSorter] = useState<{ field?: string; order?: 'ascend' | 'descend' }>(() => ({ field: undefined, order: undefined }));
     const [data, setData] = useState<QuotationRecord[]>([]);
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({
@@ -403,7 +406,8 @@ const QuotationHistory: React.FC = () => {
             const params: QuotationQueryParams = {
                 page,
                 pageSize,
-                ...searchFilters
+                ...searchFilters,
+                ...(sorter.field ? { sortField: sorter.field === 'vendor' ? 'supplier' : sorter.field, sortOrder: sorter.order === 'ascend' ? 'asc' : 'desc' } : {})
             };
             
             const response = await getQuotationList(params);
@@ -418,11 +422,12 @@ const QuotationHistory: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [sorter]);
 
     useEffect(() => {
         fetchData(pagination.currentPage, pagination.pageSize, filters);
-    }, [filters, pagination.currentPage, pagination.pageSize, fetchData]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filters, pagination.currentPage, pagination.pageSize, sorter]);
 
     const handleSubmit = (values: Record<string, any>) => {
         const newFilters: Partial<QuotationQueryParams> = {
@@ -494,17 +499,23 @@ const QuotationHistory: React.FC = () => {
         {
             title: '产品名称',
             dataIndex: 'productName',
-            width: 200
+            width: 200,
+            sorter: true,
+            sortOrder: sorter.field === 'productName' ? sorter.order : undefined
         },
         {
             title: '产品类别',
             dataIndex: 'category',
-            width: 120
+            width: 120,
+            sorter: true,
+            sortOrder: sorter.field === 'category' ? sorter.order : undefined
         },
         {
             title: '地区',
             dataIndex: 'region',
-            width: 100
+            width: 100,
+            sorter: true,
+            sortOrder: sorter.field === 'region' ? sorter.order : undefined
         },
         {
             title: '产品详解',
@@ -523,7 +534,9 @@ const QuotationHistory: React.FC = () => {
         {
             title: '供应商',
             dataIndex: 'vendor',
-            width: 150
+            width: 150,
+            sorter: true,
+            sortOrder: sorter.field === 'vendor' ? sorter.order : undefined
         },
         {
             title: 'List Price',
@@ -763,6 +776,44 @@ const QuotationHistory: React.FC = () => {
         }
     ];
 
+    // 适配 Semi UI v2.x ChangeInfo 结构
+    const handleTableChange = (changeInfo: any) => {
+        const { sorter: srt, pagination: pager } = changeInfo || {};
+
+        let nextSortField = sorter.field;
+        let nextSortOrder = sorter.order;
+        let sorterChanged = false;
+
+        if (srt) {
+            const singleSorter = Array.isArray(srt) ? srt[0] : srt;
+            const rawOrder = singleSorter?.sortOrder || singleSorter?.order;
+            if (rawOrder) {
+                const candidateField = singleSorter.dataIndex || singleSorter.field || singleSorter.columnKey;
+                const candidateOrder = rawOrder as 'ascend' | 'descend';
+                if (candidateField !== sorter.field || candidateOrder !== sorter.order) {
+                    nextSortField = candidateField;
+                    nextSortOrder = candidateOrder;
+                    sorterChanged = true;
+                    setSorter({ field: nextSortField, order: nextSortOrder });
+                }
+            } else if (sorter.field) {
+                // 取消排序
+                setSorter({ field: undefined, order: undefined });
+                sorterChanged = true;
+                nextSortField = undefined;
+                nextSortOrder = undefined;
+            }
+        }
+
+        // 分页
+        let newPage = pager?.currentPage ?? pagination.currentPage;
+        const newPageSize = pager?.pageSize ?? pagination.pageSize;
+        if (sorterChanged) newPage = 1;
+
+        fetchData(newPage,newPageSize,filters);
+        setPagination(prev=>({...prev,currentPage:newPage,pageSize:newPageSize}));
+    };
+
     return (
         <div style={{ padding: '20px' }}>
             <Title heading={3}>历史报价查询</Title>
@@ -827,6 +878,7 @@ const QuotationHistory: React.FC = () => {
                 }}
                 loading={loading}
                 scroll={{ x: 1500 }}
+                onChange={handleTableChange as any}
             />
 
             <DetailModal

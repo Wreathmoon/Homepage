@@ -3,6 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
 const Quotation = require('../models/quotation');
+const { writeLog } = require('../services/logger');
 const multer = require('multer');
 
 // 标准分类/地区列表（用于"其他"筛选逻辑）
@@ -138,6 +139,10 @@ router.get('/list', async (req, res) => {
             ];
         }
 
+        // 排序参数
+        const { sortField = 'createdAt', sortOrder = 'desc' } = req.query;
+        const sortOption = { [sortField]: sortOrder === 'asc' ? 1 : -1 };
+
         // 分页参数
         const skip = (parseInt(page) - 1) * parseInt(pageSize);
         const limit = parseInt(pageSize);
@@ -145,7 +150,8 @@ router.get('/list', async (req, res) => {
         // 执行查询
         const [quotations, total] = await Promise.all([
             Quotation.find(query)
-                .sort({ createdAt: -1 })
+                .collation({ locale: 'zh' })
+                .sort(sortOption)
                 .skip(skip)
                 .limit(limit)
                 .lean(),
@@ -229,6 +235,10 @@ router.get('/', async (req, res) => {
             ];
         }
 
+        // 排序参数
+        const { sortField: sf2 = 'createdAt', sortOrder: so2 = 'desc' } = req.query;
+        const sortOption2 = { [sf2]: so2 === 'asc' ? 1 : -1 };
+
         // 分页参数
         const skip = (parseInt(page) - 1) * parseInt(pageSize);
         const limit = parseInt(pageSize);
@@ -236,7 +246,8 @@ router.get('/', async (req, res) => {
         // 执行查询
         const [quotations, total] = await Promise.all([
             Quotation.find(query)
-                .sort({ createdAt: -1 })
+                .collation({ locale: 'zh' })
+                .sort(sortOption2)
                 .skip(skip)
                 .limit(limit)
                 .lean(),
@@ -301,6 +312,18 @@ router.post('/', async (req, res) => {
         const quotation = new Quotation(cleanedData);
         await quotation.save();
 
+        // 写日志
+        writeLog({
+            action: 'CREATE',
+            collection: 'quotations',
+            itemId: quotation._id,
+            operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+            payload: {
+                productName: quotation.productName,
+                supplier: quotation.supplier
+            }
+        });
+
         res.status(201).json({
             success: true,
             message: '报价添加成功',
@@ -349,6 +372,17 @@ router.put('/:id', async (req, res) => {
             });
         }
 
+        writeLog({
+            action: 'UPDATE',
+            collection: 'quotations',
+            itemId: quotation._id,
+            operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+            payload: {
+                productName: quotation.productName,
+                supplier: quotation.supplier
+            }
+        });
+
         res.json({
             success: true,
             message: '报价更新成功',
@@ -377,6 +411,18 @@ router.delete('/:id', async (req, res) => {
                 message: '报价记录不存在'
             });
         }
+
+        // 写日志
+        writeLog({
+            action: 'DELETE',
+            collection: 'quotations',
+            itemId: quotation._id,
+            operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+            payload: {
+                productName: quotation.productName,
+                supplier: quotation.supplier
+            }
+        });
 
         // 删除相关的附件文件
         if (quotation.attachments && quotation.attachments.length > 0) {
@@ -655,6 +701,7 @@ router.post('/confirm-save', async (req, res) => {
 
         const savedRecords = [];
         const errors = [];
+        const logsToInsert = [];
         let skippedCount = 0;
 
         for (const productData of products) {
@@ -721,6 +768,32 @@ router.post('/confirm-save', async (req, res) => {
 
                 const quotation = new Quotation(quotationData);
                 const savedQuotation = await quotation.save();
+
+                // 收集日志 (稍后批量写入)
+                console.log('准备写入系统日志 CREATE for quotation', savedQuotation._id.toString());
+                logsToInsert.push({
+                    action: 'CREATE',
+                    collection: 'quotations',
+                    itemId: savedQuotation._id,
+                    operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+                    payload: {
+                        productName: savedQuotation.productName,
+                        supplier: savedQuotation.supplier
+                    },
+                    createdAt: new Date()
+                });
+
+                // 即时写入一份日志，避免批量失败导致缺失
+                writeLog({
+                    action: 'CREATE',
+                    collection: 'quotations',
+                    itemId: savedQuotation._id,
+                    operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+                    payload: {
+                        productName: savedQuotation.productName,
+                        supplier: savedQuotation.supplier
+                    }
+                });
                 savedRecords.push(savedQuotation);
 
                 console.log(`✅ 保存成功: ${quotationData.productName}`);
@@ -731,6 +804,16 @@ router.post('/confirm-save', async (req, res) => {
                     product: productData.productName || '未知产品',
                     error: error.message
                 });
+            }
+        }
+
+        // 批量写入日志，若存在条目
+        if (logsToInsert.length) {
+            try {
+                const Log = require('../models/log');
+                await Log.insertMany(logsToInsert);
+            } catch (logErr) {
+                console.error('批量写日志失败', logErr);
             }
         }
 
@@ -803,6 +886,18 @@ router.post('/manual', upload.single('quotationFile'), async (req, res)=>{
             originalFile: fileInfo
         };
         const saved = await Quotation.create(data);
+
+        // 写日志
+        writeLog({
+            action: 'CREATE',
+            collection: 'quotations',
+            itemId: saved._id,
+            operator: req.headers['x-user'] ? decodeURIComponent(req.headers['x-user']) : 'unknown',
+            payload: {
+                productName: saved.productName,
+                supplier: saved.supplier
+            }
+        });
         res.json({ success:true, message:'手动报价保存成功', data: saved });
     } catch(err){ console.error(err); res.status(500).json({ success:false, message: err.message}); }
 });

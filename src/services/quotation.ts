@@ -1,5 +1,6 @@
 import { request } from '../utils/request';
 import { API_CONFIG } from '../utils/config';
+import { AUTH_CONFIG } from '../config/auth';
 
 // 报价记录接口定义 (扩展以匹配MongoDB模型)
 export interface QuotationRecord {
@@ -178,6 +179,10 @@ export async function uploadQuotationFile(file: File): Promise<{ success: boolea
         // 修复URL路径问题 - 使用完整的URL而不是通过request实例
         const response = await fetch(`${API_CONFIG.AI_SERVER_URL}/api/upload/quotation`, {
             method: 'POST',
+            headers: {
+                'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
+                'x-user-role': localStorage.getItem('user_role') || ''
+            },
             body: formData
         });
 

@@ -31,6 +31,7 @@ import { uploadQuotationFile, addQuotation } from '../../../services/quotation';
 import type { QuotationRecord } from '../../../services/quotation';
 import { PRODUCT_CATEGORIES, REGIONS } from '../../../services/quotationHistory';
 import { API_CONFIG } from '../../../utils/config';
+import { AUTH_CONFIG } from '../../../config/auth';
 
 const { Title, Text } = Typography;
 const { Step } = Steps;
@@ -159,6 +160,10 @@ const QuotationImport: React.FC = () => {
             const aiServerUrl = API_CONFIG.AI_SERVER_URL;
             const response = await fetch(`${aiServerUrl}/api/quotations/upload`, {
                 method: 'POST',
+                headers: {
+                    'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
+                    'x-user-role': localStorage.getItem('user_role') || ''
+                },
                 body: formData
             });
 
@@ -209,7 +214,9 @@ const QuotationImport: React.FC = () => {
             const response = await fetch(`${aiServerUrl}/api/quotations/analyze`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
+                    'x-user-role': localStorage.getItem('user_role') || ''
                 },
                 signal: controller.signal, // 添加超时控制
                 body: JSON.stringify({
@@ -497,7 +504,9 @@ const QuotationImport: React.FC = () => {
             const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
+                    'x-user-role': localStorage.getItem('user_role') || ''
                 },
                 body: JSON.stringify({
                     products: productsData,
@@ -587,6 +596,10 @@ const QuotationImport: React.FC = () => {
 
             const res = await fetch(`${apiServerUrl}/api/quotations/manual`, {
                 method: 'POST',
+                headers: {
+                    'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
+                    'x-user-role': localStorage.getItem('user_role') || ''
+                },
                 body: formData
             });
             const result = await res.json();
@@ -687,7 +700,9 @@ const QuotationImport: React.FC = () => {
             const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
+                    'x-user-role': localStorage.getItem('user_role') || ''
                 },
                 body: JSON.stringify({
                     products: products,
@@ -1675,38 +1690,23 @@ const QuotationImport: React.FC = () => {
     };
 
     return (
-        <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ padding: '24px 32px', maxWidth: '1400px', margin: '0 auto' }}>
             {/* 重复检测对话框 */}
             {renderDuplicateDialog()}
             
             {/* 文件已存在对话框 */}
             {renderFileExistsDialog()}
             
-            <Title heading={3}>智能报价单导入</Title>
-            
-            {/* 进度条 */}
-            <Steps current={currentStep} style={{ marginTop: '20px' }}>
-                <Step title="上传文件" description="选择报价单文件" />
-                <Step title="AI分析" description="智能解析内容" />
-                <Step title="确认数据" description="逐条检查确认" />
-                <Step title="导入完成" description="保存到数据库" />
-            </Steps>
-
-            {/* 主要内容区域 */}
-            {renderStepContent()}
-
-            <Divider margin="40px" />
-
-            {/* 手动添加区域 */}
-            <Card>
-                <Title heading={4}>手动添加产品</Title>
+            {/* 手动添加区域 —— 置顶显示 */}
+            <Card style={{ marginBottom: 40 }}>
+                <Title heading={3} style={{ marginBottom: 12 }}>手动添加产品</Title>
                 <Form<any> 
                     onSubmit={handleManualSubmit}
-                    layout="horizontal"
-                    style={{ marginTop: '20px' }}
+                    layout="vertical"
+                    style={{ marginTop: '4px' }}
                     getFormApi={(api) => (manualFormApi.current = api)}
                 >
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
                         <Form.Input
                             field="productName"
                             label="产品名称"
@@ -1826,7 +1826,24 @@ const QuotationImport: React.FC = () => {
                     </div>
                 </Form>
             </Card>
-            
+ 
+            {/* AI 导入区域 */}
+            <Card>
+                <Title heading={3}>智能报价单导入（AI辅助）</Title>
+                {/* 进度条 */}
+                <Steps current={currentStep} style={{ marginTop: '20px' }}>
+                    <Step title="上传文件" description="选择报价单文件" />
+                    <Step title="AI分析" description="智能解析内容" />
+                    <Step title="确认数据" description="逐条检查确认" />
+                    <Step title="导入完成" description="保存到数据库" />
+                </Steps>
+
+                {/* 主要内容区域 */}
+                <div style={{ marginTop: 24 }}>
+                    {renderStepContent()}
+                </div>
+            </Card>
+ 
             {/* 底部留白 */}
             <div style={{ height: '200px' }}></div>
 

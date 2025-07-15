@@ -9,9 +9,9 @@ const MaintenancePopup: React.FC = () => {
     const { status, remaining, msg } = useMaintenance();
     const { isAuthenticated } = useAuth();
 
-    if (!isAuthenticated) return null;
-
     const [dismissed, setDismissed] = useState(false);
+
+    if (!isAuthenticated) return null;
 
     // 当状态变化时重置 dismissed
     useEffect(() => {

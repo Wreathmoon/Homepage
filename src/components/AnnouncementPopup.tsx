@@ -28,7 +28,9 @@ const AnnouncementPopup: React.FC = () => {
             onCancel={() => setVisible(false)}
             maskClosable
         >
-            {msg}
+            <div style={{ whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto' }}>
+                {msg}
+            </div>
         </Modal>
     );
 };

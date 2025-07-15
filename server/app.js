@@ -50,6 +50,8 @@ const uploadRoutes = require('./routes/upload');
 const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/logs');
 const userRoutes = require('./routes/users');
+const maintenanceRoutes = require('./routes/maintenance');
+const { get: getMaintenance } = require('./services/maintenance');
 
 // 路由配置
 app.use('/api/vendors', vendorRoutes);
@@ -59,6 +61,16 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
+
+// 写请求维护期阻断
+app.use((req, res, next) => {
+  const maint = getMaintenance();
+  if (maint.status === 'maintenance' && req.method !== 'GET' && !req.path.startsWith('/api/maintenance')) {
+    return res.status(503).json({ success: false, message: '系统维护中，请稍后再试' });
+  }
+  next();
+});
 
 // 健康检查端点
 app.get('/api/health', (req, res) => {

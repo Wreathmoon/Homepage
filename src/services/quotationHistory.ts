@@ -158,14 +158,10 @@ export async function getQuotationList(params: QuotationQueryParams): Promise<{ 
         if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
 
         // 连接到API服务器获取数据
-        const apiServerUrl = API_CONFIG.API_URL;
-        const response = await fetch(`${apiServerUrl}/api/quotations/list?${new URLSearchParams(apiParams).toString()}`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
+        const result: any = await request('/quotations/list', {
+            method: 'GET',
+            params: apiParams
+        });
 
         // 数据格式转换，保持向后兼容
         const rawData = result.data || result;

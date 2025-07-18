@@ -3,6 +3,9 @@ const router = express.Router();
 const User = require('../models/user');
 const RegistrationCode = require('../models/registrationCode');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { signAccess, signRefresh, verify } = require('../utils/jwt');
+const cookieParser = require('cookie-parser');
 
 // 生成随机注册码
 function generateRegistrationCode() {
@@ -11,7 +14,7 @@ function generateRegistrationCode() {
 
 // 管理员权限检查中间件
 const requireAdmin = (req, res, next) => {
-    const userRole = req.headers['x-user-role'];
+    const userRole = (req.user && req.user.role) || req.headers['x-user-role'];
     if (userRole !== 'admin') {
         return res.status(403).json({
             success: false,
@@ -21,51 +24,70 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
-// 用户登录验证
+// 用户登录
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
 
         if (!username || !password) {
-            return res.status(400).json({
-                success: false,
-                message: '用户名和密码不能为空'
-            });
+            return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
         }
 
-        // 查找用户
-        const user = await User.findOne({ 
-            username: username, 
-            password: password, // 注意：实际生产环境应该使用加密密码
-            isActive: true 
-        });
-
+        const user = await User.findOne({ username, isActive: true });
         if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: '用户名或密码错误'
-            });
+            console.warn('登录失败: 用户不存在或未激活');
+            return res.status(401).json({ success: false, message: '用户名或密码错误' });
         }
+
+        const match = await user.comparePassword(password);
+        if (!match) {
+            console.warn('登录失败: 密码不匹配');
+            return res.status(401).json({ success: false, message: '用户名或密码错误' });
+        }
+
+        const payload = { id: user._id, role: user.role, name: user.displayName };
+        const accessToken = signAccess(payload);
+        const refreshToken = signRefresh({ id: user._id });
+
+        // httpOnly cookie 存 refreshToken
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 3600 * 1000
+        });
 
         res.json({
             success: true,
-            message: '登录成功',
             data: {
-                _id: user._id,
-                username: user.username,
-                displayName: user.displayName,
-                role: user.role,
-                vendorEditable: user.vendorEditable || { enabled: false, expiresAt: null }
+                accessToken,
+                user: {
+                    _id: user._id,
+                    username: user.username,
+                    displayName: user.displayName,
+                    role: user.role,
+                    vendorEditable: user.vendorEditable || { enabled: false, expiresAt: null }
+                }
             }
         });
-
     } catch (error) {
         console.error('登录失败:', error);
-        res.status(500).json({
-            success: false,
-            message: '登录失败',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: '登录失败', error: error.message });
+    }
+});
+
+// 刷新 accessToken
+router.post('/refresh', async (req, res) => {
+    const token = req.cookies.refreshToken;
+    if (!token) return res.status(401).json({ success: false, message: '无刷新令牌' });
+    try {
+        const decoded = verify(token);
+        const user = await User.findById(decoded.id);
+        if (!user) throw new Error('用户不存在');
+        const newAccessToken = signAccess({ id: user._id, role: user.role, name: user.displayName });
+        res.json({ success: true, data: { accessToken: newAccessToken } });
+    } catch (err) {
+        return res.status(401).json({ success: false, message: '刷新令牌无效' });
     }
 });
 

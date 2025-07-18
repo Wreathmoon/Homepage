@@ -576,12 +576,14 @@ const VendorAdd: React.FC = () => {
                 method = 'POST';
             }
 
+            const token = localStorage.getItem('token');
             const response = await fetch(url, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
                     'x-user': encodeURIComponent(localStorage.getItem('user_username') || ''),
-                    'x-user-role': isAdmin ? 'admin' : 'user'
+                    'x-user-role': isAdmin ? 'admin' : 'user',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify(submitData)
             });

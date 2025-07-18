@@ -7,6 +7,9 @@ const path = require('path');
 const fs = require('fs');
 const auth = require('../middleware/auth');
 const checkVendorEdit = require('../middleware/checkVendorEdit');
+const { body, query } = require('express-validator');
+const validate = require('../middlewares/validator');
+const requireRole = require('../middlewares/requireRole');
 
 // 供应商附件上传存储配置
 const storage = multer.diskStorage({
@@ -25,7 +28,14 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // 获取供应商列表 (支持筛选和分页)
-router.get('/', async (req, res) => {
+router.get(
+  '/',
+  validate([
+    query('keyword').optional().isString().trim(),
+    query('page').optional().isInt({ min: 1 }),
+    query('pageSize').optional().isInt({ min: 1, max: 100 })
+  ]),
+  async (req, res) => {
     try {
         const {
             page = 1,
@@ -219,6 +229,51 @@ router.get('/', async (req, res) => {
     }
 });
 
+// 获取供应商列表 (用于数据迁移)
+router.get('/list',
+  validate([
+    query('keyword').optional().isString().trim()
+  ]),
+  async (req, res) => {
+    try {
+        const {
+            keyword
+        } = req.query;
+
+        // 构建查询条件
+        let query = {};
+
+        // 关键字搜索 (中文名、英文名、旧name、品牌、联系人)
+        if (keyword) {
+            query.$or = [
+                { chineseName: { $regex: keyword, $options: 'i' } },
+                { englishName: { $regex: keyword, $options: 'i' } },
+                { name: { $regex: keyword, $options: 'i' } },
+                { brands: { $elemMatch: { $regex: keyword, $options: 'i' } } },
+                { contact: { $regex: keyword, $options: 'i' } }
+            ];
+        }
+
+        // 执行查询
+        const vendors = await Vendor.find(query)
+            .collation({ locale: 'zh' })
+            .lean();
+
+        res.json({
+            success: true,
+            data: vendors
+        });
+
+    } catch (error) {
+        console.error('获取供应商列表失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '获取供应商列表失败',
+            error: error.message
+        });
+    }
+});
+
 // 根据ID获取单个供应商
 router.get('/:id', async (req, res) => {
     try {
@@ -246,8 +301,17 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// 添加新供应商
-router.post('/', async (req, res) => {
+// 添加新供应商（admin / user）
+router.post(
+  '/',
+  requireRole(['admin', 'user']),
+  validate([
+    body('chineseName').isString().notEmpty().trim(),
+    body('code').isString().notEmpty(),
+    body('contact').isString().notEmpty(),
+    body('email').isEmail().normalizeEmail()
+  ]),
+  async (req, res) => {
     try {
         // 🔥 处理联系人数据和向后兼容
         const vendorData = { ...req.body };

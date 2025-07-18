@@ -3,6 +3,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
+const cookieParser = require('cookie-parser');
+const mongoSanitize = require('mongo-sanitize');
+const xss = require('xss');
 const dotenv = require('dotenv');
 
 // 加载环境变量
@@ -23,6 +26,17 @@ app.use(cors({
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// NoSQL 注入清理
+app.use((req, _res, next) => {
+  if (req.body) req.body = mongoSanitize(req.body);
+  if (req.query) req.query = mongoSanitize(req.query);
+  if (req.params) req.params = mongoSanitize(req.params);
+  next();
+});
+
+// 解析 httpOnly cookie
+app.use(cookieParser());
 
 // 静态文件服务 - 用于提供上传的文件
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -48,6 +62,7 @@ const vendorRoutes = require('./routes/vendors');
 const quotationRoutes = require('./routes/quotations');
 const uploadRoutes = require('./routes/upload');
 const authRoutes = require('./routes/auth');
+const jwtAuth = require('./middlewares/jwtAuth');
 const logRoutes = require('./routes/logs');
 const userRoutes = require('./routes/users');
 const maintenanceRoutes = require('./routes/maintenance');
@@ -55,11 +70,17 @@ const announcementRoutes = require('./routes/announcement');
 const { get: getMaintenance } = require('./services/maintenance');
 
 // 路由配置
+// 登录、注册等开放接口
+app.use('/api/auth', authRoutes);
+
+// JWT 鉴权中间件（放在业务路由之前）
+app.use('/api', jwtAuth);
+
+// 业务路由
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/quotations', quotationRoutes);
 app.use('/api/products', quotationRoutes); // 兼容现有前端API
 app.use('/api/upload', uploadRoutes);
-app.use('/api/auth', authRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
@@ -137,13 +158,15 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
     console.log(`🌍 允许的跨域源: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
     console.log(`📁 上传文件目录: ${path.join(__dirname, 'uploads')}`);
 
     // 启动定时日志归档任务
-    require('./tasks/logArchive');
+    try {
+      require('./tasks/logArchive');
+    } catch (err) {
+      console.warn('logArchive 任务未启动:', err.message);
+    }
 });
-
-module.exports = app; 

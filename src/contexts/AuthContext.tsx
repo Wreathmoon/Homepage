@@ -29,6 +29,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsAdmin(false);
         
         // 清除本地存储
+        localStorage.removeItem('token');
         localStorage.removeItem(AUTH_CONFIG.authStorageKey);
         localStorage.removeItem(AUTH_CONFIG.userStorageKey);
         localStorage.removeItem(AUTH_CONFIG.timestampStorageKey);
@@ -62,7 +63,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             });
 
             if (result && result.success) {
-                const userData = result.data;
+                // 兼容两种返回格式
+                const userData = result.data?.user || result.data;
+                const token = result.data?.accessToken || result.token;
+
+                if (token) {
+                    localStorage.setItem('token', token);
+                }
+
                 setIsAuthenticated(true);
                 setCurrentUser(userData.displayName);
                 setCurrentUserInfo(userData);

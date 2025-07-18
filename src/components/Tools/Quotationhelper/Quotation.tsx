@@ -42,7 +42,7 @@ function debounce<T extends (...args: any[]) => any>(func: T, wait = 300) {
 const Quotation: React.FC = () => {
   const [mailContent, setMailContent] = useState('');
   const [mailHtml, setMailHtml] = useState('');
-  const mailRef = useRef<HTMLTextAreaElement>(null);
+  const mailRef = useRef<HTMLDivElement>(null);
 
   // 供应商下拉选项
   const [vendorOptions, setVendorOptions] = useState<string[]>([]);
@@ -82,6 +82,14 @@ const Quotation: React.FC = () => {
       endUserContact, endUserContactInfo, currency, isFirst,
       deliveryDate, quoteValidityDate, etaDate, senderName, language = 'EN'
     } = values;
+
+    // 去重处理联系人信息，避免“Yunkai, Yunkai”重复
+    const contactParts = [endUserContact, endUserContactInfo]
+      .map(p => (p || '').trim())
+      .filter(Boolean);
+    const uniqueContacts = Array.from(new Set(contactParts));
+    const contactStrEn = uniqueContacts.join(uniqueContacts.length > 1 ? ', ' : '');
+    const contactStrCn = uniqueContacts.join(uniqueContacts.length > 1 ? '，' : '');
     
     const formatDate = (dateString?: string) => {
       if (!dateString) return '';
@@ -111,7 +119,7 @@ ${quoteValidityDate ? `- Quote Validity: until ${formatDate(quoteValidityDate)}`
 ${etaDate ? `- Expected Arrival (ETA): ${formatDate(etaDate)}` : ''}
 
 End-user: ${endUserName || 'N/A'}
-Contact: ${endUserContact || ''}${endUserContactInfo ? `, ${endUserContactInfo}` : ''}
+Contact: ${contactStrEn}
 
 ${isFirst ? 'Please note that China Unicom operates through 37 entities worldwide. Our UK entity has served as EU HQ since 2006. Kindly confirm your appropriate contracting entity.' : ''}
 
@@ -137,7 +145,7 @@ ${quoteValidityDate ? `- 报价有效期：至 ${formatDate(quoteValidityDate)}`
 ${etaDate ? `- 预计到货日期（ETA）：${formatDate(etaDate)}` : ''}
 
 最终用户：${endUserName || 'N/A'}
-联系人：${endUserContact || ''}${endUserContactInfo ? `，${endUserContactInfo}` : ''}
+联系人：${contactStrCn}
 
 ${isFirst ? '中国联通在全球拥有 37 家实体，英国公司自 2006 年起作为欧盟总部运营。如与您合作，请确认贵方可签约的对应实体。' : ''}
 
@@ -151,11 +159,66 @@ ${senderName || '【您的姓名】'}
     setMailHtml(mail.replace(/\n/g, '<br/>'));
   };
 
-  const handleCopy = () => {
-    if (mailRef.current) {
-      mailRef.current.select();
+  // 纯文本复制回退方案
+  const fallbackCopyTextToClipboard = (text: string) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
       document.execCommand('copy');
       Toast.success('邮件内容已复制到剪贴板');
+    } catch (err) {
+      Toast.error('复制失败，请手动复制');
+    }
+    document.body.removeChild(textArea);
+  };
+
+  // 复制带格式 HTML，返回是否成功
+  const copyHtmlUsingRange = (): boolean => {
+    if (!mailRef.current) return false;
+    const range = document.createRange();
+    range.selectNodeContents(mailRef.current);
+    const selection = window.getSelection();
+    if (!selection) return false;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    let succeeded = false;
+    try {
+      succeeded = document.execCommand('copy');
+    } catch (err) {
+      succeeded = false;
+    }
+    selection.removeAllRanges();
+    return succeeded;
+  };
+
+  const handleCopy = () => {
+    if (!mailContent) {
+      Toast.error('暂无可复制内容');
+      return;
+    }
+    // 1) 尝试复制包含格式的 HTML
+    const htmlCopied = copyHtmlUsingRange();
+    if (htmlCopied) {
+      Toast.success('邮件内容已复制到剪贴板');
+      return;
+    }
+
+    // 2) 浏览器支持 Clipboard API，复制纯文本
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(mailContent).then(() => {
+        Toast.success('邮件内容已复制到剪贴板');
+      }).catch(() => {
+        fallbackCopyTextToClipboard(mailContent);
+      });
+    } else {
+      // 3) 最后一招：textarea + execCommand 纯文本
+      fallbackCopyTextToClipboard(mailContent);
     }
   };
 

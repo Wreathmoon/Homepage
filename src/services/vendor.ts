@@ -87,7 +87,7 @@ export interface VendorQueryParams {
     keyword?: string;
     productCategory?: string;
     productKeyword?: string;
-    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'OTHER';
+    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'CARRIER' | 'OTHER';
     // 保持向后兼容
     isGeneralAgent?: boolean;
     isAgent?: boolean;

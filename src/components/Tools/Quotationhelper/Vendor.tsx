@@ -32,7 +32,7 @@ const { Title } = Typography;
 interface FilterValues {
     region?: VendorRegion | VendorRegion[];
     type?: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
-    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'OTHER';
+    agentType?: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'CARRIER' | 'OTHER';
     productCategory?: string;
     productKeyword?: string;
     keyword?: string;
@@ -174,6 +174,10 @@ const Vendor: React.FC = () => {
                     isAgent = true;
                     break;
                 case 'OEM':
+                    isGeneralAgent = false;
+                    isAgent = false;
+                    break;
+                case 'CARRIER':
                     isGeneralAgent = false;
                     isAgent = false;
                     break;
@@ -333,6 +337,7 @@ const Vendor: React.FC = () => {
                 if (at === 'GENERAL_AGENT') agentTypeText = '总代理';
                 else if (at === 'AGENT') agentTypeText = '经销商';
                 else if (at === 'OEM') agentTypeText = '原厂';
+                else if (at === 'CARRIER') agentTypeText = '运营商';
                 else agentTypeText = at; // 自定义类型
             } else {
                 agentTypeText = s.isGeneralAgent ? '总代理' : s.isAgent ? '经销商' : '其他';
@@ -416,6 +421,7 @@ const Vendor: React.FC = () => {
                     if (agentType === 'GENERAL_AGENT') return '总代理';
                     if (agentType === 'AGENT') return '经销商';
                     if (agentType === 'OEM') return '原厂';
+                    if (agentType === 'CARRIER') return '运营商';
                     return agentType; // 显示自定义代理类型
                 }
                 // 回退到旧的布尔字段
@@ -774,6 +780,7 @@ const Vendor: React.FC = () => {
                                 { label: '总代理', value: 'GENERAL_AGENT' },
                                 { label: '经销商', value: 'AGENT' },
                                 { label: '原厂', value: 'OEM' },
+                                { label: '运营商', value: 'CARRIER' },
                                 { label: '其他', value: 'OTHER' }
                             ]}
                         />

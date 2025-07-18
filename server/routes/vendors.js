@@ -77,7 +77,7 @@ router.get('/', async (req, res) => {
             const agentType = req.query.agentType;
             if (agentType === 'OTHER' || agentType === '其他') {
                 // 查找自定义代理类型（不在预设列表中的）
-                const predefinedAgentTypes = ['GENERAL_AGENT', 'AGENT', 'OEM'];
+                const predefinedAgentTypes = ['GENERAL_AGENT', 'AGENT', 'OEM', 'CARRIER'];
                 andConditions.push({
                     $or: [
                         // 新字段中的自定义类型
@@ -113,6 +113,8 @@ router.get('/', async (req, res) => {
                 });
             } else if (agentType === 'OEM') {
                 andConditions.push({ agentType: 'OEM' });
+            } else if (agentType === 'CARRIER') {
+                andConditions.push({ agentType: 'CARRIER' });
             }
         } else {
             // 旧的布尔字段筛选（保持向后兼容）

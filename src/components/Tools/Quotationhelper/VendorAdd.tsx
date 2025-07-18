@@ -53,7 +53,7 @@ interface VendorFormData {
     type: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
     website?: string;
     brands?: string;
-    agentType: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'OTHER';
+    agentType: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'CARRIER' | 'OTHER';
     account?: string;
     password?: string;
     entryPerson: string;
@@ -85,6 +85,7 @@ const AGENT_TYPE_OPTIONS = [
     { label: '总代理', value: 'GENERAL_AGENT' },
     { label: '经销商', value: 'AGENT' },
     { label: '原厂', value: 'OEM' },
+    { label: '运营商', value: 'CARRIER' },
     { label: '添加其他', value: 'ADD_OTHER_AGENT' }
 ];
 

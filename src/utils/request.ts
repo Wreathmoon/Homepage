@@ -63,6 +63,11 @@ request.interceptors.response.use(
     async (error: AxiosError<ErrorResponse>) => {
         const original = error.config as any;
         const status = error.response?.status;
+
+        // 若已登出，则对 401 静默处理，避免循环
+        if (sessionStorage.getItem('logged_out') === '1' && status === 401) {
+            return Promise.reject(error);
+        }
         if (status === 401 && !original?._retry && sessionStorage.getItem('logged_out')!=='1') {
             original._retry = true;
             try {

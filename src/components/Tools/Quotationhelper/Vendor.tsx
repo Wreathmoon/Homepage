@@ -17,6 +17,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit, IconDownload, IconPaperclip } from '@douyinfe/semi-icons';
 import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
 
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
 
@@ -385,7 +386,8 @@ const Vendor: React.FC = () => {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Suppliers');
-        XLSX.writeFile(wb, `vendors_${Date.now()}.xlsx`);
+        const ts = dayjs().format('YYYYMMDD_HHmmss');
+        XLSX.writeFile(wb, `vendors_${ts}.xlsx`);
     };
 
     // 表格列定义

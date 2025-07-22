@@ -10,6 +10,7 @@ const API_BASE_URL = API_CONFIG.API_URL + '/api';
 const request = axios.create({
     baseURL: API_BASE_URL,
     timeout: 30000, // 增加到30秒
+    withCredentials: true,          // 发送 httpOnly Cookie（refreshToken）
     headers: {
         'Content-Type': 'application/json',
     },
@@ -56,12 +57,38 @@ request.interceptors.response.use(
     (response: AxiosResponse) => {
         return response.data;
     },
-    (error: AxiosError<ErrorResponse>) => {
+    async (error: AxiosError<ErrorResponse>) => {
+        const original = error.config as any;
+        const status = error.response?.status;
+        if (status === 401 && !original?._retry) {
+            original._retry = true;
+            try {
+                // 调用刷新接口（不带 Authorization）
+                const resp = await axios.post<RefreshResp>(API_BASE_URL + '/auth/refresh', {}, { withCredentials: true });
+                const newToken = resp.data.data?.accessToken;
+                if (newToken) {
+                    localStorage.setItem('token', newToken);
+                    // 更新原请求 Authorization 头
+                    original.headers = original.headers || {};
+                    original.headers.Authorization = `Bearer ${newToken}`;
+                    return request(original); // 重新发送原请求
+                }
+            } catch (e) {
+                // 刷新失败，跳转登录
+                localStorage.removeItem('token');
+                Toast.error('登录已过期，请重新登录');
+                window.location.href = '/';
+                return Promise.reject(e);
+            }
+        }
         const message = error.response?.data?.message || '请求失败，请稍后重试';
         Toast.error(message);
         return Promise.reject(error);
     }
 );
+
+// 自动刷新逻辑
+interface RefreshResp { data: { accessToken: string } }
 
 export { request }; 
 

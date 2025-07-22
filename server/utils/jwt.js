@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 
 const {
   JWT_SECRET = 'dev_secret_key',
-  JWT_ACCESS_EXPIRES = '10h',
+  JWT_ACCESS_EXPIRES = '20m',
   JWT_REFRESH_EXPIRES = '7d'
 } = process.env;
 

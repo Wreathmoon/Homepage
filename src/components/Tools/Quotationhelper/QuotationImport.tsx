@@ -600,7 +600,6 @@ const QuotationImport: React.FC = () => {
             const res = await fetch(`${apiServerUrl}/api/quotations/manual`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
                     'x-user-role': localStorage.getItem('user_role') || '' ,
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})

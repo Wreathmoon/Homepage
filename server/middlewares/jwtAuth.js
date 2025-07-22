@@ -39,6 +39,9 @@ module.exports = function jwtAuth(req, res, next) {
     req.headers['x-user-name'] = payload.name || payload.username;
     next();
   } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      console.warn('JWTAuth: Access Token 已过期', new Date().toISOString());
+    }
     return res.status(401).json({ success: false, message: 'Token 无效或已过期' });
   }
 }; 

@@ -3,6 +3,9 @@ import { Toast } from '@douyinfe/semi-ui';
 import { API_CONFIG } from './config';
 import { AUTH_CONFIG } from '../config/auth';
 
+// 只触发一次的登出标记
+let isLoggingOut = false;
+
 // API基础URL配置
 const API_BASE_URL = API_CONFIG.API_URL + '/api';
 
@@ -74,12 +77,18 @@ request.interceptors.response.use(
                     return request(original); // 重新发送原请求
                 }
             } catch (e) {
-                // 刷新失败，跳转登录
-                localStorage.removeItem('token');
-                Toast.error('登录已过期，请重新登录');
-                window.location.href = '/';
-                return Promise.reject(e);
+                // 刷新失败，继续触发统一未授权处理
             }
+        }
+
+        // 刷新失败或再次 401，执行一次性登出
+        if (status === 401 && !isLoggingOut) {
+            isLoggingOut = true;
+            localStorage.removeItem('token');
+            Toast.error('登录已失效，请重新登录');
+            setTimeout(() => {
+                window.location.replace('/login');
+            }, 100);
         }
         const message = error.response?.data?.message || '请求失败，请稍后重试';
         Toast.error(message);

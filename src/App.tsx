@@ -23,6 +23,7 @@ const ProtectedApp = () => {
     const { isAuthenticated, login } = useAuth();
 
     if (!isAuthenticated) {
+        // 若已被标记登出，直接渲染登录页
         return <Login onLogin={login} />;
     }
 

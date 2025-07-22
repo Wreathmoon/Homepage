@@ -85,9 +85,10 @@ request.interceptors.response.use(
         if (status === 401 && !isLoggingOut) {
             isLoggingOut = true;
             localStorage.removeItem('token');
+            sessionStorage.setItem('logged_out', '1');
             Toast.error('登录已失效，请重新登录');
             setTimeout(() => {
-                window.location.replace('/login');
+                window.location.replace('/login?timeout=1');
             }, 100);
         }
         const message = error.response?.data?.message || '请求失败，请稍后重试';

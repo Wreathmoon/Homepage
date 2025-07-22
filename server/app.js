@@ -7,6 +7,8 @@ const cookieParser = require('cookie-parser');
 const mongoSanitize = require('mongo-sanitize');
 const xss = require('xss');
 const dotenv = require('dotenv');
+const cron = require('node-cron');
+const { fork } = require('child_process');
 
 // 加载环境变量
 dotenv.config();
@@ -158,15 +160,21 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
+// 每月1日 02:00 备份供应商
+cron.schedule('0 2 1 * *', () => {
+  const taskPath = path.join(__dirname, 'tasks', 'vendorBackup.js');
+  fork(taskPath);
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
-    console.log(`🌍 允许的跨域源: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+    console.log(`🌍 允许的跨域源: ${allowedOrigins.join(',')}`);
     console.log(`📁 上传文件目录: ${path.join(__dirname, 'uploads')}`);
-
-    // 启动定时日志归档任务
-    try {
-      require('./tasks/logArchive');
-    } catch (err) {
-      console.warn('logArchive 任务未启动:', err.message);
-    }
-});
+ 
+       // 启动定时日志归档任务
+       try {
+         require('./tasks/logArchive');
+       } catch (err) {
+         console.warn('logArchive 任务未启动:', err.message);
+       }
+   });

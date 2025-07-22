@@ -383,4 +383,17 @@ export async function getVendorAttachments(id: string): Promise<any[]> {
 // 获取附件下载 URL
 export function getVendorAttachmentDownloadUrl(id: string, filename: string): string {
     return `${API_BASE}/vendors/${id}/attachments/${filename}`;
+}
+
+export async function backupVendors(): Promise<void> {
+    const token = localStorage.getItem('token');
+    const resp = await fetch(API_BASE + '/vendors/backup', {
+        method: 'POST',
+        headers: {
+            'x-user-role': localStorage.getItem('user_role') || '',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+    });
+    const json = await resp.json();
+    if (!json.success) throw new Error(json.message || '备份失败');
 } 

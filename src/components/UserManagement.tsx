@@ -24,6 +24,7 @@ import {
     type RegistrationCode
 } from '../services/auth';
 import { resetUserPassword } from '../services/auth';
+import { backupVendors } from '../services/vendor';
 import { API_CONFIG } from '../utils/config';
 import { scheduleMaintenance, stopMaintenance } from '../services/maintenance';
 
@@ -422,6 +423,12 @@ const UserManagement: React.FC = () => {
                     <Button icon={<IconPlus />} onClick={handleGenerateCode}>生成注册码</Button>
                     <Button icon={<IconDownload />} onClick={handleExportUsers}>导出用户</Button>
                     <Button icon={<IconDownload />} onClick={handleExportCodes}>导出注册码</Button>
+                    <Button icon={<IconDownload />} onClick={async ()=>{
+                        try {
+                            await backupVendors();
+                            Toast.success('备份已保存到服务器 archived-vendors 目录');
+                        } catch { Toast.error('备份失败'); }
+                    }}>备份供应商</Button>
                     <Button icon={<IconSend />} theme="solid" onClick={() => setAnnounceModalVisible(true)}>发布公告</Button>
                     <Button icon={<IconAlertTriangle />} theme="solid" type="warning" onClick={handleSchedule}>发送维护预告</Button>
                     <Button icon={<IconTick />} theme="solid" onClick={handleStopMaintain}>维护结束</Button>

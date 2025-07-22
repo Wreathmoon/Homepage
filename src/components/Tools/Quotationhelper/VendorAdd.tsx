@@ -763,10 +763,12 @@ const VendorAdd: React.FC = () => {
                             placeholder="请输入代理品牌，多个用逗号分隔"
                         />
 
-                        <Form.Input
+                        <Form.TextArea
                             field="reportMethod"
-                            label="报障方式"
-                            placeholder="请输入报障方式，如：电话、邮件、工单系统等"
+                            label="售后/故障联系"
+                            placeholder="请输入售后/故障联系信息，如电话、邮件或工单系统等"
+                            autosize={{ minRows: 3, maxRows: 5 }}
+                            style={{ marginBottom: '20px', gridColumn: '1 / span 2' }}
                         />
                         
                         <Form.Select

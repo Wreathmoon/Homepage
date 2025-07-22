@@ -307,17 +307,18 @@ const Vendor: React.FC = () => {
             return;
         }
 
-        // 重新拉取符合当前筛选条件的全部供应商
+        // 分页拉取全部数据，避免 pageSize 超过后端限制
         let allSuppliers: VendorType[] = [];
         try {
-            const exportParams: VendorQueryParams = {
-                ...filters,
-                page: 1,
-                pageSize: pagination.total || 10000 // 一次性取完
-            };
-
-            const resp = await getVendorList(exportParams);
-            allSuppliers = resp.data || [];
+            const pageSize = 100; // 与后端验证上限保持一致
+            let current = 1;
+            let totalPages = 1;
+            do {
+                const resp = await getVendorList({ ...filters, page: current, pageSize });
+                allSuppliers = allSuppliers.concat(resp.data);
+                totalPages = resp.totalPages || 1;
+                current += 1;
+            } while (current <= totalPages);
         } catch (err) {
             console.error('导出供应商时获取数据失败', err);
             Toast.error('获取供应商数据失败，无法导出');

@@ -501,12 +501,14 @@ const QuotationImport: React.FC = () => {
 
             // 调用API服务器的确认保存API
             const apiServerUrl = API_CONFIG.API_URL;
+            const token = localStorage.getItem('token');
             const response = await fetch(`${apiServerUrl}/api/quotations/confirm-save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
-                    'x-user-role': localStorage.getItem('user_role') || ''
+                    'x-user-role': localStorage.getItem('user_role') || '' ,
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     products: productsData,
@@ -594,11 +596,14 @@ const QuotationImport: React.FC = () => {
                 formData.append('quotationFile', fileInst);
             }
 
+            const token = localStorage.getItem('token');
             const res = await fetch(`${apiServerUrl}/api/quotations/manual`, {
                 method: 'POST',
                 headers: {
+                    'Content-Type': 'application/json',
                     'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
-                    'x-user-role': localStorage.getItem('user_role') || ''
+                    'x-user-role': localStorage.getItem('user_role') || '' ,
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: formData
             });
@@ -680,6 +685,7 @@ const QuotationImport: React.FC = () => {
     // 处理重复确认
     const handleDuplicateAction = async (action: 'skip' | 'overwrite' | 'save-both') => {
         try {
+            const token = localStorage.getItem('token');
             let products = pendingProducts;
             let skipDuplicates = false;
 
@@ -702,7 +708,8 @@ const QuotationImport: React.FC = () => {
                 headers: {
                     'Content-Type': 'application/json',
                     'x-user': encodeURIComponent(localStorage.getItem(AUTH_CONFIG.userStorageKey) || ''),
-                    'x-user-role': localStorage.getItem('user_role') || ''
+                    'x-user-role': localStorage.getItem('user_role') || '' ,
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({
                     products: products,

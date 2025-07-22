@@ -239,12 +239,14 @@ const UserManagement: React.FC = () => {
                         size="small"
                         onChange={async (checked) => {
                             try {
+                                const token = localStorage.getItem('token');
                                 const res = await fetch(`${API_CONFIG.API_URL}/api/users/${record._id}/vendor-edit`, {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
                                         'x-user': encodeURIComponent(localStorage.getItem('user_username') || ''),
-                                        'x-user-role': 'admin'
+                                        'x-user-role': 'admin',
+                                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                                     },
                                     body: JSON.stringify({ enable: checked, hours: 5 })
                                 });

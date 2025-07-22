@@ -12,7 +12,7 @@ import {
     
 } from '@douyinfe/semi-ui';
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-import { IconDelete, IconPlus, IconCopy, IconDownload, IconAlertTriangle, IconTick, IconSend } from '@douyinfe/semi-icons';
+import { IconDelete, IconPlus, IconCopy, IconDownload, IconAlertTriangle, IconTick, IconSend, IconKey } from '@douyinfe/semi-icons';
 import * as XLSX from 'xlsx';
 import { 
     getAllUsers, 
@@ -23,6 +23,7 @@ import {
     type User,
     type RegistrationCode
 } from '../services/auth';
+import { resetUserPassword } from '../services/auth';
 import { API_CONFIG } from '../utils/config';
 import { scheduleMaintenance, stopMaintenance } from '../services/maintenance';
 
@@ -284,6 +285,41 @@ const UserManagement: React.FC = () => {
                         title={isCurrentUser ? '不能删除自己的账号' : '删除用户'}
                     >
                         删除
+                    </Button>
+                );
+            }
+        },
+        {
+            title: '重置密码',
+            key: 'reset',
+            width: 100,
+            render: (_: any, record: User) => {
+                const currentUser = localStorage.getItem('user_username');
+                const isCurrentUser = record.username === currentUser;
+                return (
+                    <Button
+                        icon={<IconKey />}
+                        type="secondary"
+                        theme="borderless"
+                        size="small"
+                        disabled={isCurrentUser}
+                        onClick={async () => {
+                            Modal.confirm({
+                                title: '确认重置密码',
+                                content: `确定将用户 ${record.username} 的密码重置为默认值？`,
+                                onOk: async () => {
+                                    try {
+                                        await resetUserPassword(record._id);
+                                        Toast.success('密码已重置为 password123!');
+                                    } catch (err) {
+                                        Toast.error('重置失败');
+                                    }
+                                }
+                            });
+                        }}
+                        title={isCurrentUser ? '不能重置自己的密码' : '重置密码'}
+                    >
+                        重置
                     </Button>
                 );
             }

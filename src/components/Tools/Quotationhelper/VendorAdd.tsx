@@ -53,6 +53,8 @@ interface VendorFormData {
     type: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER' | 'OTHER';
     website?: string;
     brands?: string;
+    // 报障方式
+    reportMethod?: string;
     agentType: 'GENERAL_AGENT' | 'AGENT' | 'OEM' | 'CARRIER' | 'OTHER';
     account?: string;
     password?: string;
@@ -527,6 +529,7 @@ const VendorAdd: React.FC = () => {
             submitData.remarks = values.remarks || '';
             submitData.account = values.account || '';
             submitData.address = values.address || '';
+            submitData.reportMethod = values.reportMethod || '';
 
             // 处理 code
             if (editVendor) {
@@ -758,6 +761,12 @@ const VendorAdd: React.FC = () => {
                             field="brands"
                             label="代理品牌"
                             placeholder="请输入代理品牌，多个用逗号分隔"
+                        />
+
+                        <Form.Input
+                            field="reportMethod"
+                            label="报障方式"
+                            placeholder="请输入报障方式，如：电话、邮件、工单系统等"
                         />
                         
                         <Form.Select

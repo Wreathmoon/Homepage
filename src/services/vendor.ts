@@ -63,6 +63,8 @@ export interface Vendor {
     type: 'HARDWARE' | 'SOFTWARE' | 'SERVICE' | 'DATACENTER';
     website?: string;
     brands: string[];
+    // 报障方式
+    reportMethod?: string;
     isGeneralAgent: boolean;
     isAgent: boolean;
     account?: string;

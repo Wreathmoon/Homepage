@@ -451,6 +451,12 @@ const Vendor: React.FC = () => {
             width: 120
         },
         {
+            title: '报障方式',
+            dataIndex: 'reportMethod',
+            width: 120,
+            render: (text:any)=> text || '-'
+        },
+        {
             title: '联系方式',
             render: (record: VendorType) => {
                 // 获取主要联系人信息

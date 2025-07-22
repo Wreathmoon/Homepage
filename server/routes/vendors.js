@@ -309,7 +309,8 @@ router.post(
     body('chineseName').isString().notEmpty().trim(),
     body('code').isString().notEmpty(),
     body('contact').isString().notEmpty(),
-    body('email').isEmail().normalizeEmail()
+    body('email').isEmail().normalizeEmail(),
+    body('reportMethod').optional().isString().trim()
   ]),
   async (req, res) => {
     try {

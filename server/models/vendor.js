@@ -121,6 +121,11 @@ const vendorSchema = new mongoose.Schema({
         trim: true
         // 允许自定义代理资质
     },
+    // 报障方式
+    reportMethod: {
+        type: String,
+        trim: true
+    },
     // 向后兼容字段
     isGeneralAgent: {
         type: Boolean,

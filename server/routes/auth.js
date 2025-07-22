@@ -226,6 +226,27 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
     }
 });
 
+// 管理员重置用户密码
+router.put('/users/:userId/reset-password', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const user = await User.findById(userId);
+        if (!user || !user.isActive) {
+            return res.status(404).json({ success: false, message: '用户不存在' });
+        }
+
+        // 设置为默认密码，触发 pre('save') 自动哈希
+        user.password = 'password123!';
+        await user.save();
+
+        res.json({ success: true, message: '密码已重置为默认值' });
+    } catch (error) {
+        console.error('重置密码失败:', error);
+        res.status(500).json({ success: false, message: '重置密码失败', error: error.message });
+    }
+});
+
 // 生成注册码（管理员专用）
 router.post('/registration-codes', requireAdmin, async (req, res) => {
     try {
@@ -351,22 +372,20 @@ router.post('/change-password', async (req, res) => {
             });
         }
 
-        // 查找用户并验证旧密码
-        const user = await User.findOne({ 
-            username: username, 
-            password: oldPassword, // 注意：实际生产环境应该使用加密密码比较
-            isActive: true 
-        });
-
+        // 查找用户
+        const user = await User.findOne({ username, isActive: true });
         if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: '旧密码错误'
-            });
+            return res.status(404).json({ success: false, message: '用户不存在' });
         }
 
-        // 更新密码
-        user.password = newPassword; // 注意：实际生产环境应该加密密码
+        // 使用 comparePassword 校验旧密码（支持明文到哈希升级）
+        const match = await user.comparePassword(oldPassword);
+        if (!match) {
+            return res.status(401).json({ success: false, message: '旧密码错误' });
+        }
+
+        // 设置新密码（触发 pre('save') 自动哈希）
+        user.password = newPassword;
         user.updatedAt = new Date();
         await user.save();
 

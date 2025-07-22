@@ -45,6 +45,17 @@ export const deleteUser = async (userId: string): Promise<void> => {
     });
 };
 
+// 重置用户密码为默认值（管理员专用）
+export const resetUserPassword = async (userId: string): Promise<void> => {
+    await request('/auth/users/' + userId + '/reset-password', {
+        method: 'PUT',
+        headers: {
+            'x-user-role': localStorage.getItem('user_role') || '',
+            'x-user-name': localStorage.getItem('user_username') || ''
+        }
+    });
+};
+
 // 生成注册码（管理员专用）
 export const generateRegistrationCode = async (): Promise<{ code: string; expiresAt: string }> => {
     const response: any = await request('/auth/registration-codes', {

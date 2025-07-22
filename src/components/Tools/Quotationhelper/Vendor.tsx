@@ -356,6 +356,7 @@ const Vendor: React.FC = () => {
                 代理品牌: (s.brands || []).join(','),
                 网站: s.website || '',
                 地址: s.address || '',
+                '售后/故障联系': (s as any).reportMethod || '',
                 账号: s.account || '',
                 录入人: (s as any).entryPerson || '',
                 修改人: (s as any).modifiedBy || '',

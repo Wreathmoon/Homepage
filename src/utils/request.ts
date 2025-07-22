@@ -88,7 +88,7 @@ request.interceptors.response.use(
             sessionStorage.setItem('logged_out', '1');
             Toast.error('登录已失效，请重新登录');
             setTimeout(() => {
-                window.location.replace('/login?timeout=1');
+                window.location.replace('/');
             }, 100);
         }
         const message = error.response?.data?.message || '请求失败，请稍后重试';

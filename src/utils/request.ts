@@ -63,7 +63,7 @@ request.interceptors.response.use(
     async (error: AxiosError<ErrorResponse>) => {
         const original = error.config as any;
         const status = error.response?.status;
-        if (status === 401 && !original?._retry) {
+        if (status === 401 && !original?._retry && sessionStorage.getItem('logged_out')!=='1') {
             original._retry = true;
             try {
                 // 调用刷新接口（不带 Authorization）
@@ -82,7 +82,7 @@ request.interceptors.response.use(
         }
 
         // 刷新失败或再次 401，执行一次性登出
-        if (status === 401 && !isLoggingOut) {
+        if (status === 401 && !isLoggingOut && sessionStorage.getItem('logged_out')!=='1') {
             isLoggingOut = true;
             localStorage.removeItem('token');
             sessionStorage.setItem('logged_out', '1');

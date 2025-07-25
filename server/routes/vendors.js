@@ -182,11 +182,38 @@ router.get(
             });
         }
 
-        // 产品关键字搜索
+        // 全局关键字搜索：品牌 / 产品类别 / 地区
         if (productKeyword) {
-            andConditions.push({
-                brands: { $elemMatch: { $regex: productKeyword, $options: 'i' } }
+            const altKeywords = [productKeyword];
+            if (productKeyword === '其他') altKeywords.push('OTHER');
+            if (productKeyword === '硬件') altKeywords.push('HARDWARE');
+            if (productKeyword === '软件') altKeywords.push('SOFTWARE');
+            if (productKeyword === '服务') altKeywords.push('SERVICE');
+            if (productKeyword === '数据中心') altKeywords.push('DATACENTER');
+            if (productKeyword === '总代理') altKeywords.push('GENERAL_AGENT');
+            if (productKeyword === '经销商') altKeywords.push('AGENT');
+            if (productKeyword === '原厂') altKeywords.push('OEM');
+            if (productKeyword === '运营商') altKeywords.push('CARRIER');
+
+            const orList = [];
+            altKeywords.forEach(kw => {
+                const regex = { $regex: kw, $options: 'i' };
+                orList.push(
+                    { brands: { $elemMatch: regex } },
+                    { category: { $elemMatch: regex } },
+                    { region: regex },
+                    { regions: { $elemMatch: regex } },
+                    { type: regex },
+                    { agentType: regex },
+                    { code: regex },
+                    { reportMethod: regex },
+                    { remarks: regex },
+                    { website: regex },
+                    { address: regex }
+                );
             });
+
+            andConditions.push({ $or: orList });
         }
 
         // 如果有复合条件，使用$and

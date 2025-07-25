@@ -22,4 +22,9 @@ iframe {
 .vendor-select-dropdown {
     max-height: 240px !important;
     overflow-y: auto !important;
+}
+
+.highlight {
+    background-color: #fffd54;
+    padding: 0 2px;
 } 

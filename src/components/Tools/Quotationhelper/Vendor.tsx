@@ -4,8 +4,6 @@ import {
     Form, 
     Button, 
     Table,
-    Select, 
-    Input, 
     Modal,
     Toast,
     Spin,
@@ -15,17 +13,37 @@ import {
     Space,
     Tag
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle, IconEyeOpened, IconEyeClosed, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit, IconDownload, IconPaperclip } from '@douyinfe/semi-icons';
+import { IconHelpCircle, IconKey, IconDelete, IconPhone, IconMail, IconComment, IconGlobe, IconEdit, IconDownload, IconPaperclip } from '@douyinfe/semi-icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
-
 import type { ColumnProps } from '@douyinfe/semi-ui/lib/es/table';
-
 import { getVendorList, getVendorProducts, deleteVendor, PRODUCT_CATEGORIES, VENDOR_REGIONS } from '../../../services/vendor';
 import type { VendorQueryParams, Vendor as VendorType, VendorRegion } from '../../../services/vendor';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useVendorEdit } from '../../../contexts/VendorEditContext';
 import { getVendorAttachments, getVendorAttachmentDownloadUrl } from '../../../services/vendor';
+
+// ========== Highlighter ==========
+const escapeReg = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function useHighlight(filters: VendorQueryParams) {
+    return (text: any): React.ReactNode => {
+        if (!text) return '-';
+        const str = String(text);
+        const kws: string[] = [];
+        if (filters.keyword) kws.push(filters.keyword);
+        if (filters.productKeyword) kws.push(filters.productKeyword);
+        if (kws.length === 0) return str;
+
+        let html = str;
+        kws.forEach(kw => {
+            if (!kw) return;
+            const reg = new RegExp(escapeReg(kw), 'gi');
+            html = html.replace(reg, (m) => `<mark class="highlight">${m}</mark>`);
+        });
+        return <span dangerouslySetInnerHTML={{ __html: html }} />;
+    };
+}
 
 const { Title } = Typography;
 
@@ -195,7 +213,6 @@ const Vendor: React.FC = () => {
                 type: values.type,
                 keyword: values.keyword,
                 productCategory: values.productCategory,
-                productKeyword: values.productKeyword,
                 agentType: values.agentType,
                 isGeneralAgent,
                 isAgent,
@@ -212,17 +229,56 @@ const Vendor: React.FC = () => {
             const response = await getVendorList(params);
 
             
-            // 如果有关键字，在前端进行额外过滤
+            // 前端额外过滤
             let filteredData = response.data;
+
+            // 供应商关键字：中文/英文名、品牌、联系人
             if (values.keyword) {
-                const keyword = values.keyword.toLowerCase();
+                const kw = values.keyword.toLowerCase();
                 filteredData = filteredData.filter(item => {
                     const chineseName = ((item as any).chineseName || item.name || '').toLowerCase();
                     const englishName = ((item as any).englishName || '').toLowerCase();
-                    return chineseName.includes(keyword) ||
-                    englishName.includes(keyword) ||
-                    item.brands.some(brand => brand.toLowerCase().includes(keyword)) ||
-                    item.contact.toLowerCase().includes(keyword)
+                    return chineseName.includes(kw) ||
+                    englishName.includes(kw) ||
+                    item.brands.some((b: string) => b.toLowerCase().includes(kw)) ||
+                    (item.contact || '').toLowerCase().includes(kw);
+                });
+            }
+
+            // 全局关键字：品牌、类别、地区
+            if (values.productKeyword) {
+                const gk = values.productKeyword.toLowerCase();
+                filteredData = filteredData.filter(item => {
+                    const regionArr = ((item as any).regions || [(item as any).region]).map((r: string)=>r.toLowerCase());
+                    const categoryArr = ((item as any).category || []).map((c: string)=>c.toLowerCase());
+                    // 类型中文映射
+                    const typeStr = (item.type || '').toLowerCase();
+                    const typeTextZh = (()=>{
+                        if(item.type==='HARDWARE') return '硬件';
+                        if(item.type==='SOFTWARE') return '软件';
+                        if(item.type==='SERVICE') return '服务';
+                        if(item.type==='DATACENTER') return '数据中心';
+                        if(item.type==='OTHER') return '其他';
+                        return item.type || '';
+                    })().toLowerCase();
+
+                    const agentTypeVal = (item as any).agentType;
+                    const agentStr = (agentTypeVal||'').toLowerCase();
+                    const agentTextZh = (()=>{
+                        if(agentTypeVal==='GENERAL_AGENT') return '总代理';
+                        if(agentTypeVal==='AGENT') return '经销商';
+                        if(agentTypeVal==='OEM') return '原厂';
+                        if(agentTypeVal==='CARRIER') return '运营商';
+                        if(agentTypeVal==='OTHER') return '其他';
+                        return agentTypeVal||'';
+                    })().toLowerCase();
+
+                    return item.brands.some((b: string)=>b.toLowerCase().includes(gk)) ||
+                        categoryArr.some((c:string)=>c.includes(gk)) ||
+                        regionArr.some((r:string)=>r.includes(gk)) ||
+                        typeStr.includes(gk) || typeTextZh.includes(gk) ||
+                        agentStr.includes(gk) || agentTextZh.includes(gk) ||
+                        JSON.stringify(item).toLowerCase().includes(gk);
                 });
             }
             
@@ -390,13 +446,14 @@ const Vendor: React.FC = () => {
         XLSX.writeFile(wb, `vendors_${ts}.xlsx`);
     };
 
-    // 表格列定义
+    const highlight = useHighlight(filters);
+
     const columns: ColumnProps<VendorType>[] = [
         {
             title: '英文名称',
             key: 'englishName',
             dataIndex: 'englishName',
-            render: (text: any, record: VendorType) => (text || '-'),
+            render: (text: any) => highlight(text || '-'),
             sorter: true,
             width: 160
         },
@@ -404,7 +461,7 @@ const Vendor: React.FC = () => {
             title: '中文名称',
             key: 'chineseName',
             dataIndex: 'chineseName',
-            render: (text: any, record: VendorType) => (text || record.name || '-'),
+            render: (text: any, record: VendorType) => highlight(text || record.name || '-'),
             sorter: true,
             width: 160
         },
@@ -449,7 +506,7 @@ const Vendor: React.FC = () => {
                         </Button>
                     );
                 }
-                return regionsArr[0] || '-';
+                return highlight(regionsArr[0] || '-');
             },
             sorter: true,
             width: 120
@@ -526,7 +583,10 @@ const Vendor: React.FC = () => {
         {
             title: '供应品牌',
             dataIndex: 'brands',
-            render: (brands: string[]) => Array.isArray(brands) ? brands.join(', ') : (brands || '-'),
+            render: (brands: string[]) => {
+                const text = Array.isArray(brands) ? brands.join(', ') : (brands || '-');
+                return highlight(text);
+            },
             width: 200
         },
         {
@@ -813,8 +873,8 @@ const Vendor: React.FC = () => {
                     <Col span={10}>
                         <Form.Input
                             field="productKeyword"
-                            label="产品关键字"
-                            placeholder="请输入产品关键字"
+                            label="全局关键字"
+                            placeholder="请输入供应商、品牌、联系人、类别或地区关键字"
                             style={{ width: '100%' }}
                             showClear
                         />
@@ -823,7 +883,7 @@ const Vendor: React.FC = () => {
                         <Form.Input
                             field="keyword"
                             label="供应商关键字"
-                            placeholder="请输入供应商名称、品牌或关键字"
+                            placeholder="请输入供应商名称或代码"
                             style={{ width: '100%' }}
                             showClear
                         />

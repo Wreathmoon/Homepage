@@ -199,6 +199,10 @@ router.get(
             altKeywords.forEach(kw => {
                 const regex = { $regex: kw, $options: 'i' };
                 orList.push(
+                    // 供应商名称字段
+                    { chineseName: regex },
+                    { englishName: regex },
+                    { name: regex },
                     { brands: { $elemMatch: regex } },
                     { category: { $elemMatch: regex } },
                     { region: regex },

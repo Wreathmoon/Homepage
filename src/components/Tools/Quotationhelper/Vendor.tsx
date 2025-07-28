@@ -213,6 +213,7 @@ const Vendor: React.FC = () => {
                 type: values.type,
                 keyword: values.keyword,
                 productCategory: values.productCategory,
+                productKeyword: values.productKeyword,
                 agentType: values.agentType,
                 isGeneralAgent,
                 isAgent,
@@ -229,58 +230,7 @@ const Vendor: React.FC = () => {
             const response = await getVendorList(params);
 
             
-            // 前端额外过滤
-            let filteredData = response.data;
-
-            // 供应商关键字：中文/英文名、品牌、联系人
-            if (values.keyword) {
-                const kw = values.keyword.toLowerCase();
-                filteredData = filteredData.filter(item => {
-                    const chineseName = ((item as any).chineseName || item.name || '').toLowerCase();
-                    const englishName = ((item as any).englishName || '').toLowerCase();
-                    return chineseName.includes(kw) ||
-                    englishName.includes(kw) ||
-                    item.brands.some((b: string) => b.toLowerCase().includes(kw)) ||
-                    (item.contact || '').toLowerCase().includes(kw);
-                });
-            }
-
-            // 全局关键字：品牌、类别、地区
-            if (values.productKeyword) {
-                const gk = values.productKeyword.toLowerCase();
-                filteredData = filteredData.filter(item => {
-                    const regionArr = ((item as any).regions || [(item as any).region]).map((r: string)=>r.toLowerCase());
-                    const categoryArr = ((item as any).category || []).map((c: string)=>c.toLowerCase());
-                    // 类型中文映射
-                    const typeStr = (item.type || '').toLowerCase();
-                    const typeTextZh = (()=>{
-                        if(item.type==='HARDWARE') return '硬件';
-                        if(item.type==='SOFTWARE') return '软件';
-                        if(item.type==='SERVICE') return '服务';
-                        if(item.type==='DATACENTER') return '数据中心';
-                        if(item.type==='OTHER') return '其他';
-                        return item.type || '';
-                    })().toLowerCase();
-
-                    const agentTypeVal = (item as any).agentType;
-                    const agentStr = (agentTypeVal||'').toLowerCase();
-                    const agentTextZh = (()=>{
-                        if(agentTypeVal==='GENERAL_AGENT') return '总代理';
-                        if(agentTypeVal==='AGENT') return '经销商';
-                        if(agentTypeVal==='OEM') return '原厂';
-                        if(agentTypeVal==='CARRIER') return '运营商';
-                        if(agentTypeVal==='OTHER') return '其他';
-                        return agentTypeVal||'';
-                    })().toLowerCase();
-
-                    return item.brands.some((b: string)=>b.toLowerCase().includes(gk)) ||
-                        categoryArr.some((c:string)=>c.includes(gk)) ||
-                        regionArr.some((r:string)=>r.includes(gk)) ||
-                        typeStr.includes(gk) || typeTextZh.includes(gk) ||
-                        agentStr.includes(gk) || agentTextZh.includes(gk) ||
-                        JSON.stringify(item).toLowerCase().includes(gk);
-                });
-            }
+            const filteredData = response.data;
             
             // 若未显式指定排序字段，前端按英文名 ASC 做兜底排序（与默认一致）
             if (!localSorter?.field) {
